@@ -1,0 +1,12 @@
+{
+  "reason": "Operator selected all four families. Predeclared common OpenAI mascot source enables identical edit/final input bytes, independent of quality ranking. This is not an accepted production design.",
+  "sourceTaskIds": [
+    "aa1ac0f2bef6b2e9758628ab"
+  ],
+  "modelIds": [
+    "google/gemini-3.1-flash-image",
+    "openai/gpt-image-2.5-sunburst",
+    "black-forest-labs/flux-3-image",
+    "bytedance-seed/seedream-5-0-flash"
+  ]
+}

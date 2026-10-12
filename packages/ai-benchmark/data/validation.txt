@@ -1,0 +1,2 @@
+{"verifiedImages":28,"requests":30,"commonSourceFollowups":12,"usageUsd":1.281835,"keyUsageUsd":1.281835,"unresolved":0,"blindSamples":28,"secretScanFiles":248,"credentialsInHandoff":false}
+Clean handoff reproduction: npm ci --offline succeeded; typecheck succeeded; 16/16 tests passed; CLI dry-run without credentials succeeded with 16 tasks and zero provider calls. Reproduction caught and fixed empty-artifact export before final packaging.

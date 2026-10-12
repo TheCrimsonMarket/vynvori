@@ -1,0 +1,194 @@
+[
+  {
+    "taskId": "10ce1077b7f9502f71b15d86",
+    "caseId": "ARPG-01",
+    "trial": 1,
+    "modelId": "google/gemini-3.1-flash-image",
+    "operation": "concept",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "745b3dd0dbf29462946bc31e",
+    "caseId": "ARPG-01",
+    "trial": 1,
+    "modelId": "openai/gpt-image-2.5-sunburst",
+    "operation": "concept",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "quality": "medium",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "aa98702dfa56b538228f3ace",
+    "caseId": "ARPG-01",
+    "trial": 1,
+    "modelId": "black-forest-labs/flux-3-image",
+    "operation": "concept",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "f598b70c1eb55cd1d3abe442",
+    "caseId": "ARPG-01",
+    "trial": 1,
+    "modelId": "bytedance-seed/seedream-5-0-flash",
+    "operation": "concept",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "96d7197255a28e655ec4e17a",
+    "caseId": "MIN-02",
+    "trial": 1,
+    "modelId": "google/gemini-3.1-flash-image",
+    "operation": "concept",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "9cb309c524036ed121fcbead",
+    "caseId": "MIN-02",
+    "trial": 1,
+    "modelId": "openai/gpt-image-2.5-sunburst",
+    "operation": "concept",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "quality": "medium",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "28284f0c79c8b86c9aea464f",
+    "caseId": "MIN-02",
+    "trial": 1,
+    "modelId": "black-forest-labs/flux-3-image",
+    "operation": "concept",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "ba904a0c75934998e511daea",
+    "caseId": "MIN-02",
+    "trial": 1,
+    "modelId": "bytedance-seed/seedream-5-0-flash",
+    "operation": "concept",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "5636e7737132af0bae1613fc",
+    "caseId": "CHAR-03",
+    "trial": 1,
+    "modelId": "google/gemini-3.1-flash-image",
+    "operation": "concept",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "aa1ac0f2bef6b2e9758628ab",
+    "caseId": "CHAR-03",
+    "trial": 1,
+    "modelId": "openai/gpt-image-2.5-sunburst",
+    "operation": "concept",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "quality": "medium",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "c6bb32bba4cb21396978fa01",
+    "caseId": "CHAR-03",
+    "trial": 1,
+    "modelId": "black-forest-labs/flux-3-image",
+    "operation": "concept",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "76f8ace90e5af7400dabd7a1",
+    "caseId": "CHAR-03",
+    "trial": 1,
+    "modelId": "bytedance-seed/seedream-5-0-flash",
+    "operation": "concept",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "4d0255caa7a903fd2600a69e",
+    "caseId": "MOOD-04",
+    "trial": 1,
+    "modelId": "google/gemini-3.1-flash-image",
+    "operation": "concept",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "7d97802318575f9e26dc602b",
+    "caseId": "MOOD-04",
+    "trial": 1,
+    "modelId": "openai/gpt-image-2.5-sunburst",
+    "operation": "concept",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "quality": "medium",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "0ae5fc2ba594e0836a08afe7",
+    "caseId": "MOOD-04",
+    "trial": 1,
+    "modelId": "black-forest-labs/flux-3-image",
+    "operation": "concept",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "76382fbbfb26326c864a720c",
+    "caseId": "MOOD-04",
+    "trial": 1,
+    "modelId": "bytedance-seed/seedream-5-0-flash",
+    "operation": "concept",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  }
+]

@@ -1,0 +1,167 @@
+[
+  {
+    "taskId": "400c1fd0ec93a52da47185a5",
+    "caseId": "CHAR-03",
+    "trial": 1,
+    "modelId": "google/gemini-3.1-flash-image",
+    "operation": "edit",
+    "editTest": 0,
+    "sourceTaskId": "aa1ac0f2bef6b2e9758628ab",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "5451cea2a762c4576867dca2",
+    "caseId": "CHAR-03",
+    "trial": 1,
+    "modelId": "google/gemini-3.1-flash-image",
+    "operation": "edit",
+    "editTest": 1,
+    "sourceTaskId": "aa1ac0f2bef6b2e9758628ab",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "cdf970ee263a7a044a82e67b",
+    "caseId": "CHAR-03",
+    "trial": 1,
+    "modelId": "google/gemini-3.1-flash-image",
+    "operation": "final",
+    "sourceTaskId": "aa1ac0f2bef6b2e9758628ab",
+    "requested": {
+      "aspect_ratio": "3:4",
+      "resolution": "2K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "f0e1683305603f8c3369d088",
+    "caseId": "CHAR-03",
+    "trial": 1,
+    "modelId": "openai/gpt-image-2.5-sunburst",
+    "operation": "edit",
+    "editTest": 0,
+    "sourceTaskId": "aa1ac0f2bef6b2e9758628ab",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "quality": "medium",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "a97955e54f68b7da1397fb43",
+    "caseId": "CHAR-03",
+    "trial": 1,
+    "modelId": "openai/gpt-image-2.5-sunburst",
+    "operation": "edit",
+    "editTest": 1,
+    "sourceTaskId": "aa1ac0f2bef6b2e9758628ab",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "quality": "medium",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "14bb74a3b5102fe2ceef4f99",
+    "caseId": "CHAR-03",
+    "trial": 1,
+    "modelId": "openai/gpt-image-2.5-sunburst",
+    "operation": "final",
+    "sourceTaskId": "aa1ac0f2bef6b2e9758628ab",
+    "requested": {
+      "aspect_ratio": "3:4",
+      "quality": "high",
+      "background": "transparent",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "e5ca448ca5e9adf139e60e3d",
+    "caseId": "CHAR-03",
+    "trial": 1,
+    "modelId": "black-forest-labs/flux-3-image",
+    "operation": "edit",
+    "editTest": 0,
+    "sourceTaskId": "aa1ac0f2bef6b2e9758628ab",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "ea9c6ad5b680c51a8c85e657",
+    "caseId": "CHAR-03",
+    "trial": 1,
+    "modelId": "black-forest-labs/flux-3-image",
+    "operation": "edit",
+    "editTest": 1,
+    "sourceTaskId": "aa1ac0f2bef6b2e9758628ab",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "f35b986d04488dd9158b0e56",
+    "caseId": "CHAR-03",
+    "trial": 1,
+    "modelId": "black-forest-labs/flux-3-image",
+    "operation": "final",
+    "sourceTaskId": "aa1ac0f2bef6b2e9758628ab",
+    "requested": {
+      "aspect_ratio": "3:4",
+      "resolution": "2K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "53f65f3e4767b45b9d49ec81",
+    "caseId": "CHAR-03",
+    "trial": 1,
+    "modelId": "bytedance-seed/seedream-5-0-flash",
+    "operation": "edit",
+    "editTest": 0,
+    "sourceTaskId": "aa1ac0f2bef6b2e9758628ab",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "58e04e391bf8b2da0ec3e7a9",
+    "caseId": "CHAR-03",
+    "trial": 1,
+    "modelId": "bytedance-seed/seedream-5-0-flash",
+    "operation": "edit",
+    "editTest": 1,
+    "sourceTaskId": "aa1ac0f2bef6b2e9758628ab",
+    "requested": {
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "n": 1
+    }
+  },
+  {
+    "taskId": "d59a0e1a3fabecc6ac62079a",
+    "caseId": "CHAR-03",
+    "trial": 1,
+    "modelId": "bytedance-seed/seedream-5-0-flash",
+    "operation": "final",
+    "sourceTaskId": "aa1ac0f2bef6b2e9758628ab",
+    "requested": {
+      "aspect_ratio": "3:4",
+      "resolution": "2K",
+      "n": 1
+    }
+  }
+]

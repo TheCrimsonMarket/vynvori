@@ -1,0 +1,7 @@
+{
+  "date": "2026-10-12T03:43:49.565Z",
+  "originalModel": "google/gemini-nano-banana-2.1",
+  "replacement": "google/gemini-3.1-flash-image",
+  "reason": "Two confirmed zero-charge HTTP 429 rejections for Nano Banana 2.1. Explicit separate candidate, no runtime fallback.",
+  "scope": "Same briefs, references, 1K concept settings. Old requests remain in ledger."
+}
