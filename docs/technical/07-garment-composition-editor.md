@@ -55,3 +55,9 @@ Pan/zoom and responsive canvas; preview thumbnails may be downscaled; editor kee
 ## Acceptance tests
 
 Anonymous user imports image and previews; signed-in owner saves/resumes; changed text preserved and rendered exactly; front/back layers independent; overlay coordinate conversion identical on two screen sizes; low-res large-area design warned/blocked by server; forged zone cost rejected; snapshot referenced by cart immutable after subsequent editing; BYO customer never charged AI credits.
+
+## Independent BYO/editor stage and physical geometry (v1.1)
+
+Standalone `/customize` guest entry works with no AI wallet and no Studio history. Drafts use a short-lived, scoped guest capability, private original upload intents and strict owner claim through verified SSO; navigation/back labels derive from provenance, never route BYO users to AI results. Editor supports multiple raster/text layers, z-order, real font license and exact typography, rotations, crop/scale, normalized garment zone + millimeter world coordinates; numeric keyboard parity and front/back/supported sleeves as supplier profile allows. Scene versions include schema version, immutable source hashes, font ID/license/renderer version and bounded mm transforms; never use client screenshot for print.
+
+Distinct assets: immutable customer original (retrievable unchanged), generated version, derived storefront thumbnail, watermarked proof/mockup, paid digital export, internal print master. Each use has separate rights validation; purchasing digital export never automatically grants garment resale or public-gallery rights. Save draft/preview free, persistent save needs auth, digital download needs Medusa-paid entitlement. Unknown supplier profile permits preview clearly marked unapproved, not paid print release. [BYO,E01,ACL]

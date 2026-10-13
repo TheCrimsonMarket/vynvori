@@ -1,3 +1,7 @@
+> **HISTORICAL v1.0 SNAPSHOT — NOT THE CURRENT SPECIFICATION.**
+> Preserved unchanged below for provenance. Founder-authorized corrected v1.1 individual chapters under `docs/technical/` are authoritative as of 2026-10-13.
+> Read the [canonical v1.1 master specification](docs/technical/00-master-specification.md), [acceptance matrix](docs/technical/20-acceptance-matrix.md) and [route/API/event registry](docs/technical/25-route-api-event-domain-matrix.md). This historical export grants no implementation or production authorization.
+
 # VYNVORI — Complete  Technical Specification
 
 **Export of the modular coding-agent handoff (2026-10-13).** The ZIP version preserves files and is the recommended source. **LuckyLittleDevil authentication source was inaccessible: bridge must be inspected before implementation.**

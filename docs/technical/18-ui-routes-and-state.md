@@ -2,11 +2,31 @@
 
 ## Public routes
 
-`/` editorial storefront home and two primary CTAs: **Create with AI** and **Upload Your Design**. `/customize` independent garment composer. `/studio` AI onboarding choose `Guide Me`/`Create Freely`. `/gallery` published moderated works browse/like/share. `/products/black-oversized-tshirt` initial product description/size guide. `/collections/gaming` original non-infringing ARPG-inspired curated designs. `/cart`, `/checkout` tied to valid Medusa customer identity. `/policies/*` shipping, returns, privacy, intellectual property/licensing, digital exports.
+Canonical proposed Next.js customer-facing paths; stages ST-04..ST-17 are **server-derived view states on one owned project route**, not unique security URLs:
+
+| Route | Auth / entry | Scope |
+|---|---|---|
+| `/` | public | storefront home with equally visible AI/BYO entry |
+| `/studio` | public | Guide Me vs Create Freely; truthful capability display |
+| `/studio/guide` | guest or identity | wizard drafting, no billed generation |
+| `/studio/free` | guest or identity | prompt-first drafting, no billed generation |
+| `/studio/brief/[draftId]` | valid signed guest capability | review/claim draft, expiry/reconnect |
+| `/studio/projects/[projectId]` | verified owner | all creative stages ST-04–ST-17, current server-derived stage on reload |
+| `/customize` | public/guest | independent BYO upload/editor, zero AI credits |
+| `/customize/[compositionId]` | owner or valid scoped guest capability | own layer-based editor/resume |
+| `/customize/[compositionId]/review` | owner or valid scoped guest capability | immutable composition review; checkout independently gated |
+| `/studio/projects/[projectId]/history` | verified owner | immutable version history; no new generation |
+| `/products/black-oversized-tshirt` | public | product/size guide; verified inventory/price if checkout enabled |
+| `/collections/gaming` | public | original noninfringing ARPG themes |
+| `/gallery`, `/gallery/[postId]` | public sanitized approved only | view/likes/share (no resale/remix) |
+| `/cart`, `/checkout` | valid commerce session | Medusa quote/cart/checkout, no free-login barrier to BYO |
+| `/policies/[slug]` | public | disclosed availability, refunds, rights and shipping terms |
+
+No hash-based design prototype route (`#results`, `#bag`) is canonical. Stage query hints cannot bypass server guards. US and AU ship modes gated independently. Marketing audience scope is not shipping availability. [R05,F-R01–08]
 
 ## Authenticated routes
 
-`/account/projects`, `/account/orders`, `/account/credits`, `/account/exports`, `/account/settings`. Central auth callback/logout routes sourced from **audited Lucky pattern**, not guessed. `/studio/projects/[id]` and `/customize/[id]` resume private drafts. All projects initially private, require owner checks even if IDs are not sequential.
+`/account/projects`, `/account/orders`, `/account/credits`, `/account/exports`, `/account/settings`, `/account/gallery` and `/account/orders/[id]` require valid org SSO and owner mapping. `/studio/projects/[projectId]` requires the verified authenticated owner. `/customize/[compositionId]` permits the authenticated owner or explicitly scoped guest preview; no public project URLs by ID alone. Staff operations are authenticated Medusa Admin extension routes with separate operator role enforcement; customer SSO is never enough. Auth callback/logout URLs must be discovered from audited LuckyLittleDevil source, not invented. Return-path allowlist and claim nonce protect SSO deep-link resumes.
 
 ## Main app navigation and semantics
 
@@ -20,7 +40,9 @@
 
 ## UX state machines
 
-Each screen must render distinct loading/empty/success/error/pending-unknown states. For paid AI, show `charged/held/unknown` clearly without claiming provider execution success. For preorder, show actual charge and shipping window with delay obligations. For QA, `awaiting review` not `printing` before approval. For digital export, differentiate `purchased`, `processing`, `ready`, `failed recoverable`, `expired link`.
+State registry is **only** `22-canonical-state-machines.md`; route/stage contract is `21-studio-ux-screen-contract.md`. All customer-facing statuses are server-derived read models, not direct provider billing rows. Per-direction pending/1-of-3/2-of-3/3-of-3 cards must remain inspectable with stable operation IDs even on reconnect, while unfinished bundle cannot proceed to the normal concept selection/final path. Wallet quote accessible with insufficient balance; authorizing requires verified funds/rights/fresh explicit consent. Promo is distinct from bundle, including repeated direction. Studio final choices (`Use`, `Save`, `Request quoted revision`, `Report problem`) cannot cause implicit financial reversal. Vendor cost labels hidden. Final art acceptance is not provider financial settlement and not printer human QA. No blind paid retry and no fake completion percent.
+
+Each stage must render loading, blank, persisted partial, error, case/reconciliation and revoked-capability states where relevant. For accessibility test mobile 320x480,390x568,390x844, keyboard open, 200% resize, stable ARIA live and numerical mm controls. Customer cannot use paid bundle when no rights-qualified Standard final and downstream digital/physical use. Guest brief drafting and BYO editor remain independently available; bounded nonbillable Director execution requires verified identity as specified by ST-04. [E01–06]
 
 ## Accessibility and reliability
 

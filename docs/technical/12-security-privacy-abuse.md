@@ -35,3 +35,7 @@ Account-level and IP/device-aware rate limits using privacy-consistent signals; 
 ## Security acceptance
 
 Cross-account BOLA/IDOR audit, CSRF/CORS, logout/revocation, malicious files, SSRF, event forgery/replay, payment capture duplication, self-granted credits, exposed production artwork, order state manipulation, Medusa admin escalation, provider-spend abuse, signed URL expiry, lawful deletion without corrupting accounting history.
+
+## Rights/availability and public state controls (v1.1)
+
+Saleable Studio bundle policy evaluates Standard final **commercial rights for the customer's jurisdiction/use** and either permitted digital export OR supplier/market qualified apparel production. Staff can revoke individual capabilities; existing packages enter preserved-entitlement operational review rather than deletion. Public metadata never includes raw vendor invoice/cost, private upload object keys, privileged Medusa actor, SSO secret, or internal escalation evidence. Enforce idempotent actions at API even if UI view includes `allowedActions`. Promo anti-abuse keyed to verified issuer/subject; per-device only is insufficient. [F-R02,F-R07,E01,E04]

@@ -23,7 +23,7 @@ Notification log fields: event ID, template version, locale, recipient customer 
 ## Analytics taxonomy
 
 - Acquisition: `landing_viewed`, `campaign_attributed`, `waitlist_joined`, `product_viewed`.
-- Studio: `studio_entered`, `entry_path_selected`, `brief_completed`, `concepts_requested`, `concept_selected`, `refinement_requested`, `final_tier_selected`, `final_approved`.
+- Studio: `studio_entered`, `entry_path_selected`, `brief_completed`, `concepts_requested`, `concept_selected`, `refinement_requested`, `final_tier_selected`, `final_delivered`, `version_used`, `quality_case_opened`.
 - Composer: `composer_entered`, `asset_uploaded`, `layer_added`, `composition_saved`, `mockup_previewed`, `print_zone_selected`, `composition_quoted`.
 - Commerce: `cart_started`, `checkout_started`, `payment_succeeded`, `order_created`, `order_refunded`, `shipment_dispatched` (from authoritative server state).
 - Community: `gallery_viewed`, `publication_requested`, `publication_approved`, `design_shared`, `design_liked`.
@@ -33,3 +33,7 @@ Event data should include opaque session/user ID, source campaign, feature versi
 ## Metrics
 
 Acquisition funnel conversions and event loss, AI cost per accepted output, per-provider edit success/retry, credits purchased/spent/remaining, mockup-to-cart rate, BYO vs AI conversion, price/size selection, QA lead time, defect rate, fulfillment on time, contribution before acquisition and refund/chargeback rates. Payment-derived revenue only from Medusa captured/refunded records, not from client `purchase` events alone.
+
+## Mandatory paid AI customer and operator notifications (v1.1)
+
+Notifications are M8a critical prerequisite rather than deferrable M8b feature: package authorization receipt; per-slot partial failure; provider unknown/ledger hold under reconciliation; resolved verified outcome; route qualification revoked after purchase; case created/assigned/status/remedied; final delivered; objective nonconformance decision; artifact persistence failure; closure pending and verified closure; remaining-slot forfeiture disclosed before final submission. Messages show customer amount held/settled/released and action, not provider internal invoice/cost. Delivery logs must be immutable and replay-safe, with approved numeric response/max-hold deadline and assigned operator before enabling paid flags. Do not provide invented shipment ETAs. [F-R05–08,E02,E04]

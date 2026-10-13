@@ -1,0 +1,17 @@
+{
+  "status": "NOT_RUN_BACKEND_INTEGRATION",
+  "baseline": "Phase6C candidate; proposed BFF authority checks only",
+  "scenarios": [
+    {"id":"AUTH-N01","inputMutation":"quote expires after displayed positive hint","expectedCode":"QUOTE_EXPIRED","expected":"reject before reserve/provider submission"},
+    {"id":"AUTH-N02","inputMutation":"digital export quoted eligible, now revoked, apparel eligibility unchanged","expectedCode":"QUOTE_USE_MISMATCH","expected":"reject; substitute apparel not permitted"},
+    {"id":"AUTH-N03","inputMutation":"rights snapshot revoked","expectedCode":"RIGHTS_REVOKED","expected":"reject and reveal customer-safe reason"},
+    {"id":"AUTH-N04","inputMutation":"SSO actor/region changed since quote","expectedCode":"REGION_CHANGED","expected":"reject and require newly scoped quote"},
+    {"id":"AUTH-N05","inputMutation":"mandatory rights, expiry or partial remedy terms not approved/published","expectedCode":"TERMS_NOT_APPROVED","expected":"reject; no billable operation"},
+    {"id":"AUTH-N06","inputMutation":"quote plan mapping changed after plan edit","expectedCode":"PLAN_STALE","expected":"reject; maintain original slots"},
+    {"id":"AUTH-N07","inputMutation":"quote has stale price policy version","expectedCode":"QUOTE_STALE","expected":"reject/requote/reconfirm"},
+    {"id":"AUTH-N08","inputMutation":"different current authenticated owner from quote/project","expectedCode":"AUTH_REQUIRED","expected":"reject without disclosing another user's project"},
+    {"id":"AUTH-N09","inputMutation":"credit wallet depleted after quote inspection","expectedCode":"INSUFFICIENT_CREDITS","expected":"quote still viewable, authorize rejected"},
+    {"id":"AUTH-N10","inputMutation":"qualified Standard final route revoked","expectedCode":"STANDARD_FINAL_UNQUALIFIED","expected":"reject; offer no unverified final"},
+    {"id":"AUTH-N11","inputMutation":"server authorization hint true but expiry elapsed","expectedCode":"QUOTE_EXPIRED","expected":"reject, regardless of CTA hint"}
+  ]
+}

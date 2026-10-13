@@ -17,7 +17,7 @@ Actual keys opaque/non-guessable; names shown are conceptual. Do not expose user
 
 ## Upload service
 
-1. `POST /api/assets/upload-intents` receives declared MIME, byte size, purpose and guest/account identity.
+1. `POST /api/v1/assets/upload-intents` receives declared MIME, byte size, purpose and guest/account identity.
 2. Checks quotas/ownership, issues short-lived presigned R2 PUT only for exact target key.
 3. Client uploads and reports completion; server HEADs/reads object, verifies dimensions/magic/hash/scans and content safety, commits asset record as `ready`.
 4. Reject or quarantine malformed/abusive files; expired guest assets garbage-collected, respecting references to migrated projects.
@@ -38,7 +38,9 @@ Artifacts must record: pixel dimensions, physical mm, effective PPI per raster l
 
 ## Print-job lifecycle
 
-`created → assets_verified → preflight_pending → qa_pending → qa_approved → released_to_print → printer_ack → printed → inspected → packed → dispatched`; exception states: `needs_fix`, `customer_reapproval`, `rejected`, `cancelled`, `refunded`. Only authorized human QA actor can transition `qa_pending → qa_approved`; releasing checks valid payment, unchanged proof hash and approved print profile.
+The unique canonical `production_jobs.state` values and transition guards live in `22-canonical-state-machines.md` §Plane E — Production QA / fulfillment. Retire the alternative v1.0 lifecycle labels `created/assets_verified/qa_pending/qa_approved/released_to_print/printer_ack/inspected/dispatched/needs_fix/customer_reapproval/rejected/cancelled/refunded` as job states. Preserve supplier acknowledgments, inspection, staff rejection and refunds in their separately owned event/decision/Medusa record types.
+
+Paid Medusa order capture is a guard to create `pending_asset_verification`. `preflight_pending` validates immutable asset hashes, font license, appropriate rights, approved print profile dimensions, pixel density/alpha/color against supplier real requirements. `awaiting_human_qa` requires staff proof approval; `approved_for_print` still needs fresh payment/rights/hash recheck before `released_to_partner`. Reapproval after material proof change is mandatory. Renderer/worker `succeeded` does not approve garment printing. Unknown, unsubmittable, preview-only, disputed or unpaid files cannot be released. No fulfillment promises without genuine US/AU rates. [F-R07,E01,production reconciliation]
 
 ## Operational behavior
 

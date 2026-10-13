@@ -53,3 +53,7 @@ Persist payload version, immutable event ID, producer and `schemaVersion`. Schem
 ## Integration tests
 
 Duplicates, out-of-order delivery, receiver crash after DB commit before ack, Medusa outage during grant, Vynvori outage after capture, wrong signature, replay outside allowed timestamp, partial refund, failed checkout with stale composition, late refund during fulfillment, manual incident replay, reconciliation alert after induced mismatch.
+
+## Cross-plane reconciliation and financial evidence protection (v1.1)
+
+Events use source-scoped unique IDs, immutable producer event version, correlation causality (`projectId/packageId/operationId/medusaOrderId`) and idempotent inbox+outbox. The versioned event spellings in `25-route-api-event-domain-matrix.md` §C are authoritative for the transitions listed there; earlier unversioned shorthand is not a second event contract. Additional bundle-partial, persistence-failure, case, qualification, closure, preflight and fulfillment signals require reviewed versioned schemas before implementation. Provider cost invoices live in protected internal reconciliation tables/logs; public BFF projections expose customer-only receipts and safe `under_review`/`remedy_required`. Never assume event publication and second DB mutation are a distributed transaction. Case management reads authoritative pending operation and ledger state; handles duplicate or out-of-order events. [F-R05–08,E02,E04]

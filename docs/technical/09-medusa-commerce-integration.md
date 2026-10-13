@@ -50,3 +50,9 @@ Multiple businesses on shared Medusa instance; fully custom checkout/order engin
 ## Medusa references
 
 Start at https://docs.medusajs.com/ for current Medusa v2 modules/workflows and custom pricing, customer authentication provider, order module, Medusa Cloud monorepo deployment; verify actual installed APIs before authoring code.
+
+## Medusa quote, consent and paid-offer boundaries (v1.1)
+
+Medusa is authoritative for actual merchandise/cart/order/payment/shipping/discount/refund; Neon owns CreativeBrief, design versions, wallet and credit receipts, project rights, print proof/QA and supplier release. A `compositionQuote` references a frozen scene/version, validated size/placement/zone, authoritative product variant and verified region/tax/carrier rule, with server-generated signed expiry and Medusa custom-priced cart line. Never trust browser-submitted personalization price or market zone. Digital art final/paid composition export are distinct Medusa product/entitlement contracts; no double charging unchanged owner originals.
+
+For AI credit top-ups, Medusa payment capture must be verified via fetch-and-reconcile before single Neon grant. Buying credits never auto-consents to an old Studio quote; new quote/approval required. Full-journey bundle may be sold only when qualified final and a rights/region-valid downstream use are available; checkout orders require their own supplier/merchant/shipping readiness. Partial redemption of eligible consumed design spend is versioned and margin-gated, not an automatic unrestricted wallet discount. [F-R02,F-R07,E01–03]

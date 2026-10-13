@@ -28,3 +28,7 @@ Scheduled verification of Neon and Medusa Cloud backups/restores and R2 object r
 ## Operations documentation
 
 `runbooks/payment-missing-credit.md`, `unknown-ai-billing.md`, `stuck-print-job.md`, `r2-upload-leak.md`, `auth-outage.md`, `shipping-late.md`, `medusa-neon-reconciliation.md`, `rollback.md`. Every production alert links to safe diagnostic queries and escalation owner.
+
+## Support/reconciliation monitoring before paid AI (v1.1)
+
+Before enabling `studio.ai_generation_paid`, monitor and alert: provider submissions with missing job IDs, unpersisted delivered artifacts, orphaned reservations, repeated quote authorization, partial 0/3–2/3 delivery, lost qualification after purchase, stale case notifications, escalation overdue against **approved** SLA, double grant and failed remedy. Operator case queue and notification delivery evidence must exist already in M8a. Sentry/PostHog event names and amounts must be redacted appropriately; vendor cost only to privileged financial observability. The release must document recovery drill (unknown provider after submission; successful provider but R2 write failure).

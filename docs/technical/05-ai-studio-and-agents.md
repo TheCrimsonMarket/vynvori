@@ -6,16 +6,13 @@ Two public entry points into the same creation engine: **Guide Me** visual wizar
 
 ## Bounded design workflow
 
-```text
-brief_draft -> brief_ready -> creative_direction_approved -> concepts_pending
- -> concepts_ready (3 distinct concept versions) -> selected_concept
- -> refinement_1 -> refinement_2 -> final_render_pending
- -> final_approved -> optionally_open_composer / paid_digital_artwork
-```
+**Authoritative sequence** (F-R01–F-R08; UI projection detailed in `21`, machine ownership in `22`):
 
-A guided bundle includes three paid-or-bundled concept options and two refinements per approved policy; one promotional preview entitlement is separate and anti-abuse protected. Additional refinements require explicit charges. The system must **not silently run** three premium generations if the selected bundle funds only standard preview operations.
+`guest guided/free brief → verified identity / guest claim → bounded nonbillable Director plan → customer reviews and approves three distinct directions as one frozen plan → offer choice (optional separate promotional preview) → valid paid bundle quote + explicit consent → exactly three newly generated versions, one per approved direction → inspect 0/3..3/3 persisted results → choose a completed concept (only 3/3 permits ordinary progression) → optionally use/skip up to two included refinements on explicitly selected source branches → qualified separately quoted final authorization → persisted final delivery → package closes; user may Use, Save, report objective defect, or request new quoted revision → optional independent editor/digital export/Medusa checkout`.
 
-The Creative Director: gather intent, propose original directions, check rights risks, ask only essential clarification questions, produce a structured plan. Specialists: prompt construction, generation tool, reference/moodboard analyzer, deterministic quality checks and optional refinement scorer. Agent calls bounded by max iterations, allowed tools, time/cost budget, moderated inputs, cancellation semantics and credit authorization. Machine-generated ratings assist triage but cannot claim physical print qualification.
+Plan changes require a new plan version and invalidate old quotes; purchased slots remain attached to their original approved directions. Planning and ordinary plan revisions are bounded platform overhead, not customer credit charges. A promotional output cannot be counted among the purchased three. Partial versions remain accessible; unresolved slots block selection/final progression pending recovery/case. Skip is reversible while eligible, not an execution. A refinement slot becomes used on verified delivered valid output, independent of subjective preference. Informed final submission puts closure in `closure_pending`; successfully persisted final delivery closes unused included slots only under disclosed and approved terms, while unknown/undelivered operations do not silently consume/forfeit. No numeric expiration is invented.
+
+**Prepurchase capability gate:** paid full-journey package is disabled unless rights-qualified Standard final route and at least one eligible downstream use (licensed digital art export or supported physical production) exists **for that user's region and intended rights**. Showing a quote with insufficient wallet balance is allowed; authorization is guarded, revalidated, and reconfirmed after top-up. An interrupted downstream capability post-purchase pauses service-caused expiry, preserves entitlements/artifacts, notifies, opens case and offers consented alternative or approved remedy. Standard final availability is distinct from actual supplier physical print qualification; Premium is hidden until independently qualified. [E01,E02]
 
 ## Model registry
 
@@ -47,4 +44,10 @@ User reference copyrights, gaming publisher IP, unsafe content, excessive modera
 
 ## Acceptance tests
 
-Different entry paths produce equivalent `CreativeBrief`; free preview only once per canonical identity; malformed reference rejected; quota enforced; 3 distinct concepts saved as immutable versions; 2 revisions versioned with restore; unauthorized users cannot view designs; charge confirmation exact; concurrency preserves ledger; timeout→unknown needs reconciliation; premium unavailable before qualification; printability not inferred from model score.
+Different entry paths produce equivalent `CreativeBrief`; free preview only once per canonical identity; malformed reference rejected; quota enforced; 3 distinct concepts saved as immutable versions; up to 2 optional included refinements versioned with restore; unauthorized users cannot view designs; charge confirmation exact; concurrency preserves ledger; timeout→unknown needs reconciliation; premium unavailable before qualification; printability not inferred from model score.
+
+## Independent execution, plan freeze and final-review outcomes (v1.1)
+
+Creative Director plan is versioned and immutable on customer approval; three slot IDs are allocated only after the plan is approved and paid bundle authorized. Track separately: `studio_project.stage`, `provider_execution.state`, `asset_persistence.state`, `credit_reservation.state`, `quality_case.state`. Submitted provider request ID and operation idempotency key must be durable before status polling; unknown results never cause blind reissue. Provider successful output with failed R2 persistence is **not** a delivered customer artifact. Never expose vendor charge evidence as a customer debit label.
+
+User final choices are `Use this version`, `Save without using`, `Request another revision (quote required)`, `Report a quality problem`. Successful delivery and credit settlement are separate from selection. An objectively nonconforming final goes to case review and correction/remedy; subjective dislike is not automatic refund. Supplier print approval is an additional independent stage. Paid operation must not go live without M8a support, remedies and approved financial/response SLA. See `22` and `23`.

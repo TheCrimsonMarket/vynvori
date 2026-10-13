@@ -52,3 +52,7 @@ Feature branches → PR → dependency-aware npm install with locked versions �
 4. Add typed environment parser and feature flags.
 5. Establish CI and independent app deployments.
 6. Complete central auth repo audit before bridging customers.
+
+## Protected workspace and review artifact boundary (v1.1)
+
+`Phase 6C` candidate files and `.patch` outputs are review artifacts, not instructions to overwrite the current repository. Protected `packages/ai-benchmark`, logos, source designs and ignored `output/` must remain unchanged. Any later code-modifying agent must check `git rev-parse HEAD`, compare to the recorded source SHA in review manifest, perform a dry-run patch apply, and stop if the baseline has drifted; no `git clean`/reset or historic rewrite. Chapters `21`–`25` were added under the founder-authorized local documentation operation. Commit/push and implementation require separate approval; the new ignored `output/phase-06c-application-review/` contains application evidence. Do not treat ignored Phase 05 release contents as expendable.

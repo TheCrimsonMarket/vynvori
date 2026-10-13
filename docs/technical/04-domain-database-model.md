@@ -50,11 +50,11 @@ Use `schemaVersion`, garment product reference, per-zone pages, layer arrays and
 
 ## Suggested states
 
-`design_version`: draft/generated/approved/superseded (immutable revision data even if status recorded elsewhere).
-`composition`: draft/frozen/archived; frozen version is order bound.
-`model_execution`: prepared/reserved/submitted/awaiting_provider/completed/failed/unknown/reconciled.
-`production_job`: waiting_payment → preflight_pending → qa_pending → approved_for_print → released → printed → packed → handed_to_carrier → delivered; exception/cancelled/refund paths.
-`gallery_post`: draft → moderation_pending → published / rejected → unpublished.
+See the **sole canonical lifecycle registry** in `22-canonical-state-machines.md` §Plane E — Production QA / fulfillment. Do not use the v1.0 `waiting_payment`, `qa_pending`, `released`, `handed_to_carrier` as production states. Payment remains Medusa guard; provider execution and render attempts are separate. `production_jobs.state` is exactly:
+
+`pending_asset_verification | preflight_pending | preflight_blocked | awaiting_human_qa | needs_customer_reapproval | approved_for_print | released_to_partner | printing | printed | packed | awaiting_dispatch | shipped | delivered | cancelled_before_release | production_exception`.
+
+A release-to-partner transition requires a fresh authoritative Medusa payment check, verified current composition/profile/proof hashes, no blocking refund, and an append-only authorized HUMAN QA decision. Printer acknowledgment is an event, not approval. No unpaid cart can instantiate a printable production job. State values and transitions must be runtime validated. [Phase6A/6B production reconciliation]
 
 ## Multi-DB consistency
 
@@ -63,3 +63,22 @@ No distributed DB transaction across Medusa and Neon. Use transactional outbox/i
 ## Secrets and migrations
 
 Neon pooled connection via `DATABASE_URL`; controlled direct/admin migration URL optional only if official driver/migration operations require it; no staging connection in production. Drizzle ORM/Kit versions pinned to tested compatible versions, with generated SQL included in PR. Medusa migrations remain Medusa-native in its own deploy lifecycle.
+
+## v1.1 Studio persistence additions (v1.1)
+
+Extend the *representative* Neon entity catalog (exact Drizzle migrations require separate review):
+
+| Entity | Fields / invariant |
+|---|---|
+| `director_plan_versions` | `id`, `project_id`, `brief_version_id`, `directions[3]`, `approval_hash`, `approved_at`; immutable once approved, exactly three distinct direction IDs |
+| `studio_packages` | `id`, `owner`, `plan_version_id`, `offer_snapshot`, `capability_snapshot`, `state` (`quoted/authorized/partial/delivered_3_of_3/open_for_refinements/closure_pending/closed/remedy_pending`), `policy_version`; unique active package per approved offer intent |
+| `concept_slots` | `package_id`, `slot_no in (1,2,3)`, `direction_id`, `operation_id`, `persisted_design_version_id`; unique package+slot and package+direction; **none before approved plan** |
+| `refinement_slots` | package, ordinal 1/2, `state=available/skipped/pending/unknown/used/forfeited`, selected source/branch and operation refs; `skipped` reversible while open; `used` after valid delivered refinement |
+| `promo_claims` | stable `(issuer,subject)` uniqueness, direction/plan, `claim_state`, `operation_id`, artifact/rights, audit timestamps; claim uncertainty requires reconciliation |
+| `capability_snapshots` | versioned jurisdiction, licensed final route, concept route, digital-export rights, garment availability, effective policy and evidence timestamps; recheck at quote authorization and final operation |
+| `studio_quotes` | immutable quote kind, approved plan mapping, price policy, expected balance, expiration, rights snapshot and display disclosures |
+| `quality_cases` | customer, project, operation, issue class, evidence, state, assigned operator, notification audit, authorized remedy record |
+| `financial_receipts` | operation/quote/reservation id, customer displayed held/settled/released units and ledger cause; vendor billed USD stored separately/internal |
+| `render_artifact_manifests` | original+derived+master hashes, rights profile, renderer, source lineage, print profile version; immutable referenced records |
+
+Use transactional constraints/outbox to create all three `concept_slots` only on approved plan+authorized bundle; no placeholder IDs. `plan_version_id` and branch lineage are never reassigned when briefs or selected source change. Retain partial outputs even when bundle completion is blocked. [F-R01–08,E03–05]

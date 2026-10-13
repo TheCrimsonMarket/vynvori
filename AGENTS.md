@@ -24,3 +24,11 @@ You are evolving **an existing private repository**, `TheCrimsonMarket/vynvori`,
 ## Stop and escalate
 
 Escalate when (a) LuckyLittleDevil auth source is not available, (b) a Medusa version-specific extension mechanism differs from docs, (c) checkout can't safely price validated compositions, (d) post-payment outbox/reconciliation invariants aren't met, (e) rights/print/shipping/payment production gates are absent, or (f) any proposed change breaks previously approved product requirements.
+
+## Phase 6C v1.1 canonical documentation (applied locally; implementation pending)
+
+- Founder approvals F-R01–F-R08, E01–E06 and UX-C01–UX-C07 are integrated into the canonical v1.1 chapters `docs/technical/00`–`25`. The founder authorized this local documentation application on 2026-10-13. Application implementation, commits, pushes, deployment and Design Release 1.1 changes require separate authorization.
+- Verify source SHA `83056750fe599d6a7c6b9df9ce199574b6de6eff` before applying any later diff; stop for three-way review if current GitHub `main` differs. Preserve `packages/ai-benchmark`, existing logo, approved Archivo/Monumental Atelier, and intentionally ignored Phase05 `output/` artifacts.
+- Never assume paid concept-only packages are allowed; require qualified Standard final + licensed digital export or eligible garment route for full 3+2 authorization. Promotional preview is separate; Director is bounded/nonbillable; final render is a separately quoted operation.
+- The studio UI stage, provider execution, customer ledger and production/Medusa authorities are separate; no unknown-state billable retries, no unsupported customer debit inference from vendor charges.
+- `M1a + M2 -> M1b` and `M6a + M7 + M8a -> M6b` are prerequisites. Financial/rights/vendor/SSO operational launch blockers remain OFF. Further implementation requires explicit authorization. Acceptance may be marked passed only with executed evidence; this documentation update passes no production gate.

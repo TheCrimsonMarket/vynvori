@@ -62,3 +62,9 @@ Medusa v2 custom auth providers: https://docs.medusajs.com/resources/commerce-mo
 Medusa AuthIdentity/actor model: https://docs.medusajs.com/resources/commerce-modules/auth/auth-identity-and-actor-types
 Medusa provider linking: https://docs.medusajs.com/resources/commerce-modules/auth/link-provider-identity
 Medusa protected route middleware: https://docs.medusajs.com/learn/fundamentals/api-routes/protected-routes
+
+## M1a/M2/M1b dependency and guest access (v1.1)
+
+`M1a` is a read-only audit of LuckyLittleDevil's verified central-SSO→Medusa bridge at an immutable source SHA, including issuer/audience, signing keys, sessions/cookies, revocation, subject mapping, auth/custom Medusa modules, tenant isolation, and version compatibility. This requires source access; the repository name is not protocol evidence.
+
+`M2` provisions a dedicated Vynvori staging Medusa instance + test identities without live payments. `M1b` only then integrates the audited bridge, unique subject mapping and ownership/SSO-callback tests. Guest `/customize` and draft `/studio` must remain accessible with scoped expiring capability even while bridge unavailable; authenticated paid work fails closed. No local password provider is introduced.

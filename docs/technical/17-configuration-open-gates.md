@@ -30,4 +30,8 @@ Lucky auth audit, supplier quote PDFs, garment sample QA report, DTF print-file 
 
 ## Launch gate
 
-The founder/authorized owner signs off individual gates independently. A coding agent can mark technical tasks complete while leaving business-dependent gates **BLOCKED**. `feature.checkout_live` and `feature.production.print_release` must remain disabled where required evidence is absent.
+The founder/authorized owner signs off individual gates independently. A coding agent can mark technical tasks complete while leaving business-dependent gates **BLOCKED**. `commerce.checkout_live` and `production.print_release` must remain disabled where required evidence is absent.
+
+## Non-negotiable live activation gates for v1.1 (v1.1)
+
+Additionally require: (a) a qualified commercial Standard final, verified right to digital export **or** supplier+regional physical order availability at *paid full-journey concept* quote authorization; (b) operator-approved postpurchase route-loss remedy, package expiry/forfeiture disclosures and ledger hold/case SLA; (c) M8a support and reconciliation before any paid AI; (d) real merchant authorization and refund framework before credit purchases; (e) no print release absent verified DTF supplier dimensions/material tests, HUMAN QA, customer proof and actual applicable US/AU shipping duties/ETA. Regional capability can be revoked; preserve affected package rights and issue notices/cases. No paid concept-only offer without separate founder approval. Marketing access does not authorize EU delivery. `Archivo`/Monumental Atelier/logo/Design Release1.0 are approved **visual decisions**, not live production evidence. [F-R07,E01,E02]

@@ -1,6 +1,6 @@
 # 20 — Traceability and acceptance matrix
 
-Use statuses `NOT_STARTED`, `IN_PROGRESS`, `PASSED`, `FAILED`, `BLOCKED`. **All rows currently NOT_STARTED or BLOCKED:** this documentation does not imply code exists. For each completed requirement record PR/commit, test evidence, migration/deploy link, reviewer and date.
+Use statuses `NOT_STARTED`, `NOT_RUN`, `IN_PROGRESS`, `PASSED`, `FAILED`, `BLOCKED`. **All rows currently NOT_STARTED or BLOCKED:** this documentation does not imply code exists. For each completed requirement record PR/commit, test evidence, migration/deploy link, reviewer and date.
 
 | ID | Area | Acceptance evidence | Current status |
 |---|---|---|---|
@@ -35,3 +35,7 @@ Use statuses `NOT_STARTED`, `IN_PROGRESS`, `PASSED`, `FAILED`, `BLOCKED`. **All 
 ## Release rules
 
 A row can be `PASSED` only with a reproducible link to test/evidence. No “conditionally passed” row may satisfy a mandatory production launch gate. A coding agent must not change founder-approved scope to make a test easier. Any architecture deviation requires an ADR and explicit founder approval.
+
+## v1.1 traceability and status segregation (v1.1)
+
+Existing `ACC-01`..`ACC-27` current statuses stay **unchanged** until actual tests. Extend *proposed* acceptance IDs in `24-traceability-acceptance-v1.1.md`: `ACC-28` dual entry/immutable 3-direction plan, `29` full quote/downstream guard, `30` promo separate + two-device race, `31` per-slot 0–3 saved partial and no double paid retry, `32` included refinement fork/skip/forfeiture, `33` qualified separately consented final + no-final gate, `34` provider/credit/public separation, `35` M8a cases/notice/remedy/hold SLA, `36` post-purchase qualification revocation, `37` 25-screen routes/mobile mocks, `38` BYO independent + physical print lineage, `39` visual approval vs backend evidence split. All proposed IDs start `NOT_RUN`/`BLOCKED` as applicable; passing Phase05 demo browser tests does not satisfy them. Prior Archivo/logo/Monumental/visual release are **founder approved**, which is separate from implementation/test acceptance. External model, legal seller, actual shipping, physical samples, IP rights, provider invoices and SOP remain blocked. [F-R01–08,E01–06]

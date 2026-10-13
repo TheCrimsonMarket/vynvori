@@ -55,3 +55,12 @@ Every boundary must have: idempotency key, schema version, stable entity identif
 ## ADRs required before implementation
 
 Identity transport and bridge after Lucky audit; customer-vs-admin operator identity mapping; chosen Medusa customization API after version pin; CDN/private R2 access; Cloud Run job execution authentication; deterministic render engine for vector text/print quality; payment/refund provider after eligibility verification.
+
+## Integration/authority layering (v1.1)
+
+- **UI stage** is a server-derived view of separate records, not the authoritative provider or wallet state. No route change, refresh or background poll starts paid execution.
+- **Provider adapter** owns submission/request evidence and artifact arrival; `WorkflowAgent` orchestrates but must not reinterpret unknown external billing as failed-uncharged.
+- **Neon credit ledger** owns customer authorization/holds/settlement; Medusa owns payment capture, wallet top-up merchandise and physical order financial state. Atomicity is local to each DB; outbox/inbox + reconciliation are mandatory for cross-system effects.
+- **Neon production job** owns exact physical proof/approved print release and supplier progress; Medusa owns actual commerce fulfillment and shipment financial/order records. Customer status is a projection, not a third mutable owner.
+- **Org SSO** owns human identity; Vynvori/Medusa map stable verified subject, not mutable email. Real bridge blocked pending source-SHA audit and staging Medusa.
+- No region is activated by marketing copy. US and AU are initial shipping modes but each region's real merchant/duty/ETA and printer economics must be verified before checkout. [F-R07,E01,E02]

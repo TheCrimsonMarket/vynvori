@@ -10,9 +10,7 @@ Admin shows paid order, composition version hash, preview, print-preflight check
 
 ## Status model
 
-- `awaiting_payment`, `paid_verified`, `preflight_pending`, `preflight_failed`, `awaiting_qa`, `needs_customer_approval`, `approved_for_print`, `released_to_partner`, `printing`, `printed`, `packed`, `awaiting_dispatch`, `shipped`, `delivered`, `cancelled`, `refunded`, `manual_exception`.
-- Guards: only paid and matching immutable proof/profile can enter `approved_for_print`; only admin QA role can approve; only released jobs may be printed; scan tracking event/source; no transition to shipped without parcel/label evidence.
-- Every significant transition has idempotent event with actor ID or trusted service identity and audit log. Shipment/delivery states mirrored to Medusa by explicit domain command with reconciliation.
+Customer-visible order status is a **read-only projection** of Medusa payment/fulfillment and Neon `production_jobs.state`; it must not be a third writable state. Canonical production state names/transitions are in `22-canonical-state-machines.md` and `08-assets-rendering-and-dtf.md`. Distinguish `Checking artwork`, `Preparing proof`, `Awaiting human quality approval`, `Awaiting customer proof approval`, `Approved for production`, `Sent to print partner`, `Printing`, `Packed`, `Awaiting dispatch`, `Shipped`, `Delivered`, and `Support review`. Never show `Printing` before human QA, and never let shipping events bypass payment/partner evidence. `cancelled_before_release` is possible only before partner release; post-release cancellation/refund triggers production exception/authorized remedies as applicable.
 
 ## Bangladesh partner workflow
 
@@ -33,3 +31,7 @@ Broken print, missing shipment, size mismatch, reprint, returns, customs delay, 
 ## Tests
 
 Unauthorized employee cannot approve; QA approval requires exact proof hash; cancelled payment cannot print; re-render invalidates old QA approval; double-send release ignored; stale carrier status cannot regress delivery; Australia batch threshold, deadline and fallback policies tested with configurable rate inputs.
+
+## Paid AI support (M8a) before live M6b (v1.1)
+
+Although most customer support/gallery/analytics arrive in M8b, **M8a is blocking** for any live paid image generation. Implement durable quality/billing/reconciliation cases with owner and staff authorization, customer-safe operation receipts, operator assignment/inbox, notices, trace correlation, status read, audited remedy execution with Medusa/Neon reconciliations and escalation. Require approved named operators, numeric hold limits, response/remedy deadlines and policy version prior to enabling billable operation. No unsupported time promises. [F-R06,F-R08,E02]

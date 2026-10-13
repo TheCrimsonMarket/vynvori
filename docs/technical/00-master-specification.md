@@ -1,6 +1,6 @@
 # 00 — Master technical specification
 
-**Project:** VYNVORI. **Repo:** https://github.com/TheCrimsonMarket/vynvori. **Decision baseline:** founder approvals Phases 1–6, 20/21 initial T decisions A; **T03 overridden** with organization centralized auth patterned on LuckyLittleDevil. **Document status:** implementation handoff; subject to verifiable external gates.
+**Project:** VYNVORI. **Repo:** https://github.com/TheCrimsonMarket/vynvori. **Decision baseline:** founder approvals Phases 1–6, 20/21 initial T decisions A; **T03 overridden** with organization centralized auth patterned on LuckyLittleDevil; **F-R01–F-R08 approved 2026-10-13**. **Document status:** canonical v1.1 applied locally for founder and independent review; implementation and production gates remain unverified.
 
 ## Product goal
 
@@ -10,7 +10,7 @@ Build a globally accessible premium customizable-apparel platform that initially
 
 **BYO:** anonymous visitor → upload original PNG/JPEG/WebP → separate free Garment Composition Editor (layers, exact text, position/scale/rotate, multi-zone as supported) → preview → sign in via organization SSO → persist and lock composition → choose size → Medusa personalized cart → checkout (when enabled) → automated print preflight → internal human QA → release to DTF partner → US direct or Australian consolidation → tracking. Paid high-resolution composition export is optional; no export charge to place an order. Original unchanged upload remains retrievable by owner.
 
-**AI:** anonymous visitor → `Guide Me` wizard or `Create Freely` prompt → account required to claim one free preview or generate paid art → CreativeBrief and bounded Creative Director → three concept directions (bundle policy; free promotional preview where eligible) → revisions (two in guided bundle) → qualified Standard final or Premium if a truly differentiated qualified model exists; Advanced Model Selection optional → original art/version in R2 → optional Garment Editor → digital artwork purchase or physical order → partial eligible AI-design spending redemption on physical shirt where economically allowed.
+**AI:** anonymous visitor → `Guide Me` wizard or `Create Freely` prompt → account required to claim one free preview or generate paid art → CreativeBrief → bounded nonbillable Creative Director → approve exactly three immutable directions → optional identity-bound *separate* one-preview promotion → separately consented 3+2 bundle (one new concept per direction, two optional included project-bound refinements) → separately quoted qualified Standard final or Premium only if demonstrably qualified; Advanced Model Selection optional → original art/version in R2 → optional Garment Editor → digital artwork purchase or physical order → partial eligible AI-design spending redemption on physical shirt where economically allowed.
 
 **Gallery:** all projects private by default. Creator explicitly publishes a sanitized representation, moderated and removable, with browse/like/share; no buy-someone-else's-design, download originals, remix or royalties in MVP. Architect future explicit licensing/marketplace as separate optional grants.
 
@@ -51,3 +51,28 @@ Use typed flags: `commerce.checkout_live`, `payments.live`, `studio.ai_generatio
 ## Cross references
 
 `01` architecture, `02` workspace, `03` T03 identity bridge, `04` schema, `05` AI, `06` wallet, `07` editor, `08` assets/DTF, `09` Medusa, `10` events, `11` QA logistics, `12` security, `13` operations, `14` tests, `15` milestones, `16` APIs, `17` external gates, `18` routes, `19` notifications/events, `20` acceptance.
+
+## Founder-approved AI offer and saleability invariants (v1.1)
+
+F-R01–F-R08 are founder-approved *policy*, distinct from proof of real execution and operational readiness:
+
+1. `Guide Me` and `Create Freely` normalize to one `CreativeBrief`; authenticated Creative Director planning is bounded and nonbillable. Customer approves a single immutable three-direction plan before a paid package is quoted.
+2. The identity-bound optional promotional preview is one **additional** concept from one approved direction, never one of the three paid concept deliveries, nor a credit discount for repeating a direction.
+3. A paid bundle promises three **new**, persisted, immutable concept versions (one per direction) and up to two optional project-bound guided refinements. Standard final is quoted separately. Incomplete or uncertain delivery blocks full-completion claims and requires recovery or an approved customer remedy.
+4. Bundle authorization is forbidden without a qualified, rights-eligible Standard final **and** at least one disclosed eligible downstream use for the customer's region: commercial digital artwork export or an available configured garment-production path. Do not sell concept-only service through this offer. Physical print eligibility is independently gated.
+5. Quotes disclose exact included/excluded actions, rights limitations, current capability snapshots, partial-delivery treatment, customer credit holds and any operative expiry/forfeiture terms. Never auto-accept after a top-up; reconfirm a freshly validated quote.
+6. Unused included refinements are not silently forfeited at final *quote* or provider *submission*. During unknown final outcome closure is pending; on verified final delivery and prior explicit disclosure package closes. Objective defects enter case handling; subjective dislike does not imply automatic reversal of an otherwise valid charge.
+7. If downstream capability disappears after bundle purchase, preserve projects/deliverables and suspend service-caused expiry, notify customer, investigate qualified equivalent with consent, or process authorized remedy. No mandatory surprise surcharge.
+8. For live paid AI, independently operating provider execution state, immutable customer credit ledger, customer support cases, approved hold/response SLA and actual qualified model rights are hard prerequisites. Provider expense is **not** proof that customer should be charged. No blind potentially billable retries.
+
+Visual baseline already approved: Monumental Atelier, A1 identity and product hierarchy, A2 editorial campaign approach, Archivo interface/editorial font and original logo, Phase 05 Design Release 1.0 as **visual only**. US direct shipping / AU consolidated fulfillment priority is unchanged; EU delivery is unpromised. Detailed contracts: `21-studio-ux-screen-contract.md`, `22-canonical-state-machines.md`, `23-typed-contracts-runtime-validation.md`, `24-traceability-acceptance-v1.1.md`.
+
+## v1.1 canonical chapter index
+
+- [21 — Studio screen contract](21-studio-ux-screen-contract.md)
+- [22 — State machines](22-canonical-state-machines.md)
+- [23 — Proposed contracts and runtime validation](23-typed-contracts-runtime-validation.md)
+- [24 — Acceptance traceability](24-traceability-acceptance-v1.1.md)
+- [25 — Route, API and event registry](25-route-api-event-domain-matrix.md)
+
+The canonical documentation is applied; proposed APIs, schemas and runtime integrations remain unimplemented. Phase 6C checks validate documentation and the existing offline benchmark only.

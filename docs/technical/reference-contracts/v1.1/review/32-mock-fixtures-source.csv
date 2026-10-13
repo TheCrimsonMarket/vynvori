@@ -1,0 +1,33 @@
+fixture_id,affected_screens,scenario,expected_acceptance,review_anchor,execution_status
+CF-01,ST-00 ST-06 ST-08,Standard final unqualified before purchase,conceptPackage unavailable; no billable quote authorization; save brief,UX2-01/12; F-R07,NOT_RUN
+CF-02,ST-00 ST-06 ST-08 ED-03,Final qualified; apparel supplier/US-AU route unverified,accurate apparel gate separate; price/terms disclose no shirt promise,UX2-01/12,NOT_RUN
+CF-03,ST-06 ST-08,"Standard qualified at offer, revoked before authorize",quote stale/revoked; zero provider execution; explicit reconsent,UX2-01/12,NOT_RUN
+CF-04,ST-04 ST-05,Director planning success; concept model unavailable,capability independent; no promise of valid concept call,UX2-12,NOT_RUN
+CF-05,ST-08,Quote visible with insufficient credits,quote still displayed; top-up CTA; authorize disabled,UX2-04,NOT_RUN
+CF-06,ST-08 AC-01,Top-up success returns to expired/changed quote,"re-evaluate, show new terms, no automatic authorization",UX2-04,NOT_RUN
+CF-07,ST-08,SSO interruption prior to customer consent,no hold/no execution; plan persisted,UX2-04,NOT_RUN
+CF-08,ST-06 ST-07,Promo eligible one user across two devices,"single identity claim, one delivered promo, no duplicate claim",UX2-05,NOT_RUN
+CF-09,ST-06 ST-07 ST-11,Promo on direction 2 then purchase 3+2,"new paid direction2 concept, separate asset and receipt, no offset",UX2-05,NOT_RUN
+CF-10,ST-07,Promo provider uncertainty then verified zero-charge failure,claim held then safely released/requalifies by evidence,UX2-05,NOT_RUN
+CF-11,ST-07,Promo result delivered; R2 persist fails,unconfirmed persistence; no claim of delivered; case,UX2-08,NOT_RUN
+CF-12,ST-09 ST-10,Concept batch 0/3 1/3 2/3 3/3,"three independent cards, accurate delivered count, no fake sequential labels",UX2-11,NOT_RUN
+CF-13,ST-10 AC-01,2/3 persisted; third verified zero-charge fail,"explicit safe same-slot recovery, no duplicate bundle billing",UX2-07,NOT_RUN
+CF-14,ST-10 AC-01,2/3 persisted; third unknown after provider submission,"same operation ID, hold/case; no automatic paid POST retry",UX2-07,NOT_RUN
+CF-15,ST-10 AC-01,3/3 stored; bundle settlement pending,artwork visible with accurate held/settled customer receipt,UX2-08,NOT_RUN
+CF-16,ST-12 ST-13,"Skip slot 1, use slot 2",slot1 skipped reversible; slot2 binds selected source version,UX2-06,NOT_RUN
+CF-17,ST-12 ST-14,"Skip both, reopen before final submission",both usable again while package open; no extra charge,UX2-06,NOT_RUN
+CF-18,ST-12 ST-13,Delivered refinement disliked subjectively,slot still delivered; quality case optional; no automatic credit reversal,UX2-06/02,NOT_RUN
+CF-19,ST-11 ST-12 ST-17,Switch selected concept after delivered branch refinement,old branch persists; slot spent; unused same-plan slot can apply new source with confirmation,UX2-07,NOT_RUN
+CF-20,ST-05 ST-11 ST-12,Edit brief after approved plan and purchased slots,new plan/quote; old assets preserved; no transfer of old slots,UX2-07,NOT_RUN
+CF-21,ST-14 ST-16,View final quote without submitting,unused slots stay open,UX2-06,NOT_RUN
+CF-22,ST-14 ST-16,Final submitted then provider outcome unknown,closure_pending; included slots blocked not forfeited; support case,UX2-06/03,NOT_RUN
+CF-23,ST-16,Final submitted; verified uncharged failure,"package reopens; slot availability restored, no arbitrary settlement",UX2-06,NOT_RUN
+CF-24,ST-16 ST-17,"Validated final delivered, customer saves without using",package closes with disclosed forfeiture; final receipt independent of Use,UX2-02/06,NOT_RUN
+CF-25,ST-16 AC-01,Final delivered and customer reports objective nonconformance,"operator review, immutable evidence, make-good/remedy through audited ledger",UX2-02/03,NOT_RUN
+CF-26,ST-16 AC-01,"Final delivered, aesthetic preference complaint",no auto-refund; optional quoted revision or review,UX2-02,NOT_RUN
+CF-27,ST-16 AC-01,Provider billed Vynvori but no persisted deliverable,case and separate customer credit truth; no invoice-implied debit,UX2-02/03,NOT_RUN
+CF-28,AC-01 AD-01,Support operator remedies attempted without RBAC/approval,denied; immutable case audit; ledger via command only,UX2-03,NOT_RUN
+CF-29,ST-09 ST-10 ST-16,Refresh/reconnect on two devices during run,same operation IDs/receipts; no hidden POST or ARIA spam,UX2-08/11,NOT_RUN
+CF-30,ST-05 ST-08 ST-10 ST-16 ED-02,320x480 390x568 390x844 + 200% text + keyboard,rights/quote unobscured; keyboard/list alternative; no focus theft; numeric mm controls,UX2-11,NOT_RUN
+CF-31,AC-01,UX-19 visual font/logo approval and backend acceptance,visual founder decision APPROVED; technical acceptance NOT_RUN/BLOCKED,UX2-10,NOT_RUN
+CF-32,ST-13 ST-14,No final purchased; package expiry not configured,no hidden forfeiture; live paid flag blocked pending approved policy,UX2-06,NOT_RUN
