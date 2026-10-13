@@ -7,7 +7,7 @@
 `brief_draft → brief_ready → director_planning → director_review → plan_approved → offer_choice → [promo_quote → promo_pending → promo_review] → bundle_quote → bundle_authorized → concepts_running → concepts_partial | concepts_ready → selected_concept → refinements_open → final_quote | final_unavailable → final_pending | final_under_review → final_delivered → project_next_action`.
 
 - `Guide Me` and `Create Freely` converge to one versioned `CreativeBrief`. Bounded Director is nonbillable and cannot guarantee a paid eligible downstream path.
-- `director_review → plan_approved` requires owner revision check, exactly three distinct direction IDs, immutable approved plan hash. Before approval, concept-slot array is **empty**.
+- `director_review → plan_approved` requires owner revision check, exactly three distinct direction IDs, immutable approved plan hash. Public ST-05 is a separate `draft|approved` projection; a draft has no plan hash/approved ID. Before and immediately after approval (before bundle authorization), concept-slot array is **empty**.
 - Promo is one separately claimed verified identity entitlement and its generated output does **not** count toward purchased 3+2.
 - `bundle_quote → bundle_authorized` checks authenticated verified customer, server rights/region, qualified Standard and at least one downstream digital/garment use, exactly three distinct direction IDs, current policy/offer version, money and explicit reconfirmation. Inspecting quote does not require wallet balance.
 - `concepts_partial` preserves 0/3–2/3 durable versions with visible cards, but blocks normal concept-selection/final advancement until 3/3 valid outputs or an operator-approved remediation.
@@ -28,6 +28,8 @@
 | `outcome_unknown`, `persistence_failed_under_review` | `reconciled_delivered | reconciled_uncharged_failure | operator_case` **only** from authoritative evidence |
 | `verified_zero_charge_failure` | authorized safe retry *only* with new explicit policy/consent; don't reuse charged/unknown attempt |
 
+Additional required recovery projections: verified-zero-charge **final** failure must carry the `originalPackageId` and authoritative **pre-attempt** original package closure state. For first final attempted on an `open` package, authoritative verified-uncharged failure + committed ACID release returns to `open`, preserving still-eligible unused refinements. For a separately purchased revision attempted after a previously delivered final on a `closed` package, original closure remains `closed`; any case-bound remedy is a new entitlement/refund/ledger adjustment, never original-slot restoration. The failure read model includes the customer-safe release receipt, not vendor evidence. Until verified release commits show `under_review` and do not project successful recovery. Promo provider result that fails R2 persistence stays claim/operation `under_review`; no second identity-bound free claim from a reload. Director quota exhaustion leaves saved brief with no approved plan, while concept-route unavailability blocks package authorization before purchase and creates durable case/reconciliation after purchase. These are public-safe projections, not new vendor state or reimbursement policies.
+
 Store separate internal `vendor_cost_evidence` (usage/invoice/unknown) not projected to public. A provider can charge Vynvori while customer ledger remains reserved/under review. Never blindly repeat potentially billable POST after timeout. Verify durable artifacts before marking a customer deliverable.
 
 ## Plane C — Customer credits, package and promo entitlement (Neon ACID ledger)
@@ -43,9 +45,9 @@ Customer financial projection exposes `{availableUnits, reservedUnits, settledUn
 `guest_draft → editable_scene → saved_owned → frozen_version → composition_quoted → cart_linked → ordered_snapshot`.
 
 - Anonymous BYO stays free of Studio/AI credits; guest drafts can be claimed only by owning scoped capability + verified identity. Expired or conflicting claims fail closed.
-- Each scene revision references immutable original/image assets, layer IDs/z-order, exact text/font/license versions, zone physical mm geometry and original SHA hashes. Zone switch preserves independent layer arrays.
+- Each scene revision references immutable original/image assets, layer IDs/z-order, exact text/font/license versions, zone physical mm geometry and original SHA hashes. A frozen review proof, preflight report and cart quote all reference the *same* immutable composition version and content hash; draft edits invalidate any attempt to quote them under the prior freeze. Zone switch preserves independent layer arrays.
 - `frozen_version` never mutates after a quote/order. Editing creates next version/new quote; no implicit amendment to old Medusa cart line. Public mockup/preview and private print master are distinct artifacts.
-- Digital export needs separate paid entitlement (other than retrieving unchanged uploaded original); export rights ≠ public-gallery publishing or physical commercial reproduction.
+- Digital export needs separate paid entitlement (other than retrieving unchanged uploaded original). `artwork_export` is keyed to one immutable generated artwork version and `composition_export` to one frozen composition version, each also bound to exact exported R2 artifact ID/SHA256 and rights policy. A newer source version cannot be retrieved through an older grant; export rights ≠ public-gallery publishing or physical commercial reproduction.
 
 ## Plane E — Production QA / fulfillment (Neon + Medusa)
 
@@ -72,3 +74,7 @@ This is a proposal to normalize *future* initial state schema; there is no evide
 ## Global cancel, recover, reconcile policy
 
 Navigation back/pause/closing tab **never** cancels a provider request or releases customer credit by itself. User-initiated cancellation of unpaid draft may be immediate; paid provider/partner cancellation is confirmed only with authoritative verified evidence and approved published terms. M8a durable case IDs and customer notifications are prerequisites for live billable AI. Numeric maximum hold and remedy/response service levels must be approved by founder/operations before charging.
+
+### Post-closure remedy authority (F-R04 Option A / C-03)
+
+Founder policy is **APPROVED**; live remedy issuance remains **BLOCKED** pending operational terms. Closed original packages and refinement history are immutable. Split internal audited `InternalRemedyAuthorizationCommandV1` and `RemedyExecutionInternalV1` from externally projected `CustomerRemedyStatusV1`. Enforce unique `(caseId, remedyDecisionId)` and `(scope, idempotencyKey)`, payload-consistent replay and at-most-one compensating effect per approved decision; external Medusa refund and Neon credit/replacement transactions must use linked idempotency and reconciliation. Provider invoices, private refund IDs, staff actor IDs and authorization evidence never appear in the customer view.

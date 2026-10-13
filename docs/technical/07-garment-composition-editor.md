@@ -48,6 +48,10 @@ The example uses **fictional print profile identifiers and coordinates** solely 
 
 Each uploaded asset has validated owner/guest-session lineage; signed upload cannot be reused for unrelated accounts; immutable version hash includes source hashes and font versions. UI-visible text never treated as HTML. Prevent arbitrary CORS/SSRF/object keys. Merchant-side price quote generated only after user/asset/zone authorization and scene profile validation.
 
+## Proposed ED-03 frozen-review invariant (E6E-02)
+
+One selected immutable scene snapshot `{compositionVersionId, sceneHashSha256, variantId, printProfileVersion}` is the binding key for **all** displayed proof pixels, server preflight, quote and personalized Medusa line. Proof/source SHA256 and scene/font/asset version references must agree before display or quote authorization. A mutable `draftRevision` must never render under a frozen-version label. On edit, explicitly return to a new draft and require new freeze/preflight/quote, or show the prior frozen proof unmodified; disable add-to-cart on any mismatch. Server quote checks must bind owner, exact source hash/version, print zone/profile/size, rights, current region and price. Test Edit→Back/deep link/refresh across both sides and verify all provenance fields match.
+
 ## Performance
 
 Pan/zoom and responsive canvas; preview thumbnails may be downscaled; editor keeps original asset refs separately. Limits for maximum layers, asset bytes and total decoded image memory are configurable; mobile actions accessible via panels and touch transforms. Autosave must debounce, cancel stale writes, reconcile conflict versions on reconnect, and warn before losing guest drafts.

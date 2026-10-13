@@ -36,6 +36,15 @@ export type PlanStateV1 =
  | {readonly kind:'approved';readonly planVersionId:string;readonly approvalHash:string;readonly directions:readonly [PlanDirectionV1,PlanDirectionV1,PlanDirectionV1];readonly conceptSlots:readonly []}
  | {readonly kind:'bundle_authorized';readonly planVersionId:string;readonly approvalHash:string;readonly directions:readonly [PlanDirectionV1,PlanDirectionV1,PlanDirectionV1];readonly conceptSlots:readonly [ConceptSlotV1,ConceptSlotV1,ConceptSlotV1]};
 
+/** PUBLIC ST-05 plan presentation, independent of authoritative PlanStateV1. */
+export type DirectorPlanProjectionV1 =
+ | { readonly kind:'draft';readonly draftPlanId:string;readonly planRevision:number;readonly briefVersionId:VersionId;
+     readonly directions:readonly [PlanDirectionV1,PlanDirectionV1,PlanDirectionV1];readonly conceptSlots:readonly [];
+     readonly approvalHash?:never;readonly planVersionId?:never;readonly approvedPlanRevision?:never;readonly approvedAt?:never; }
+ | { readonly kind:'approved';readonly planVersionId:string;readonly approvedPlanRevision:number;readonly briefVersionId:VersionId;
+     readonly approvalHash:string;readonly approvedAt:string;
+     readonly directions:readonly [PlanDirectionV1,PlanDirectionV1,PlanDirectionV1];readonly conceptSlots:readonly []; };
+
 export type DownstreamKind='digital_art_export'|'personalized_garment';
 export type RightsDecision='commercial_use_permitted'|'preview_only'|'not_permitted'|'unverified';
 export interface DownstreamUseEligibilityV2 {
@@ -170,11 +179,13 @@ export interface StudioStatusV3 {
 export type StudioStageV1 =
  'entry'|'guided_brief'|'free_brief'|'brief_review'|'director_planning'|'director_review'|'offer_choice'|'promo_review'|
  'concept_quote'|'concepts_running'|'concepts_partial'|'concepts_review'|'refinement_1'|'refinement_2'|'final_quote'|'final_unavailable'|'final_review'|'history';
+import type { StudioRecoveryProjectionV1 } from './vynvori-phase6e-companion.proposed.js';
 export interface StudioScreenBaseV1 {
   readonly schemaVersion:'studio-screen.v1';readonly route:string;readonly projectId:ProjectId|null;
   readonly status:StudioStatusV3|null;readonly availableActions:readonly SafeActionV1[];
   readonly errorCode:CustomerErrorCode|null;readonly supportCases:readonly SupportCaseViewV1[];
   readonly history:readonly StudioVersionHistoryItemV1[];
+  readonly recovery?:StudioRecoveryProjectionV1|null; // stage-specific, public-safe projection; server validates association
 }
 export type StudioScreenV1 = StudioScreenBaseV1 & (
  | {readonly screenId:'ST-00';readonly stage:'entry';readonly entryModes:readonly ['guide_me','create_freely'];readonly byoLink:'/customize'}
@@ -182,7 +193,7 @@ export type StudioScreenV1 = StudioScreenBaseV1 & (
  | {readonly screenId:'ST-02';readonly stage:'free_brief';readonly brief:CreativeBriefDisplayV1|null}
  | {readonly screenId:'ST-03';readonly stage:'brief_review';readonly brief:CreativeBriefDisplayV1;readonly guestClaimStatus:'guest'|'sign_in_required'|'claim_pending'|'claimed'|'expired'|'conflict'}
  | {readonly screenId:'ST-04';readonly stage:'director_planning';readonly brief:CreativeBriefDisplayV1;readonly plannerJobId:string}
- | {readonly screenId:'ST-05';readonly stage:'director_review';readonly plan:Extract<PlanStateV1,{kind:'approved'}>}
+ | {readonly screenId:'ST-05';readonly stage:'director_review';readonly plan:DirectorPlanProjectionV1}
  | {readonly screenId:'ST-06';readonly stage:'offer_choice';readonly promo:PromoEligibilityViewV1;readonly offerDisclosures:readonly string[]}
  | {readonly screenId:'ST-07';readonly stage:'promo_review';readonly promo:PromoEligibilityViewV1;readonly promoOperation:PublicOperationV3|null}
  | {readonly screenId:'ST-08';readonly stage:'concept_quote';readonly quote:Extract<QuoteViewV3,{offerKind:'concept_bundle_3x2'}>|null}

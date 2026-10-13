@@ -43,3 +43,7 @@ Preserve all 32 `CF-01`–`CF-32` from the original `MOCK-FIXTURE-DELTA.csv`, re
 | ACC-UXC-06 | Canonical route/command registry, deep links, preserved BYO provenance, SSO return and clean refresh during generation; no demo hash redirects | routes/types contract fixtures and accessible navigation | NOT_RUN |
 
 These are **Design Release 1.1 acceptance requirements only** and do not amend approved visual tokens/logo or production acceptance.
+
+## Phase 6E recovery / post-closure review-fixture inventory
+
+The [negative/recovery fixture inventory](review-fixtures/NEGATIVE-RECOVERY-ACCEPTANCE-CASES.csv) preserves PE6-01 through PE6-25, all **NOT_RUN**. E6E-01/02/03/06/07 cover plan approval, frozen proof, exact-version exports, recovery and ED/AC/CO projections; C-01 locks founder-approved Option A while live execution remains BLOCKED. PE6-08/09 preserve authoritative pre-attempt original package closure; PE6-23 forbids reopening after a failed later revision. PE6-24 requires case-bound idempotency, changed-payload conflicts and no duplicate remedy effects; PE6-25 excludes private authorization, staff, payment, idempotency and provider evidence from customer projections. This inventory upgrades no existing acceptance status and proves no runtime, financial or production control.
