@@ -55,7 +55,7 @@ try {
   page.on("console", message => { if (message.type() === "error") result.errors.push(message.text()); });
   page.on("response", response => { if (response.status() >= 400 && /\/_next\/|\/assets\//.test(response.url())) result.failedAssets.push(response.url()); });
   const routes = [["/", "WEAR WHAT"], ["/studio", "A COLLECTION"], ["/customize", "YOUR ART"], ["/products/black-oversized-tshirt", "THE BLACK"], ["/gallery", "PERSONAL FIRST"]];
-  const viewports = [[320,480],[390,568],[390,844],[768,1024],[1440,900]];
+  const viewports = [[320,480],[320,640],[390,568],[390,844],[768,1024],[1440,900],[1920,1080],[2560,1440],[3440,1440]];
   for (const [width,height] of viewports) {
     await page.setViewportSize({ width,height });
     for (const [route,heading] of routes) {
@@ -71,6 +71,16 @@ try {
           images: [...document.querySelectorAll("img")].every(img => img.complete && img.naturalWidth > 0),
         }));
         assert.equal(layout.overflow, false); assert(layout.font); assert(layout.images);
+        if (width>=1440) {
+          const framing = await page.evaluate(() => {
+            const frame = selector => { const r=document.querySelector(selector).getBoundingClientRect(); return {left:r.left,width:r.width}; };
+            const mark=document.querySelector(".wordmark")?.getBoundingClientRect();
+            const media=document.querySelector(".campaign > img")?.getBoundingClientRect();
+            return {frames:["main",".site-header",".preview-strip",".site-footer"].map(frame),wordmarkRatio:mark ? mark.width/mark.height : null,campaignRight:media?.right};
+          });
+          assert(framing.frames.every(frame=>Math.abs(frame.left)<1&&Math.abs(frame.width-width)<1),"Desktop site is boxed inside a centered frame");
+          if (route==="/") { assert(Math.abs(framing.wordmarkRatio-2286.82/320)<0.01); assert(Math.abs(framing.campaignRight-width)<1); }
+        }
         await page.addScriptTag({ content: axe });
         const audit = await page.evaluate(async () => window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a","wcag2aa","wcag21aa","wcag22aa"] } }));
         assert.deepEqual(audit.violations.map(v => ({ id:v.id, nodes:v.nodes.map(n => n.target) })), []);
