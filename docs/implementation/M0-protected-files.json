@@ -1,0 +1,815 @@
+{
+  "baseline": "0db351a95f5a47b360de1ad65d4c4145f4717bed",
+  "files": [
+    {
+      "path": "design/reference/README.md",
+      "sha256": "5d5b11d76845abb93a7bf58dd860792aef01987a22948a0549c52980fcd89a10"
+    },
+    {
+      "path": "design/reference/REFERENCE-MANIFEST.json",
+      "sha256": "d22179e6800242d37aba84dc31cdf9c1fe62573bc8b747a53538eedc9e1173e2"
+    },
+    {
+      "path": "design/reference/assets/arch-promo.svg",
+      "sha256": "e50c02e50d4d4404d03c83d6e69e094e20e1d54d82fa3eb520902c371c4f9f53"
+    },
+    {
+      "path": "design/reference/assets/arch-refined.svg",
+      "sha256": "1251a8b23d073fac554efbbe931b5df93db845b131749d148dec0601a60ce836"
+    },
+    {
+      "path": "design/reference/assets/arch-study.svg",
+      "sha256": "d36f718579ee02897fc3578c8678f8bb988d170dda463770df6f190364a66a5d"
+    },
+    {
+      "path": "design/reference/assets/blank-garment.png",
+      "sha256": "10d578946947155098dc82e8de437afacd0e0ec92eef6dda5609c31d5aef5269"
+    },
+    {
+      "path": "design/reference/assets/campaign.png",
+      "sha256": "ed6ea3013401cc7c4cdecd84c6a8158365dff9a16180bdeffba59ef7e3e2aed9"
+    },
+    {
+      "path": "design/reference/assets/chromatic-promo.svg",
+      "sha256": "6a3529db03dc451974e991c735f7eb85ecc8199c56fc59110bb302bb0884566f"
+    },
+    {
+      "path": "design/reference/assets/chromatic-refined.svg",
+      "sha256": "f585d20469daedd54bbb642d6301e552fb74eee4c1e27401d3f4e2805fb5936e"
+    },
+    {
+      "path": "design/reference/assets/chromatic-study.svg",
+      "sha256": "9c0d339958fa4d77f507fde3f402c99e4b471e5027ec790ef0a80cd1992718c8"
+    },
+    {
+      "path": "design/reference/assets/fonts/archivo-METADATA.pb",
+      "sha256": "a2e8f63ffa4f9dfe43a65c349b4742e9cd85298802aed890a6315152f2ae231d"
+    },
+    {
+      "path": "design/reference/assets/fonts/archivo-OFL.txt",
+      "sha256": "108b4e57c9c796d3d38d0428ca7ee39de47ad93187302718d9b2d8864b9b716b"
+    },
+    {
+      "path": "design/reference/assets/fonts/archivo.ttf",
+      "sha256": "0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053"
+    },
+    {
+      "path": "design/reference/assets/manifest.json",
+      "sha256": "c9a4779279161fb1172e1d2aa5b4038e992dcc0efe4f182a6290b4fd253d46b4"
+    },
+    {
+      "path": "design/reference/assets/orbit-promo.svg",
+      "sha256": "91b7d6a84d1cec8ec112c41d66aff63fca504b62f46c41983b0a04d46070a753"
+    },
+    {
+      "path": "design/reference/assets/orbit-refined.svg",
+      "sha256": "efab1d99dd5c16df2f7a4d4275f72d68c381b3f488f7e0a41e0237bc548213e6"
+    },
+    {
+      "path": "design/reference/assets/orbit-study.svg",
+      "sha256": "2b17bebbc3defd25a4abe653d5556f7b276466622c1cc010f8319ffade54d2b0"
+    },
+    {
+      "path": "design/reference/assets/studio-chromatic-promo.svg",
+      "sha256": "16a1b5853a48a07ca5e023b61d4ca804ccf2c0e7a8ee05ce9139284c2a03cd00"
+    },
+    {
+      "path": "design/reference/assets/studio-chromatic-refined.svg",
+      "sha256": "9349a9139fd00647acdd6338031bb5000ae6cd5f80a4516780dbf6c579ce6055"
+    },
+    {
+      "path": "design/reference/assets/studio-chromatic-study.svg",
+      "sha256": "a611dc3212a015892a243c6d36fa12492a1fb8c5fb0fe771b9532d9b4bd29f19"
+    },
+    {
+      "path": "design/reference/assets/studio-sentinel-promo.svg",
+      "sha256": "d815474da998861026ab441f7b78586fcdcb0b15ce05be6d5a1215924de43a5e"
+    },
+    {
+      "path": "design/reference/assets/studio-sentinel-refined.svg",
+      "sha256": "31d8f3980dc21c55205443cc7112510e4a2370272126dce6e5a0c12d1e81f025"
+    },
+    {
+      "path": "design/reference/assets/studio-sentinel-study.svg",
+      "sha256": "849acc55c754f8b4ddd1a7067f61bc25358a643a28f8df1a8b795f793856e2cc"
+    },
+    {
+      "path": "design/reference/assets/vynvori-symbol-black.svg",
+      "sha256": "286e5a48edfb5de113c7521998ee5efa0dbfa9096314337e9bb968c3e39da8dc"
+    },
+    {
+      "path": "design/reference/assets/vynvori-wordmark-black.svg",
+      "sha256": "097f1666c8cc05bd4c1d11e5f7c81ac09573083221b930773508d37c79f446ea"
+    },
+    {
+      "path": "design/reference/assets/vynvori-wordmark-white.svg",
+      "sha256": "17e9adedd5f42b05858eaf289bdec14fcfd6a249d9f43ac2165fe2044945c8b5"
+    },
+    {
+      "path": "design/reference/brand-spec.md",
+      "sha256": "e3f9533b07cc61adc536562e4b43e8b725e23c1863423a19b952c72356338b98"
+    },
+    {
+      "path": "design/reference/components/geometry.js",
+      "sha256": "b0d44cbc94c81a3cc9957d503b31572db07d5735910778861ede84c163e8578d"
+    },
+    {
+      "path": "design/reference/components/release.css",
+      "sha256": "f2862bc6ae1d647caae5e16e69d38d769d016b38c8b420c598fbcc63b0c2f4b6"
+    },
+    {
+      "path": "design/reference/components/visuals.js",
+      "sha256": "123d264850f2fd878fb712ea03d583e2ba2695a3fd6d7e014a0282fdde0c9608"
+    },
+    {
+      "path": "design/reference/docs/ASSET-PROVENANCE.md",
+      "sha256": "49542ab998858484e09b07a980a5208568dc2cde83f93e960f72d734c459559c"
+    },
+    {
+      "path": "design/reference/docs/CONTRACT-PROVENANCE.json",
+      "sha256": "ddaa32fef30f67efd825b661a6b11f75111a84880e5764f05044c54bd2125e3b"
+    },
+    {
+      "path": "design/reference/docs/DESIGN-DECISIONS.md",
+      "sha256": "cf67b3c8b6651f65d44119835ee638dc17db1b88a328e56dba218369abd2480b"
+    },
+    {
+      "path": "design/reference/docs/MOCK-ARCHITECTURE.md",
+      "sha256": "df441682cd7ea1de0d7edf3fb83b2f4c279ac7f6926f54406af71ede50694570"
+    },
+    {
+      "path": "design/reference/docs/PE6-COVERAGE.csv",
+      "sha256": "b3598745e3adaf0f00e11be3efac6577545294ad33211306755628beaf09bf88"
+    },
+    {
+      "path": "design/reference/docs/PHASE6E-CORRECTION-REPORT.md",
+      "sha256": "44c4afff861f1e395d13f7663b6e19f09fa5925083a9f2d3512483de87a39aab"
+    },
+    {
+      "path": "design/reference/docs/SCREEN-CONTRACT-MATRIX.md",
+      "sha256": "d18f749b1b3ac46764ecb8e3927088812f0f4d5ace1d63cb15d77ac32d9470cd"
+    },
+    {
+      "path": "design/reference/docs/SECURITY-REVIEW.md",
+      "sha256": "516ceeb750928b634bfb6bdb07fea58702adb0b5093bd776bac2a7b3b9a6b8e9"
+    },
+    {
+      "path": "design/reference/index.html",
+      "sha256": "9cc8fcd083f2411c1c847b5e4475492da1e4f70081d02482690f7ea3ff770a65"
+    },
+    {
+      "path": "design/reference/mock/assets.ts",
+      "sha256": "7293728e3d1ff0481ce03d3226b9a01c7ee06b890d1b4061ebb55a331a2c8d00"
+    },
+    {
+      "path": "design/reference/mock/browser.ts",
+      "sha256": "a5ab50ee5cf837bb2d5bc613dd9ab633cfa7f138ff36e9f98359f3d9de637a1f"
+    },
+    {
+      "path": "design/reference/mock/corrections.ts",
+      "sha256": "b679ba76d71ae0bc805141daf1dbcd0b98241ca04060e046df7c5904dede25eb"
+    },
+    {
+      "path": "design/reference/mock/fixtures/account.json",
+      "sha256": "be18e3aafe0106796f6b48b7ba0d2e187c4cacf0a5a46220a42555a87876fb9b"
+    },
+    {
+      "path": "design/reference/mock/fixtures/both-uses.json",
+      "sha256": "3acb7de5cceb20f05976cc6334ab3684851f269a559c049b65bb5b44c2b1a2d5"
+    },
+    {
+      "path": "design/reference/mock/fixtures/bundle-expired.json",
+      "sha256": "f6cbc7c1bae916ca4e01dee15a5d59f7aad32b84931230fcbe4823a62fd37440"
+    },
+    {
+      "path": "design/reference/mock/fixtures/bundle-insufficient.json",
+      "sha256": "9b6ebbbf31eea8bdcc9a218a4dc5f46a400d958f459adfecc5394f8c2f4289e7"
+    },
+    {
+      "path": "design/reference/mock/fixtures/bundle-stale.json",
+      "sha256": "7a58318acba2d09ec49ecb5dc3d00a5d7c6c9dabb8623e77a5aaa9b0088fb0fa"
+    },
+    {
+      "path": "design/reference/mock/fixtures/bundle-valid.json",
+      "sha256": "08f6857af5acd03902b0ee51632ddea0c6064fbfb9e0ea930e0e6887da3dc86a"
+    },
+    {
+      "path": "design/reference/mock/fixtures/byo-empty.json",
+      "sha256": "dd16fd79e510f5e3c3562b4f7ffe848944d1ac1c60ba12f09dd7cf87252d6067"
+    },
+    {
+      "path": "design/reference/mock/fixtures/byo-layers.json",
+      "sha256": "49cb35bb938e7d8db1d4677641a2bd386c4ee5a081b7ea8b8c2a5fd00b13576e"
+    },
+    {
+      "path": "design/reference/mock/fixtures/byo-low-resolution.json",
+      "sha256": "939855b42f3659941049db2c9c4ff80769e937d2a450a67f1b4c835b06844a47"
+    },
+    {
+      "path": "design/reference/mock/fixtures/byo-out-of-bounds.json",
+      "sha256": "7996e0f6152db2b5e0c24eeaeb5a4d787d3cc50e45a8b7f3758428ab5486812f"
+    },
+    {
+      "path": "design/reference/mock/fixtures/cart.json",
+      "sha256": "807096bdffe4705cda04027e47be092e84954e2eec7916650175123b9bcba206"
+    },
+    {
+      "path": "design/reference/mock/fixtures/claim-conflict.json",
+      "sha256": "9bc1d76e724ad9045bf7f7d57cb19fce727af31aae3458dd6af9f4b7be04105a"
+    },
+    {
+      "path": "design/reference/mock/fixtures/composition-quote-expired.json",
+      "sha256": "05014dd2f248aaf099ed3f119fbf45b233a739ddc3c5fa51349b572a4ee95f54"
+    },
+    {
+      "path": "design/reference/mock/fixtures/composition-review.json",
+      "sha256": "af50b98befdb605ec8da8b6f10d779413a9c88560bde5392d755bb10e7eb8d95"
+    },
+    {
+      "path": "design/reference/mock/fixtures/concept-failed.json",
+      "sha256": "cbfaffe17416517ad4c69fbc37880c84cf01704d0bbae21a399483b1d8f1ec42"
+    },
+    {
+      "path": "design/reference/mock/fixtures/concept-unknown.json",
+      "sha256": "da2553fa961ecd47280aeab9a9e766f16b67edc617625888589dcaacee402947"
+    },
+    {
+      "path": "design/reference/mock/fixtures/concepts-0.json",
+      "sha256": "e81870b0fc98c714b26d0c90666a019fcad30086dc76d440a12117d1cda033ec"
+    },
+    {
+      "path": "design/reference/mock/fixtures/concepts-1.json",
+      "sha256": "f850016b8df48a23363e58ff3a2b7c89848ef5d599a2a9acac1c03cfcddb5b04"
+    },
+    {
+      "path": "design/reference/mock/fixtures/concepts-2.json",
+      "sha256": "797289b25b4f6bc0f8711fe5c6033b0b5c483d2049497bade06dcb9458c331d7"
+    },
+    {
+      "path": "design/reference/mock/fixtures/concepts-3.json",
+      "sha256": "4cac08ddc7b8ec90b238f6dd79d58995ec572bfe32c2552198167c55c3f0fbde"
+    },
+    {
+      "path": "design/reference/mock/fixtures/digital-only.json",
+      "sha256": "a38ac69aac4a8bb0c88af9a6bac7f2620f255a8cc9e2b1a54acd3f3001a4a087"
+    },
+    {
+      "path": "design/reference/mock/fixtures/director-planning.json",
+      "sha256": "e797e9ab9de4bc7de9efa425752487e2ca5acf0d2e701fd34ee2872f8b3d2904"
+    },
+    {
+      "path": "design/reference/mock/fixtures/director-review.json",
+      "sha256": "a204ee157e73a9c80d44b2e3c59e87c77757bdccaa932bf8d8fa99fd398d8ac2"
+    },
+    {
+      "path": "design/reference/mock/fixtures/draft-expired.json",
+      "sha256": "11b086b7db70349792b6657512389c4f03919fd69df38ada3eeb55195b784233"
+    },
+    {
+      "path": "design/reference/mock/fixtures/entry.json",
+      "sha256": "9ddb32f90c82c07b6abd100408dabd1663e6448e00f8888471309ebdc633db30"
+    },
+    {
+      "path": "design/reference/mock/fixtures/export-expired.json",
+      "sha256": "c0ceb85141e8c1f44a498aa41a750249f3ad54d3929cd453ff22523b24fb5c6b"
+    },
+    {
+      "path": "design/reference/mock/fixtures/export-restricted.json",
+      "sha256": "949dabd4fdbc717d263ee32bb22b706c8f80a649036c8f712ac1c7376da88e1e"
+    },
+    {
+      "path": "design/reference/mock/fixtures/final-available.json",
+      "sha256": "5d2cb90d1eff1634cc9ad3f9a0f4fbe48ade93724720da31c7db031113aba697"
+    },
+    {
+      "path": "design/reference/mock/fixtures/final-charge-review.json",
+      "sha256": "554a37c957d32f40741d9fe8b87b7474491f30983b9a518ba88b892314b37cda"
+    },
+    {
+      "path": "design/reference/mock/fixtures/final-delivered.json",
+      "sha256": "1073f5591c9cdc09db67fc87698fa39ff4ed94b234059d89c4de0cff0959a569"
+    },
+    {
+      "path": "design/reference/mock/fixtures/final-quality.json",
+      "sha256": "b528cadf5a4d761d82b08b36e07e52330f7a7303370fe2f46e1bc67bf2a4d2e8"
+    },
+    {
+      "path": "design/reference/mock/fixtures/final-reserved.json",
+      "sha256": "56f65f322609ee306dd38f252584da0a06d13dd419e9a9f4af08a6526b3d77f6"
+    },
+    {
+      "path": "design/reference/mock/fixtures/final-revoked.json",
+      "sha256": "f84dc1a383a7ffc172b6e01d166a79ba35b0ed5dc64cfcb180b79372ad5ff6e4"
+    },
+    {
+      "path": "design/reference/mock/fixtures/final-running.json",
+      "sha256": "c970395fee60a00189c11a1e8206d8953db606ca94236b81e75c2fcd80cb5f7a"
+    },
+    {
+      "path": "design/reference/mock/fixtures/final-unavailable.json",
+      "sha256": "f6b07177e8c094115ad475b8b2d9c962c5b07bbef7efa4e238969fbb98401bf2"
+    },
+    {
+      "path": "design/reference/mock/fixtures/final-unknown.json",
+      "sha256": "5f72399bccd225688d17b50b927a67e18d8ab35d957533f992334b0bc45fac68"
+    },
+    {
+      "path": "design/reference/mock/fixtures/free-normalized.json",
+      "sha256": "52f1ab17c74e64ee51b96b95b71f87668af882f94e3749069c8a199fc5d53b1d"
+    },
+    {
+      "path": "design/reference/mock/fixtures/gallery-pending.json",
+      "sha256": "da7d6830340975aabddababffea58e73acc8a73d08b5ac5fe3784717bd97496a"
+    },
+    {
+      "path": "design/reference/mock/fixtures/gallery-private.json",
+      "sha256": "52274d917406bf64f1d7bfd24fd2e931ad7f0525b451393ff5c7c1b4f4dff56e"
+    },
+    {
+      "path": "design/reference/mock/fixtures/gallery-published.json",
+      "sha256": "fcc1159c6159f5f0ee3a6143c31f5c11b3ab7435709125f17305385a9af40d41"
+    },
+    {
+      "path": "design/reference/mock/fixtures/gallery-rejected.json",
+      "sha256": "34eebd60ea83a30cc7fde19cedf00eef7d01f6f69e38af5809aded5c76dc34b0"
+    },
+    {
+      "path": "design/reference/mock/fixtures/gallery-revoked.json",
+      "sha256": "a3429ab2e36835af44ffe64f309b2f22b50fc554dd5bc14b1f64cbbea7e7a450"
+    },
+    {
+      "path": "design/reference/mock/fixtures/garment-only.json",
+      "sha256": "bb78a5da3ba912d29f487c0213a1537661b5925434427db513469431bc8ab5ac"
+    },
+    {
+      "path": "design/reference/mock/fixtures/guide-success.json",
+      "sha256": "83ea2701edc0be9835e1ea7de50cfe5469f9c09d392e87cf623dd1d3c4eb85ab"
+    },
+    {
+      "path": "design/reference/mock/fixtures/guide-validation.json",
+      "sha256": "e69aef6fc0f61c1a6a5b320ddd9f7f5df7c5e223e0b39407bbaef8dbf38d0332"
+    },
+    {
+      "path": "design/reference/mock/fixtures/history.json",
+      "sha256": "62b752ec3bfd2687ee407f2023bff6fbf2edc8f33500479d15665ad74e8c62b2"
+    },
+    {
+      "path": "design/reference/mock/fixtures/no-downstream.json",
+      "sha256": "8a7a99de60542a0792b88017371c6b2a2282ad4d189d9ded9a7f9f7ecd89ca3a"
+    },
+    {
+      "path": "design/reference/mock/fixtures/no-standard.json",
+      "sha256": "8cb419ee6debc714f4bd2e6493aba060981c98939c80dc0ee12b845a1c85e350"
+    },
+    {
+      "path": "design/reference/mock/fixtures/persistence-pending.json",
+      "sha256": "1b018e8be87f1711d7e3bb1746ab688a5efc1b7b3e371c41c6c2b1de6080271d"
+    },
+    {
+      "path": "design/reference/mock/fixtures/promo-delivered.json",
+      "sha256": "ced04735b95dbc8c0e2222bd3f1e74f3172c1a065aee59b44384acfa1bcb42d3"
+    },
+    {
+      "path": "design/reference/mock/fixtures/promo-eligible.json",
+      "sha256": "e87e9a9e6f02c193f10c3dfbc0b7ece44037ae47849a49d4b4571952353b9bc4"
+    },
+    {
+      "path": "design/reference/mock/fixtures/promo-failed.json",
+      "sha256": "f2239488ccbdf2ced46ed02c1be16dc24eda7eac40e0394d27399f482da76f2e"
+    },
+    {
+      "path": "design/reference/mock/fixtures/promo-running.json",
+      "sha256": "102c4ef75da89aa30fef674f14b4abaeafa612daf143edbc008283924d2421d7"
+    },
+    {
+      "path": "design/reference/mock/fixtures/promo-unavailable.json",
+      "sha256": "2335474b48a399aa7f4c4395a0681ab4710e284a89b29b318348bad002c51d33"
+    },
+    {
+      "path": "design/reference/mock/fixtures/promo-unknown.json",
+      "sha256": "65019aee1386776599a66688a61859ab4aea9407c75785bf74f00d14818d8131"
+    },
+    {
+      "path": "design/reference/mock/fixtures/promo-used.json",
+      "sha256": "3b086b03363232c2e6049a0e443b06f2ba2517ba274446d173b28eddc22666d5"
+    },
+    {
+      "path": "design/reference/mock/fixtures/provider-pending.json",
+      "sha256": "e78cf4238df88cfdd8f5d281aa34bf33157ddb960cc01acf69eb0e8b76a9f108"
+    },
+    {
+      "path": "design/reference/mock/fixtures/qa-hold.json",
+      "sha256": "1a1ab44e98fe8d4602a1a4ca338b5fbbe9b0ff482038528f0e6030c1ebc88673"
+    },
+    {
+      "path": "design/reference/mock/fixtures/qa-ready.json",
+      "sha256": "2360c19a762a889a91b759cb557dce3d5c6db1d62da926305335494fbcfd4dce"
+    },
+    {
+      "path": "design/reference/mock/fixtures/qa-reapproval.json",
+      "sha256": "a14788ede0905c4a128a413d596e2c288494688785b3b2dc29c8b4fd03430c02"
+    },
+    {
+      "path": "design/reference/mock/fixtures/refinement-1.json",
+      "sha256": "d4aa044b6485108b14c5ec68614576b832a82e6e84041b0ec97e4438edcab6b6"
+    },
+    {
+      "path": "design/reference/mock/fixtures/refinement-2.json",
+      "sha256": "74d5458f9dbe26dd5c3b8ec8020088fc161229193b4a9a4f8d5756e51a1ef04d"
+    },
+    {
+      "path": "design/reference/mock/fixtures/refinement-pending.json",
+      "sha256": "d5fd7425623d9593978490b8a194f5ea7dd67cd18dedc58443415919ddc6c324"
+    },
+    {
+      "path": "design/reference/mock/fixtures/refinement-skipped.json",
+      "sha256": "61148043dc327efc6beca382013544787927f956ecf9d6868c0ed0a644c73371"
+    },
+    {
+      "path": "design/reference/mock/fixtures/refinement-unknown.json",
+      "sha256": "87987ccfad0d1d223b7853de780781d02ece3bcb23cff9ac58ba6d057da9a0ca"
+    },
+    {
+      "path": "design/reference/mock/fixtures/region-blocked.json",
+      "sha256": "cb13d88649038c37377fb25ba7a0434b4e5371c2c6c20da2c982adfd3e7ac75d"
+    },
+    {
+      "path": "design/reference/mock/fixtures/settlement-pending.json",
+      "sha256": "5587393f4b9127959b580ddd25dded9ddaa7e6e92153691c1dc39aa06fbcee40"
+    },
+    {
+      "path": "design/reference/mock/proposals/director-plan-projection.ts",
+      "sha256": "a984e8fabf4acc6f16bad8a194f9890f4f56733331db1f23ec9eacf9f787bf33"
+    },
+    {
+      "path": "design/reference/mock/reference/README.md",
+      "sha256": "c010e6da66ad00f05d8accee706d6d0af5e43a4de7c0a25495948b5e9d38b446"
+    },
+    {
+      "path": "design/reference/mock/reference/proposed-contract-assertions.ts",
+      "sha256": "b06d12d6c6400ac9894380d92c0a3d2b62cfd976c93386c16703608c98765574"
+    },
+    {
+      "path": "design/reference/mock/reference/review/25-gap-traceability-v1.1.csv",
+      "sha256": "8e479d5288746839edcb3da39b42194573e52d54e65a5dd221902a431433e202"
+    },
+    {
+      "path": "design/reference/mock/reference/review/32-mock-fixtures-source.csv",
+      "sha256": "a828610c3bd68089196df1caa198d6113b96c3f23aa5c2ad186d737ef5127876"
+    },
+    {
+      "path": "design/reference/mock/reference/review/server-authorization-negative-fixtures.json",
+      "sha256": "602f1ffc42a9b013b6f68188c3441a7bb4641c6dd0bc17c48e4e4e4bd149d3aa"
+    },
+    {
+      "path": "design/reference/mock/reference/vynvori-phase6e-companion.proposed.ts",
+      "sha256": "a599e92c7beea8acf00a7d3a6c38e7b04e9c7b5548e621614208c2ad23c2822c"
+    },
+    {
+      "path": "design/reference/mock/reference/vynvori-v1_1-proposed.ts",
+      "sha256": "009f64ba91380f837901166a99a36923ac9e18c8cb913972837588636942b6fd"
+    },
+    {
+      "path": "design/reference/mock/service.ts",
+      "sha256": "f582db0347ccab233f6d998930811affc531ebe993467bf9fb31fb217a6e6f6c"
+    },
+    {
+      "path": "design/reference/package.json",
+      "sha256": "c7145deaecb3b06cbe423a7d5bbdc150845d5893d789ef97285d868c31ad7280"
+    },
+    {
+      "path": "design/reference/review.html",
+      "sha256": "e86bd6611806ac8744490f141bdf4c6de48803c910add244fcdd088b88aa441d"
+    },
+    {
+      "path": "design/reference/scripts/build.mjs",
+      "sha256": "ea101eab7734fc9d17afe4124dfadc8b43d4406e6cff74e1f24f3d8903ac3cb7"
+    },
+    {
+      "path": "design/reference/scripts/runtime-output.mjs",
+      "sha256": "64abc2da9ef29ba063c680c8e79832c2dd332f29b7e09f81731e079270a7a153"
+    },
+    {
+      "path": "design/reference/scripts/verify-reference.mjs",
+      "sha256": "e5c733987ed3360083ba6db522cecaa321b202ee13273d407ea7eacbcbc092c1"
+    },
+    {
+      "path": "design/reference/serve.mjs",
+      "sha256": "0d228eb02c1701f0ac1435f789531187965f654b57659329ca9b1eb311d2a57f"
+    },
+    {
+      "path": "design/reference/src/app.js",
+      "sha256": "67fbb04a2866497408e483c824e3747cdc03bac36ccdeca4cdbbca056d59b694"
+    },
+    {
+      "path": "design/reference/src/atelier.css",
+      "sha256": "4d5cd479f11f84f6433cfe91522a79270f3dd7a2dd70db04ee2ae90b0c197859"
+    },
+    {
+      "path": "design/reference/src/corrections.css",
+      "sha256": "d69cfca250ac3e3f734fd8f9a383024011891f8be31c388243cc4f1c46c56570"
+    },
+    {
+      "path": "design/reference/src/corrections.js",
+      "sha256": "ab6c5148e2c5f459efcac854ca120c80004259f81b9b8deaa384c79761c7776e"
+    },
+    {
+      "path": "design/reference/src/final-accessibility.css",
+      "sha256": "104be8d51ea2bc1767b899ba254cd70e0fe1a14938ff175775439b1b754a660e"
+    },
+    {
+      "path": "design/reference/src/layout.css",
+      "sha256": "e767c83aa5af7c6da64a5749456e8631282c6b2265df1c931a05e3ba010ecce6"
+    },
+    {
+      "path": "design/reference/src/mock.js",
+      "sha256": "dbc53ceed72b0406c5f3d3fc8c822a11d64ffb72f272cc466c73d2615de4ca0b"
+    },
+    {
+      "path": "design/reference/src/polish.css",
+      "sha256": "abaaf6f4afef4900f0fb23e4f2a544bd01694d7476e629b038c50c672b7d0322"
+    },
+    {
+      "path": "design/reference/src/polish.js",
+      "sha256": "d55661e6a7ff17d4419246f45d096915374ee399c3efbeb8528177231781d0a9"
+    },
+    {
+      "path": "design/reference/src/review.js",
+      "sha256": "2f5733eba1b19338ea3c29b297dc8d41ee33d43bccb84985dfab56e2b71b3ae9"
+    },
+    {
+      "path": "design/reference/src/state.js",
+      "sha256": "2f261e516cb7b428cfee557d85b360f253e114ef0ec9334ab072fde1593bde35"
+    },
+    {
+      "path": "design/reference/src/storefront.js",
+      "sha256": "fe102975fc4fad094366caa38f2cfdc71608a734f39f7e900c8092b1b365bcab"
+    },
+    {
+      "path": "design/reference/tests/baseline/src/mock.js",
+      "sha256": "5294d9785104f0cf7565e1e3b5b4463354541c094c711000808dccd7f27d1764"
+    },
+    {
+      "path": "design/reference/tests/browser.mjs",
+      "sha256": "34516032629e98493cfb7627c241d66f1b19679f33dd7d284bdec573986cfba2"
+    },
+    {
+      "path": "design/reference/tests/contracts.mjs",
+      "sha256": "86d08e286c053a6fa1739119936ee54464fb56d3b301801b2e1609c21cfccfe9"
+    },
+    {
+      "path": "design/reference/tests/dependencies.mjs",
+      "sha256": "e0b744926935614b975a3624bd49316f055fe27f9d12d6873012b273388f4269"
+    },
+    {
+      "path": "design/reference/tests/phase6e-browser.mjs",
+      "sha256": "a9589f81c2a3c9ba584d72b0bc9b30d5c9e5487f7be9da66ecf4832ba0419290"
+    },
+    {
+      "path": "design/reference/tests/phase6e.mjs",
+      "sha256": "281bcfd3b4750e60632f1cf77689925815f7221961f4ae940cec943d12e2df94"
+    },
+    {
+      "path": "design/reference/tests/text-resize.mjs",
+      "sha256": "ed43f589e79edf3b69e837742080a522975e28f27c428de39461e9ae328ba7d9"
+    },
+    {
+      "path": "design/reference/tokens/tokens.css",
+      "sha256": "e944ffa28d3afcbeaa7133b308dbabb75fce58f03771da47b33c61a69d465c59"
+    },
+    {
+      "path": "design/reference/tokens/tokens.js",
+      "sha256": "b08bff07cce28ab659d6198a3cc0baa0e8e5e767173a58bf0cfc6430e09b4666"
+    },
+    {
+      "path": "design/reference/tokens/tokens.json",
+      "sha256": "938b0925150106a9ae9653da5c26f1fb4d0687d8ce12fbe15e8422f0da91db43"
+    },
+    {
+      "path": "design/reference/tsconfig.json",
+      "sha256": "b01b2b7954efbaff634a8785eed8c350fd59564845e4d0d37d9e25c08c4e6b83"
+    },
+    {
+      "path": "docs/technical/00-master-specification.md",
+      "sha256": "e3046db5a87730a22772d0ee4475e926276c71f2398178336443c943f6cdc62e"
+    },
+    {
+      "path": "docs/technical/01-system-architecture.md",
+      "sha256": "33e87d8f6aa0d55fe3934fab5be773269d406535c068d8c43f77051191570571"
+    },
+    {
+      "path": "docs/technical/02-monorepo-and-development.md",
+      "sha256": "e08e64943f882a8fc9ac21119248fdbf1278f40e583b1cf706a8e83b0723c614"
+    },
+    {
+      "path": "docs/technical/03-centralized-authentication.md",
+      "sha256": "d86f8de0f59fbe99e934c9ca42d4afe3e3d782c16387284a0dda946893a4c98d"
+    },
+    {
+      "path": "docs/technical/04-domain-database-model.md",
+      "sha256": "0042f2532d0f553b5a56eab738b1a7fa124c0eb4d731557c040360f338fd52e5"
+    },
+    {
+      "path": "docs/technical/05-ai-studio-and-agents.md",
+      "sha256": "41066a4c4a7d84a7c01e915d8f17aa32262f03bf76ca99f81ae8d66609565aec"
+    },
+    {
+      "path": "docs/technical/06-credit-ledger-and-entitlements.md",
+      "sha256": "7b8063343b2c8f86c8be79f12f142469d240328b3a5c465a19b47c9b173f7ec9"
+    },
+    {
+      "path": "docs/technical/07-garment-composition-editor.md",
+      "sha256": "a936b3a5d35145d9c7e7b4c89cafebbf0b3ad12dd6194f4903eda20ddf615cd7"
+    },
+    {
+      "path": "docs/technical/08-assets-rendering-and-dtf.md",
+      "sha256": "594d8b4ad531f7489aa01b06b31ebb191c3de5188785169db1ddec78b39e8818"
+    },
+    {
+      "path": "docs/technical/09-medusa-commerce-integration.md",
+      "sha256": "8daebcf421b86073fb8dfd878b7f58413597df2dcfc3225401c0bc54f587171a"
+    },
+    {
+      "path": "docs/technical/10-cross-system-events.md",
+      "sha256": "7eca91f5b26467beca069b76bff6a67f9ed34f3108fd23ad96fcb5b072ac2e15"
+    },
+    {
+      "path": "docs/technical/11-admin-qa-fulfillment.md",
+      "sha256": "97366ffb92a877957910d38fa991735693362f809655c695da8eb93a75a87dca"
+    },
+    {
+      "path": "docs/technical/12-security-privacy-abuse.md",
+      "sha256": "1e3804b2bc97b807c38ec954a1ac56e8667d0616ac88f919fc35fc3e15c23c8d"
+    },
+    {
+      "path": "docs/technical/13-observability-and-deploy.md",
+      "sha256": "1867563ddbfdda36720969fc5dea30a6b71e1577610104d31448f51b146f4272"
+    },
+    {
+      "path": "docs/technical/14-test-strategy.md",
+      "sha256": "80cc4b0ead29e4a9ba0fa7562cd233074150e15636f7c57fdcdd168e52431a26"
+    },
+    {
+      "path": "docs/technical/15-implementation-milestones.md",
+      "sha256": "b6fcc45fd8cedcf8f11d3e78906fa4c4baac71406e5aa4d139e8517b064cc45e"
+    },
+    {
+      "path": "docs/technical/16-api-contracts.md",
+      "sha256": "ccca03480e97286786b1ce529f11ed9b8733727642f37d8996cde6425b7568dd"
+    },
+    {
+      "path": "docs/technical/17-configuration-open-gates.md",
+      "sha256": "bb5a9a431524b420d40e809fe4266a4fbf0675ad0893fdf02622a98a2a484221"
+    },
+    {
+      "path": "docs/technical/18-ui-routes-and-state.md",
+      "sha256": "3e824d1bfd81c6ca85891efe09fd66160147fd989f83de468a0c328f3a3efb35"
+    },
+    {
+      "path": "docs/technical/19-notifications-analytics.md",
+      "sha256": "782b7a19193580ae935f7ecf4199d7949339818aeed3a683902516f95b7e26ef"
+    },
+    {
+      "path": "docs/technical/20-acceptance-matrix.md",
+      "sha256": "311a115f5fff3f5550f83b8c1bc20113196c813dc31244cd338b127d0545ff57"
+    },
+    {
+      "path": "docs/technical/21-studio-ux-screen-contract.md",
+      "sha256": "0e48a05c83808144f8fb39b5d84409fec1227eb248b1eb0fc3481d3fc1744470"
+    },
+    {
+      "path": "docs/technical/22-canonical-state-machines.md",
+      "sha256": "14572d4a854ea3dc2c2d51787d3985f7a428559da46fd2404030b3098165719c"
+    },
+    {
+      "path": "docs/technical/23-typed-contracts-runtime-validation.md",
+      "sha256": "eb36fa411cf3baa8bb80f4cc381b0f208ea7d6927e99d2c62e76d16550c05f9a"
+    },
+    {
+      "path": "docs/technical/24-traceability-acceptance-v1.1.md",
+      "sha256": "76fef0519fad8c63d9b0ef3076420b5f14e5efdc0430ecb3ddcfe4aa99009849"
+    },
+    {
+      "path": "docs/technical/25-route-api-event-domain-matrix.md",
+      "sha256": "59fbc24a7167b204a4c7652e9e2989d1773ab7ea64cfcf10276893404c8075ff"
+    },
+    {
+      "path": "docs/technical/reference-contracts/v1.1/README.md",
+      "sha256": "862f77e4345f0b316d09aa9d7de12fa7aab7e8a81d515fcda8e05f9f6f8bde47"
+    },
+    {
+      "path": "docs/technical/reference-contracts/v1.1/proposed-contract-assertions.ts",
+      "sha256": "b06d12d6c6400ac9894380d92c0a3d2b62cfd976c93386c16703608c98765574"
+    },
+    {
+      "path": "docs/technical/reference-contracts/v1.1/review/25-gap-traceability-v1.1.csv",
+      "sha256": "8e479d5288746839edcb3da39b42194573e52d54e65a5dd221902a431433e202",
+      "gitBlobSha256": "9f7c0ce3d432d01f0198ddd720dd8c80062f27296a17308ce8a34c8891b2ecc3"
+    },
+    {
+      "path": "docs/technical/reference-contracts/v1.1/review/32-mock-fixtures-source.csv",
+      "sha256": "a828610c3bd68089196df1caa198d6113b96c3f23aa5c2ad186d737ef5127876",
+      "gitBlobSha256": "4c63317f2afc4e5db3809e4ad81ab52d653e26e5d93ea9345830ac2b80637081"
+    },
+    {
+      "path": "docs/technical/reference-contracts/v1.1/review/server-authorization-negative-fixtures.json",
+      "sha256": "602f1ffc42a9b013b6f68188c3441a7bb4641c6dd0bc17c48e4e4e4bd149d3aa"
+    },
+    {
+      "path": "docs/technical/reference-contracts/v1.1/vynvori-phase6e-companion.proposed.ts",
+      "sha256": "a599e92c7beea8acf00a7d3a6c38e7b04e9c7b5548e621614208c2ad23c2822c"
+    },
+    {
+      "path": "docs/technical/reference-contracts/v1.1/vynvori-v1_1-proposed.ts",
+      "sha256": "009f64ba91380f837901166a99a36923ac9e18c8cb913972837588636942b6fd"
+    },
+    {
+      "path": "docs/technical/review-fixtures/NEGATIVE-RECOVERY-ACCEPTANCE-CASES.csv",
+      "sha256": "c878294145fbc057566a4e83bb02e1e43d20532abeb513b9312a49116588e917"
+    },
+    {
+      "path": "logo/VYNVORI-brand-sheet.png",
+      "sha256": "223cd6b1cfe3549bd576646fe47134709a62d9972526ba8058caee74f651b0ca"
+    },
+    {
+      "path": "logo/png/vynvori-avatar-black-on-white.png",
+      "sha256": "ce134a720d83f1d98935d166abb647df884cedaea001565af0cd8d69e6178c39"
+    },
+    {
+      "path": "logo/png/vynvori-avatar-white-on-black.png",
+      "sha256": "15095c9ab4ad72f43e4ad63b5d4e4fd74b926df7f22eeeeb07d184a17a1ef7a3"
+    },
+    {
+      "path": "logo/png/vynvori-horizontal-black.png",
+      "sha256": "0dd701993b4ee0adb99a6b8ecc0cf36b10111745280e473efd176a351a883b04"
+    },
+    {
+      "path": "logo/png/vynvori-horizontal-white.png",
+      "sha256": "2ae47b8d84371d0c5d4ad3283ae1edf204557ad7d098ddb31de0390d28809c10"
+    },
+    {
+      "path": "logo/png/vynvori-stacked-black.png",
+      "sha256": "21883662d088978f4f3474cbe0454e8cd8dc530cfcbb4f3cc65e829cf660eeb1"
+    },
+    {
+      "path": "logo/png/vynvori-stacked-white.png",
+      "sha256": "552b88aec336b675b9eb03422a77e91302f6c028b7d67e4f8fb19bebd0cb3f3a"
+    },
+    {
+      "path": "logo/png/vynvori-symbol-black.png",
+      "sha256": "ed14c40dd766dc82245ac4c929de53f346d8553fd22ce6d0004cf5ed0927a745"
+    },
+    {
+      "path": "logo/png/vynvori-symbol-white.png",
+      "sha256": "5b943a0c94c4e457f7147e085e3e803cfc22a37cab2716f4c4a181e4e357afb1"
+    },
+    {
+      "path": "logo/png/vynvori-wordmark-black.png",
+      "sha256": "dcd4eb95997fb27679a3e2295bf65cbbd708d6416a3ca39f77fc1ee93c2edb77"
+    },
+    {
+      "path": "logo/png/vynvori-wordmark-white.png",
+      "sha256": "c6a47a745eb47d588870334c2afb128f48bba198db5e4da4a7b20c78324e3f19"
+    },
+    {
+      "path": "logo/svg/vynvori-avatar-black-on-white.svg",
+      "sha256": "18b2254787ea1a3eb7b774b9ae64ae31efa257e7e67b74f3e1e816706acc6c8f"
+    },
+    {
+      "path": "logo/svg/vynvori-avatar-white-on-black.svg",
+      "sha256": "5ed2b49115bd17dc99acc6f8a908b9db6b59c708c5b7b6cb7d9f86eb41ded2f1"
+    },
+    {
+      "path": "logo/svg/vynvori-horizontal-black.svg",
+      "sha256": "bbddf67ea49f120c99825da586f965fb99cf7e144cf7cc2d4ed8b0267dc8d25b"
+    },
+    {
+      "path": "logo/svg/vynvori-horizontal-white.svg",
+      "sha256": "47d47ca295442de8c4313224e59713fd8219c9f041e927f283d7359f938031fb"
+    },
+    {
+      "path": "logo/svg/vynvori-stacked-black.svg",
+      "sha256": "c794bcfaaa7c5f28541f3627c6f615905f059c929c4f6fc76ada460c2e143f72"
+    },
+    {
+      "path": "logo/svg/vynvori-stacked-white.svg",
+      "sha256": "1839761052b58eb3a946cd64a89e7e4fcb707212e8c229a120338f86725d2a23"
+    },
+    {
+      "path": "logo/svg/vynvori-symbol-black.svg",
+      "sha256": "286e5a48edfb5de113c7521998ee5efa0dbfa9096314337e9bb968c3e39da8dc"
+    },
+    {
+      "path": "logo/svg/vynvori-symbol-white.svg",
+      "sha256": "20b94ac00464a7dcb51cf61772001fabdc0fdac92620a87de1056c3e6e77eccf"
+    },
+    {
+      "path": "logo/svg/vynvori-wordmark-black.svg",
+      "sha256": "097f1666c8cc05bd4c1d11e5f7c81ac09573083221b930773508d37c79f446ea"
+    },
+    {
+      "path": "logo/svg/vynvori-wordmark-white.svg",
+      "sha256": "17e9adedd5f42b05858eaf289bdec14fcfd6a249d9f43ac2165fe2044945c8b5"
+    }
+  ]
+}
