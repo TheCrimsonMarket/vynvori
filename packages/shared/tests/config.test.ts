@@ -26,9 +26,10 @@ test("invalid environment, misspelled flags and public environment variables are
   assert.throws(() => parseServerConfig({ NEXT_PUBLIC_SECRET: "synthetic-sensitive-value" }), /Public environment/);
 });
 test("documented Vercel public metadata is tolerated but never included in configuration", () => {
-  const config = parseServerConfig({ VERCEL:"1", VERCEL_ENV:"preview", NEXT_PUBLIC_VERCEL_URL:"synthetic-preview.vercel.app", NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA:"synthetic-sha" });
+  const config = parseServerConfig({ VERCEL:"1", VERCEL_ENV:"preview", NEXT_PUBLIC_VERCEL_URL:"synthetic-preview.vercel.app", NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA:"synthetic-sha", NEXT_PUBLIC_VERCEL_OBSERVABILITY_CLIENT_CONFIG:"synthetic-unused-platform-metadata" });
   assert(!JSON.stringify(config).includes("synthetic-preview"));
   assert(!JSON.stringify(publicConfig).includes("synthetic-sha"));
+  assert(!JSON.stringify(config).includes("synthetic-unused-platform-metadata"));
   assert.throws(() => parseServerConfig({ NEXT_PUBLIC_VERCEL_SECRET:"synthetic-sensitive-value" }), /Public environment/);
 });
 test("public projection and validation errors cannot leak unrelated server values", () => {

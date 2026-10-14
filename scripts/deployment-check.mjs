@@ -29,7 +29,7 @@ const lockBefore = hash(await fs.readFile(path.join(output,"package-lock.json"))
 let log = "";
 async function run(args) {
   console.log(`Deployment readiness: npm ${args.join(" ")}`);
-  const child = spawn(process.execPath,[npmCli,...args],{cwd:output,env:{...process.env,VERCEL:"1",VERCEL_ENV:"preview",NEXT_TELEMETRY_DISABLED:"1"},stdio:["ignore","pipe","pipe"]});
+  const child = spawn(process.execPath,[npmCli,...args],{cwd:output,env:{...process.env,VERCEL:"1",VERCEL_ENV:"preview",NEXT_PUBLIC_VERCEL_OBSERVABILITY_CLIENT_CONFIG:"synthetic-unused-platform-metadata",NEXT_TELEMETRY_DISABLED:"1"},stdio:["ignore","pipe","pipe"]});
   child.stdout.on("data",bytes=>{log+=bytes;process.stdout.write(bytes);});
   child.stderr.on("data",bytes=>{log+=bytes;process.stderr.write(bytes);});
   const code = await new Promise((resolve,reject)=>{child.on("error",reject);child.on("exit",resolve);});

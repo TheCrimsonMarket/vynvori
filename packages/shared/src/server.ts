@@ -13,6 +13,8 @@ const platformPublicKeys = new Set([
   "NEXT_PUBLIC_VERCEL_GIT_REPO_ID", "NEXT_PUBLIC_VERCEL_GIT_COMMIT_REF", "NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA",
   "NEXT_PUBLIC_VERCEL_GIT_COMMIT_MESSAGE", "NEXT_PUBLIC_VERCEL_GIT_COMMIT_AUTHOR_LOGIN",
   "NEXT_PUBLIC_VERCEL_GIT_COMMIT_AUTHOR_NAME", "NEXT_PUBLIC_VERCEL_GIT_PULL_REQUEST_ID",
+  // Observed Vercel Next.js build injection; not application configuration.
+  "NEXT_PUBLIC_VERCEL_OBSERVABILITY_CLIENT_CONFIG",
 ]);
 
 /** Values are intentionally never included in errors or logs. */

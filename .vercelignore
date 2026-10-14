@@ -10,6 +10,13 @@
 docs/
 logo/
 scripts/
+AGENTS.md
+CODING_AGENT_START_HERE.md
+README.md
+.gitattributes
+eslint.config.mjs
+apps/web/ASSET-PROVENANCE.md
+apps/web/components.json
 design/reference/*
 !design/reference/package.json
 apps/web/tests/
