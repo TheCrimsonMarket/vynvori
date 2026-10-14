@@ -1,7 +1,0 @@
-{
-  "instructions": "After blind concept review, select source task IDs for two models on CHAR-03. CLI followups creates two controlled edits per model and one final per model (6 attempts). No automatic winner.",
-  "sourceTaskIds": [
-    "04ce83f5369416d290a60698",
-    "aa1ac0f2bef6b2e9758628ab"
-  ]
-}

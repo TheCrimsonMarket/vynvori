@@ -1,0 +1,26 @@
+case_id,source_finding,contract_or_screen,fixture_expectation,execution_status,local_evidence,production_execution
+PE6-01,E6E-01,ST-05,"Draft three directions contains no approved-plan hash/version and cannot authorize a bundle",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-02,E6E-01,ST-05,"Approval freezes all three distinct directions against expected brief revision; stale/duplicate requests idempotent",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-03,E6E-02,ED-03,"Edit draft after freeze; review displays original frozen geometry or blocks for re-freeze, never labels draft as old proof",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-04,E6E-02,CO-01,"Proof, validation, cart quote, Medusa line exact version/hash/profile mismatch blocks cart mutation",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-05,E6E-03,AC-01,"Purchase export at final v1; later final v2 must not change entitlement or downloaded v1 artifact",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-06,E6E-03,AC-01,"Composition export cannot be downloaded under an artwork-export entitlement and vice versa",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-07,E6E-03,AC-01,"Paid capture before artifact verification shows pending; no permanent download URL/other owner access",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-08,E6E-06,ST-16,"Initial final on an open original package: verified uncharged failure with committed release preserves pre-attempt open state and eligible unused refinements; no automatic retry",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-09,E6E-06,ST-16,"Unverified charge or pending customer release keeps under_review, originalPackageId and pre-attempt closure: initial final closure_pending; later revision original remains closed",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-10,E6E-06,ST-07,"Provider bytes received but R2 persistence missing: promo claim under_review, no consumed asset or second call",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-11,E6E-06,ST-04,"Director quota exhausted leaves brief saved and cannot show approved plan or fabricated retry-after",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-12,E6E-06,ST-08,"Concept provider unavailable before quote prevents paid bundle authorization without erasing draft",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-13,E6E-06,ST-09,"Concept provider unavailable after authorization preserves held funds, original operation IDs and case; no blind paid POST",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-14,E6E-07,ED-02,"Untrusted negative mm size, missing font source hash and outside print bounds rejected by strict runtime schema",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-15,E6E-07,AC-01,"Mismatched owner or source/artifact hash, unknown export kind and extra fields rejected",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-16,E6E-07,CO-01,"Forged quote/variant/version, unverified region/shipping and stale Medusa price rejected server-side",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-17,E6E-08,Quality-case,"Report subjective dissatisfaction never auto grants replacement, refunds credits or reopens closed package",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-18,E6E-08,Quality-case,"Upheld authorized case grants at most one independently audited remedy and original package remains closed",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-19,E6E-04,ST-17,"History inspection without explicit use leaves active version and digital export source unchanged",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-20,E6E-05,ED-01,"Real guest fixture exercises /customize without simulated identity, AI flow or credits",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-21,E6E-09,Runtime-validation,"Strict unknown-field and invalid union discriminant fail closed at public request/projection boundaries",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-22,E6E-10,Portability,"Clean dependency-resolved installation runs test suite without workspace-specific Playwright path",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-23,C-02,ST-16,"A separately purchased revised final fails verified-uncharged after original package was already closed: original package stays closed; no original refinement restoration",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-24,C-03,Quality-case,"Same case/remedy decision replay with same scoped idempotency key returns same effect, changed payload conflicts, no double Medusa refund/credit/replacement",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN
+PE6-25,C-03,AC-01,"Customer remedy projection contains no staff IDs, private Medusa refund ID, internal approval evidence, idempotency key or provider invoices",PASS_SIMULATION,evidence/after/phase6e-unit-results.json,NOT_RUN

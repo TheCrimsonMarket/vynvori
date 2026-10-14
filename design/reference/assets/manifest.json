@@ -1,0 +1,75 @@
+[
+  {
+    "file": "assets/vynvori-wordmark-black.svg",
+    "sha256": "097f1666c8cc05bd4c1d11e5f7c81ac09573083221b930773508d37c79f446ea",
+    "source": "output/phase-04/assets/vynvori-wordmark-black.svg",
+    "treatment": "byte-identical Phase 04 copy",
+    "distribution": "Internal founder review only; public/commercial rights and production evidence not cleared"
+  },
+  {
+    "file": "assets/vynvori-wordmark-white.svg",
+    "sha256": "17e9adedd5f42b05858eaf289bdec14fcfd6a249d9f43ac2165fe2044945c8b5",
+    "source": "output/phase-04/assets/vynvori-wordmark-white.svg",
+    "treatment": "byte-identical Phase 04 copy",
+    "distribution": "Internal founder review only; public/commercial rights and production evidence not cleared"
+  },
+  {
+    "file": "assets/vynvori-symbol-black.svg",
+    "sha256": "286e5a48edfb5de113c7521998ee5efa0dbfa9096314337e9bb968c3e39da8dc",
+    "source": "output/phase-04/assets/vynvori-symbol-black.svg",
+    "treatment": "byte-identical Phase 04 copy",
+    "distribution": "Internal founder review only; public/commercial rights and production evidence not cleared"
+  },
+  {
+    "file": "assets/campaign.png",
+    "sha256": "ed6ea3013401cc7c4cdecd84c6a8158365dff9a16180bdeffba59ef7e3e2aed9",
+    "source": "output/phase-04/assets/campaign.png",
+    "treatment": "byte-identical Phase 04 copy",
+    "distribution": "Internal founder review only; public/commercial rights and production evidence not cleared"
+  },
+  {
+    "file": "assets/blank-garment.png",
+    "sha256": "10d578946947155098dc82e8de437afacd0e0ec92eef6dda5609c31d5aef5269",
+    "source": "output/phase-04/assets/blank-garment.png",
+    "treatment": "byte-identical Phase 04 copy",
+    "distribution": "Internal founder review only; public/commercial rights and production evidence not cleared"
+  },
+  {
+    "file": "assets/arch-study.svg",
+    "sha256": "d36f718579ee02897fc3578c8678f8bb988d170dda463770df6f190364a66a5d",
+    "source": "output/phase-04/assets/arch-study.svg",
+    "treatment": "byte-identical Phase 04 copy",
+    "distribution": "Internal founder review only; public/commercial rights and production evidence not cleared"
+  },
+  {
+    "file": "assets/chromatic-study.svg",
+    "sha256": "9c0d339958fa4d77f507fde3f402c99e4b471e5027ec790ef0a80cd1992718c8",
+    "source": "output/phase-04/assets/chromatic-study.svg",
+    "treatment": "byte-identical Phase 04 copy",
+    "distribution": "Internal founder review only; public/commercial rights and production evidence not cleared"
+  },
+  {
+    "file": "assets/fonts/archivo.ttf",
+    "sha256": "0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053",
+    "source": "output/phase-04/assets/fonts/archivo.ttf",
+    "treatment": "byte-identical Phase 04 copy",
+    "distribution": "SIL Open Font License 1.1; preserve bundled notice",
+    "upstreamRevision": "66928797f271fed5ee428544e7229685e2d90127"
+  },
+  {
+    "file": "assets/fonts/archivo-OFL.txt",
+    "sha256": "108b4e57c9c796d3d38d0428ca7ee39de47ad93187302718d9b2d8864b9b716b",
+    "source": "output/phase-04/assets/fonts/archivo-OFL.txt",
+    "treatment": "byte-identical Phase 04 copy",
+    "distribution": "SIL Open Font License 1.1; preserve bundled notice",
+    "upstreamRevision": "66928797f271fed5ee428544e7229685e2d90127"
+  },
+  {
+    "file": "assets/fonts/archivo-METADATA.pb",
+    "sha256": "a2e8f63ffa4f9dfe43a65c349b4742e9cd85298802aed890a6315152f2ae231d",
+    "source": "output/phase-04/assets/fonts/archivo-METADATA.pb",
+    "treatment": "byte-identical Phase 04 copy",
+    "distribution": "SIL Open Font License 1.1; preserve bundled notice",
+    "upstreamRevision": "66928797f271fed5ee428544e7229685e2d90127"
+  }
+]

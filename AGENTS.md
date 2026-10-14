@@ -1,10 +1,10 @@
 # Agent instructions — VYNVORI
 
-You are evolving **an existing private repository**, `TheCrimsonMarket/vynvori`, not creating a replacement repository or rewriting the existing benchmark harness. Read `docs/technical/00-master-specification.md` and its links before changing code.
+You are evolving **an existing private repository**, `TheCrimsonMarket/vynvori`, not creating a replacement repository. Read `docs/technical/00-master-specification.md` and its links before changing code.
 
 ## Required operating method
 
-1. Inspect repository tree, `package.json`, root lockfile, benchmark package, existing branches and current tests. Record the starting commit SHA. Protect existing work.
+1. Inspect repository tree, `package.json`, root lockfile, design/reference, existing branches and current tests. Record the starting commit SHA. Protect existing work.
 2. Audit the canonical **LuckyLittleDevil** authentication/Medusa integration before implementing customer authentication. The source was not accessible to the blueprint author. Produce verified findings under `docs/technical/research/lucky-little-devil-auth-audit.md`. Do not infer or fabricate authentication endpoints, tokens or secrets.
 3. Follow founder-locked decisions exactly. For external unknowns, implement typed configuration with disabled production feature flags; do not insert invented supplier prices, print dimensions, model qualifications, shipping quotes, legal entities, or payment processors.
 4. Implement milestone by milestone. Each PR must contain an ADR where architecture changes, migrations, tests, security review notes, and changes to APIs/events. Never make destructive migrations without a documented rollback/backup plan.
@@ -32,3 +32,10 @@ Escalate when (a) LuckyLittleDevil auth source is not available, (b) a Medusa ve
 - Never assume paid concept-only packages are allowed; require qualified Standard final + licensed digital export or eligible garment route for full 3+2 authorization. Promotional preview is separate; Director is bounded/nonbillable; final render is a separately quoted operation.
 - The studio UI stage, provider execution, customer ledger and production/Medusa authorities are separate; no unknown-state billable retries, no unsupported customer debit inference from vendor charges.
 - `M1a + M2 -> M1b` and `M6a + M7 + M8a -> M6b` are prerequisites. Financial/rights/vendor/SSO operational launch blockers remain OFF. Further implementation requires explicit authorization. Acceptance may be marked passed only with executed evidence; this documentation update passes no production gate.
+
+## Founder-authorized clean-slate baseline (2026-10-14)
+
+- The founder superseded incremental cleanup and authorized removing historical benchmark/design/review/output/install workspaces from the active repository, including unarchived restricted material. Existing portable archives and Git history remain untouched. This latest direction overrides earlier active packages/ai-benchmark and Phase05 output retention instructions in this document.
+- Canonical docs/technical and proposed contracts remain byte-for-byte intact, including historical descriptions. The current installed workspace is design/reference; root manifests/README govern executable paths. The Phase6C source SHA above is historical; record current HEAD and review divergence before new changes.
+- Final runtime/mock/components/assets are retained. Historical screenshot galleries and report generators are omitted. Builds/tests use new external temporary destinations.
+- This reset authorizes no commit, push, production scaffolding, deployment or M0 execution. Stop for founder review of the local changes.

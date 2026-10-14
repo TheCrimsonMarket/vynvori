@@ -1,13 +1,18 @@
 {
-  "name": "vynvori-benchmark-workspace",
+  "name": "vynvori",
   "private": true,
-  "workspaces": ["packages/ai-benchmark"],
+  "workspaces": [
+    "design/reference"
+  ],
   "scripts": {
-    "typecheck": "tsc --noEmit -p packages/ai-benchmark",
-    "test": "tsx --test packages/ai-benchmark/tests/*.test.ts",
-    "benchmark": "node --env-file-if-exists=.env --import tsx packages/ai-benchmark/src/cli.ts"
+    "preview": "npm run preview --workspace @vynvori/design-reference",
+    "build": "npm run build --workspace @vynvori/design-reference",
+    "typecheck": "npm run typecheck --workspace @vynvori/design-reference",
+    "test": "npm run test --workspace @vynvori/design-reference && npm run test:legacy --workspace @vynvori/design-reference",
+    "test:browser": "npm run test:browser --workspace @vynvori/design-reference",
+    "verify": "npm run verify --workspace @vynvori/design-reference"
   },
-  "devDependencies": {"@types/node": "22.19.15", "tsx": "4.23.15", "typescript": "7.0.2"},
-  "dependencies": {"sharp": "0.35.5"},
-  "engines": {"node": ">=22.23.0"}
+  "engines": {
+    "node": ">=22.23.0"
+  }
 }

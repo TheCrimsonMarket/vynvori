@@ -1,0 +1,199 @@
+{
+  "fixtureName": "promo-unavailable",
+  "canonicalRoute": "/studio/projects/project-atelier-01",
+  "state": {
+    "schemaVersion": "atelier.mock.v1",
+    "revision": 1,
+    "stage": 7,
+    "projectStage": 7,
+    "approvedBrief": [
+      {
+        "schemaVersion": "creative-brief.mock.v1",
+        "id": "draft-01",
+        "revision": 1,
+        "entryMode": "guided",
+        "niche": "Architecture after dark",
+        "aesthetic": "Sculptural minimalism",
+        "palette": "Ivory / mineral",
+        "motifs": "Open arches",
+        "exactPhrase": "",
+        "prompt": "An original architectural study of open arches and negative space.",
+        "references": [],
+        "restrictions": "",
+        "rightsAcknowledged": true
+      }
+    ],
+    "identity": "simulated",
+    "claim": "claimed",
+    "brief": {
+      "schemaVersion": "creative-brief.mock.v1",
+      "id": "draft-01",
+      "revision": 1,
+      "entryMode": "guided",
+      "niche": "Architecture after dark",
+      "aesthetic": "Sculptural minimalism",
+      "palette": "Ivory / mineral",
+      "motifs": "Open arches",
+      "exactPhrase": "",
+      "prompt": "An original architectural study of open arches and negative space.",
+      "references": [],
+      "restrictions": "",
+      "rightsAcknowledged": true
+    },
+    "wizard": 0,
+    "planApproved": true,
+    "planHash": "synthetic-hash-three-directions-v1",
+    "quoteState": "valid",
+    "quoteRevision": 1,
+    "quoteUses": [
+      "digital_art_export"
+    ],
+    "quoteRegion": "US",
+    "quoteSource": null,
+    "wallet": {
+      "unit": "credits",
+      "availableUnits": 60,
+      "reservedUnits": 0,
+      "heldForReviewUnits": 0,
+      "snapshotAt": "2026-10-13T12:00:00Z",
+      "walletRevision": "wallet-1"
+    },
+    "standard": true,
+    "premium": false,
+    "digital": true,
+    "garment": false,
+    "region": "US",
+    "promo": "unavailable",
+    "promoDirection": 0,
+    "authorized": false,
+    "slots": [],
+    "settlement": "reserved",
+    "selected": null,
+    "refinements": [],
+    "history": [],
+    "final": "none",
+    "finalSettlement": "reserved",
+    "finalSource": null,
+    "finalSequence": 1,
+    "finalQuoteId": null,
+    "finalArchive": [],
+    "useVersion": null,
+    "saved": [],
+    "cases": [],
+    "idempotency": [],
+    "scene": {
+      "schemaVersion": "scene.mock.v1",
+      "id": "composition-01",
+      "revision": 1,
+      "provenance": "byo",
+      "side": "front",
+      "panel": "canvas",
+      "front": [],
+      "back": [],
+      "selected": null,
+      "versions": [],
+      "undo": [],
+      "redo": []
+    },
+    "cart": [],
+    "gallery": "private",
+    "galleryLiked": false,
+    "galleryReports": [],
+    "exportState": "none",
+    "qa": "awaiting_human_qa",
+    "qaPrerequisites": false,
+    "qualityDescription": "",
+    "change": "",
+    "preserve": "",
+    "exactTypography": ""
+  },
+  "studioProjection": {
+    "schemaVersion": "studio-screen.v1",
+    "route": "/studio/projects/project-atelier-01",
+    "projectId": "project-atelier-01",
+    "status": {
+      "schemaVersion": "studio-status.v3",
+      "projectId": "project-atelier-01",
+      "plan": {
+        "kind": "approved",
+        "planVersionId": "plan-frozen-01",
+        "approvalHash": "synthetic-hash-three-directions-v1",
+        "directions": [
+          {
+            "directionId": "direction-arch",
+            "title": "Open structure",
+            "rationale": "Negative space as a statement of independence.",
+            "visualIntent": "Ivory arches, quiet geometry and precise architectural rhythm.",
+            "risks": [
+              "Illustrative house study; production rights unverified."
+            ]
+          },
+          {
+            "directionId": "direction-chromatic",
+            "title": "Chromatic surge",
+            "rationale": "Architecture dissolves into motion: a richly layered color study for a graphic back print.",
+            "visualIntent": "Interwoven mineral ribbons, a luminous orb and precise poster typography.",
+            "risks": [
+              "Print color fidelity requires physical testing."
+            ]
+          },
+          {
+            "directionId": "direction-orbit",
+            "title": "Midnight sentinel",
+            "rationale": "Architecture becomes armor: an original dark-fantasy emblem of nocturnal protection.",
+            "visualIntent": "Engraved visor, feathered wings, crossed blades and restrained ivory-on-ink lettering.",
+            "risks": [
+              "Local original vector; not a qualified print asset."
+            ]
+          }
+        ],
+        "conceptSlots": []
+      },
+      "deliveredConceptCount": 0,
+      "packageState": null,
+      "promoStatus": "unavailable",
+      "customerOperations": [],
+      "bundleFinancials": null,
+      "capabilities": {
+        "atIso": "2026-10-13T12:00:00Z",
+        "capabilitySnapshotId": "synthetic-cap-01",
+        "region": "US",
+        "concept": "available",
+        "director": "available",
+        "promo": "unavailable",
+        "qualifiedStandardFinal": "available",
+        "qualifiedPremiumFinal": "unavailable",
+        "digitalArtExportLicensed": "available",
+        "garmentProductionQualified": "unavailable",
+        "rightsSummary": "Synthetic rights configuration for internal review only.",
+        "customerRestrictions": [
+          "No real production rights or shipping availability implied.",
+          "No third-party gallery original download or remix."
+        ]
+      },
+      "allowedActions": [
+        "inspect_quote",
+        "open_support",
+        "resume"
+      ],
+      "currentErrorCode": null,
+      "refinements": []
+    },
+    "availableActions": [
+      "inspect_quote",
+      "open_support",
+      "resume"
+    ],
+    "errorCode": null,
+    "supportCases": [],
+    "history": [],
+    "screenId": "ST-07",
+    "stage": "promo_review",
+    "promo": {
+      "state": "unavailable",
+      "explanatoryText": "One separate identity-bound synthetic preview; zero customer credits.",
+      "chosenDirectionId": "direction-arch"
+    },
+    "promoOperation": null
+  }
+}

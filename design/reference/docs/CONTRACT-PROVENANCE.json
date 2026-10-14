@@ -1,0 +1,15 @@
+{
+  "startingCommit": "50190edd3a8623ed43484e845019730cc817c5fd",
+  "publishedMain": "50190edd3a8623ed43484e845019730cc817c5fd",
+  "version": "v1.1 with committed Phase 6E proposed corrections; no production validators",
+  "contracts": [
+    {
+      "file": "mock/reference/vynvori-v1_1-proposed.ts",
+      "sha256": "009f64ba91380f837901166a99a36923ac9e18c8cb913972837588636942b6fd"
+    },
+    {
+      "file": "mock/reference/vynvori-phase6e-companion.proposed.ts",
+      "sha256": "a599e92c7beea8acf00a7d3a6c38e7b04e9c7b5548e621614208c2ad23c2822c"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+/* Layout-only corrections: approved font sizes/family, art, copy and policies are unchanged. */
+.atelier h1,.atelier h2{overflow-wrap:break-word;hyphens:auto;text-wrap:balance}
+.atelier .wallet{grid-template-columns:repeat(auto-fit,minmax(min(100%,5rem),1fr));align-items:start}
+.atelier .wallet>div{min-width:0}.atelier .wallet dt{word-break:normal;overflow-wrap:normal;hyphens:auto}
+.atelier .step-strip{align-items:start;row-gap:1em}.atelier .step-strip>span{min-width:0;line-height:1.5}
+.atelier .choices{grid-template-columns:repeat(auto-fit,minmax(min(100%,8rem),1fr))}
+.atelier .choices button{min-width:0;overflow-wrap:break-word;hyphens:auto}
+.atelier .check{min-width:0}.atelier .check input{flex-shrink:0}
+.atelier .btn,.atelier summary{overflow-wrap:break-word;hyphens:auto;white-space:normal}
+.purchase-decision,.purchase-context,.quote-source>div{min-width:0}
+@media(max-width:700px){
+ body:has(.atelier) .demo-banner{flex-wrap:wrap}
+ body:has(.atelier) .demo-banner span{flex:1 1 10rem;min-width:0;max-width:none}
+ body:has(.atelier) .demo-banner button{max-width:none;overflow-wrap:break-word;hyphens:auto}
+ .atelier .atelier-head{flex-wrap:wrap;row-gap:1em}.atelier .atelier-head>*{min-width:0;max-width:100%}
+ .atelier .step-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,7.5rem),1fr));gap:1em}
+ .purchase-view .step-strip{display:none}
+ .quote-source{display:flex;flex-wrap:wrap}.quote-source>img{flex:none}.quote-source>div{flex:1 1 10rem}
+ .purchase-view .check{display:flex;align-items:flex-start;gap:.5em}.purchase-view .check input{margin-right:0}
+}

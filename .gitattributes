@@ -1,0 +1,9 @@
+# Preserve the approved design snapshot bytes across Windows/Linux checkouts.
+design/reference/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# Supplied license wording/formatting and generated TypeScript-erasure padding are immutable.
+design/reference/assets/fonts/archivo-OFL.txt whitespace=-blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+design/reference/src/mock.js whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+design/reference/tests/baseline/src/mock.js whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+# Preserve approved source EOF formatting without rewriting the reference.
+design/reference/index.html whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+design/reference/mock/service.ts whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol

@@ -1,0 +1,24 @@
+{
+  "name": "@vynvori/design-reference",
+  "version": "1.1.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "preview": "node serve.mjs",
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node tests/phase6e.mjs",
+    "test:legacy": "node tests/contracts.mjs",
+    "test:browser": "node tests/phase6e-browser.mjs",
+    "test:browser:regression": "node tests/browser.mjs",
+    "verify": "node scripts/verify-reference.mjs"
+  },
+  "devDependencies": {
+    "axe-core": "4.14.0",
+    "playwright": "1.62.1",
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=22.23.0"
+  }
+}
