@@ -37,7 +37,7 @@ export function parseServerConfig(env: Readonly<Record<string, string | undefine
   const keys = new Set(Object.keys(featureDefaults).map(f => `VYNVORI_${f.replaceAll(".", "_").toUpperCase()}`));
   for (const key of Object.keys(env)) {
     if (key.startsWith("VYNVORI_") && !keys.has(key)) throw new Error("Unknown VYNVORI configuration key.");
-    if (key.startsWith("NEXT_PUBLIC_") && !platformPublicKeys.has(key)) throw new Error("Public environment configuration is not supported in M0.");
+    if (key.startsWith("NEXT_PUBLIC_") && !platformPublicKeys.has(key)) throw new Error(`Public environment configuration is not supported in M0: ${key}.`);
   }
   return Object.freeze({ environment: environment as Environment, deployment: deployment as Deployment, features: featureDefaults });
 }
