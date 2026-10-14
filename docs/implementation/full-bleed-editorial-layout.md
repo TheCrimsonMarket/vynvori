@@ -25,6 +25,14 @@ Original SVG proportions, Archivo, mineral/dark palettes, square edges, content 
 
 Reproduce with a production server: `node scripts/editorial-layout.mjs http://127.0.0.1:3100`. Protected remote capture uses `vercel env run` and the exact owned Preview URL. The OIDC token is scoped to that origin and never saved or printed. Evidence writes to new external temporary directories. Before screenshots: `%TEMP%/VYNVORI-editorial-before-fpBtIZ`; verification log: `%TEMP%/vynvori-editorial-verify.log`; final M0 browser evidence: `%TEMP%/VYNVORI-M0-browser-fATpQo`. PR/Preview and final screenshot evidence are reported after actual delivery; local results do not imply remote CI/deployment acceptance.
 
+## Delivered Preview and remote evidence
+
+[PR #2](https://github.com/TheCrimsonMarket/vynvori/pull/2) is open for review. [Protected Preview](https://vynvori-6wmxyms06-omor-shahriars-projects.vercel.app) is **READY**, deployment `dpl_Bq3hfqDYfMoTpDT5HtW6861yKRBN`, runtime commit `e56138aaf79607d5f437848b89eb507ce353b616`, Preview target with no production alias. Manual runtime-only upload uses the existing authorized development workflow while organization Git access remains pending.
+
+Remote editorial acceptance: **35/35 passed** across all five routes and seven viewports. The two primary entry buttons each measure 384x54px and end at y=1438.6 within the 1440px founder target. Remote health/fonts/assets/disabled-action checks: **12/12 passed**; no observed browser errors, failed assets or external requests. The deployment-scoped Vercel error/fatal query for the last 15 minutes returned no records. Before/after files: `%TEMP%/VYNVORI-editorial-before-fpBtIZ` and `%TEMP%/VYNVORI-editorial-after-N7Shig`; remote health evidence: `%TEMP%/VYNVORI-M0-preview-browser-1FtotU`.
+
+[Independent CI](https://github.com/TheCrimsonMarket/vynvori/actions/runs/38633254274) passed both verify and browser jobs for the runtime commit. [Corrected screenshot artifact](https://github.com/TheCrimsonMarket/vynvori/actions/runs/38633254274/artifacts/11927671362). Documentation follow-up changes no deployed runtime files. No merge or production promotion.
+
 ## Image limitation and rollback
 
 The unchanged campaign source is **1536x1024**. Its rendered width is about 1963px at 2560 and 2824px at 3440, approximately 1.28x and 1.84x the source width at 1x DPR. It cannot provide native-resolution detail on ultrawide/high-density displays. Intentional cover cropping preserves the campaign treatment; a higher-resolution approved original would be needed for greater detail. No replacement or invented artwork is introduced.
