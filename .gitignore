@@ -6,3 +6,9 @@ node_modules/
 tmp/
 packages/ai-benchmark/results/
 output/
+.next/
+*.tsbuildinfo
+playwright-report/
+test-results/
+apps/web/next-env.d.ts
+.vercel/

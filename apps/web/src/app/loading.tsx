@@ -1,0 +1,1 @@
+export default function Loading() { return <section className="atelier" role="status" aria-live="polite"><p className="eyebrow">VYNVORI / ATELIER</p><h1>OPENING THE ATELIER.</h1><p>Loading the requested page.</p></section>; }

@@ -1,0 +1,57 @@
+name: M0 foundation
+on:
+  pull_request:
+  push:
+    branches: [main, feat/m0-platform-foundation]
+permissions:
+  contents: read
+concurrency:
+  group: m0-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.23.3'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build:web
+      - run: npm run build
+      - run: npm run verify:reference
+      - run: npm run smoke:security
+      - run: npm ls --all --omit=optional
+      - run: npm audit --omit=dev
+      - run: npm run test:deployment
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.23.3'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build:web
+      - run: npm run test:browser:web
+        env:
+          M0_BROWSER: chromium
+          M0_EVIDENCE_DIR: ${{ runner.temp }}/m0-browser
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: m0-browser
+          path: ${{ runner.temp }}/m0-browser
+          if-no-files-found: error

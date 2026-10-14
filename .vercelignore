@@ -1,0 +1,16 @@
+.git/
+.github/
+.agents/
+.codex/
+.vercel/
+**/node_modules/
+**/.next/
+**/*.tsbuildinfo
+**/.env*
+docs/
+logo/
+scripts/
+design/reference/*
+!design/reference/package.json
+apps/web/tests/
+packages/shared/tests/

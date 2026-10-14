@@ -7,3 +7,7 @@ design/reference/tests/baseline/src/mock.js whitespace=-blank-at-eol,-blank-at-e
 # Preserve approved source EOF formatting without rewriting the reference.
 design/reference/index.html whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
 design/reference/mock/service.ts whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+apps/web/public/assets/** -text
+apps/web/src/fonts/** -text
+# Preserve the byte-identical upstream OFL notice, including its whitespace.
+apps/web/src/fonts/archivo-OFL.txt -whitespace
