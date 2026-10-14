@@ -37,6 +37,14 @@ Target project: **vynvori-dev**, repository **TheCrimsonMarket/vynvori**, root *
 
 Connect the repository's existing Vercel Git integration for PR Previews and automatic merged-main builds. Use Vercel Authentication deployment protection where the selected plan supports it. GitHub Actions remains independent. Verify READY, the actual Preview URL, pages/assets/fonts and `/api/health` before accepting a deployment. A successful development deployment grants no commercial launch approval. Do not merge this PR or enable integrations automatically. See M0.md for actual account/deployment evidence and remaining setup steps.
 
+The first protected [Preview](https://vynvori-4rp3evxui-omor-shahriars-projects.vercel.app) is READY and remotely tested. Automatic Git deployment remains pending the organization's Vercel GitHub app approval, scoped only to `vynvori`. Runtime code commit: `31c4009`; this is a manual API Preview with no production alias. Vercel's platform observability metadata is tolerated and ignored; system environment auto-exposure is disabled, Preview/Production contexts are configured separately, and Next telemetry is disabled.
+
+For protected remote checks, use the authenticated CLI without saving tokens:
+
+    npx --yes --package=vercel@64.0.2 vercel env run --project vynvori-dev --scope omor-shahriars-projects -- node scripts/browser-preview.mjs https://vynvori-4rp3evxui-omor-shahriars-projects.vercel.app
+
+The harness scopes its short-lived OIDC header to the exact Preview origin, aborts external requests and writes screenshots/results to a new external temporary directory. It records no credentials or browser authentication state.
+
 The founder made the repository public during this session to use Hobby Git integration; the previous private-organization restriction no longer applies. Hobby is limited to personal/noncommercial use; commercial operation requires an appropriate plan. Illustrative reference assets retain internal-review-only provenance, so public/commercial distribution remains a separate rights gate. noindex/nofollow headers are not access control.
 
 ## Troubleshooting

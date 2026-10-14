@@ -24,3 +24,5 @@ ESLint 10.12.0 was checked against current registry plugin peers. React 7.37.5, 
 ## Evidence and limits
 
 See M0.md for executed unit/browser/config/source checks. The smoke scanner checks common private-key/AWS/GitHub credential patterns and source module boundaries; it is not a comprehensive secret scanner or penetration test. Financial, SSO, Medusa, Neon, R2, manufacturing, legal rights and customer-data security remain untested and disabled. M1a must inspect actual LuckyLittleDevil source before any auth bridge is built.
+
+Protected Preview verification uses a short-lived development OIDC token scoped to the exact deployment origin. It is never printed, persisted in artifacts or forwarded to other origins. Rendered HTML was checked for accidental token exposure. Remote checks observed no runtime errors, failed assets or nonlocal requests; the scoped Vercel error/fatal log query was empty. The original failed CLI deployment was implicitly classified as Production but never READY; the final deployment is Preview with no production alias. GitHub app owner approval remains pending, and no app authorization request was submitted by the agent.
