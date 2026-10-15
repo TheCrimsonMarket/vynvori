@@ -1,0 +1,2291 @@
+{
+  "schemaVersion": 1,
+  "authority": "VYNVORI founder",
+  "approvedOn": "2026-10-15",
+  "reviewedHead": "34c55cbe8c889ce777e9994ae4eede9b2e316148",
+  "expiresAt": "2026-11-15T23:59:59Z",
+  "scope": "synthetic-only-local-M2",
+  "medusaVersion": "2.21.2",
+  "exceptions": [
+    {
+      "ghsa": "GHSA-vfj7-8cjw-p6xm",
+      "name": "braces",
+      "version": "3.0.3",
+      "severity": "high",
+      "range": "<=3.0.3",
+      "nodes": [
+        "node_modules/braces"
+      ],
+      "residualRisk": "Stack exhaustion if untrusted nested glob patterns reach startup/module/migration discovery; fixed server-owned patterns only.",
+      "immediateParents": [
+        {
+          "parent": "node_modules/@medusajs/admin-bundler/node_modules/chokidar",
+          "child": "node_modules/braces",
+          "name": "braces",
+          "spec": "~3.0.2",
+          "kind": "dependencies",
+          "parentVersion": "3.6.0"
+        },
+        {
+          "parent": "node_modules/micromatch",
+          "child": "node_modules/braces",
+          "name": "braces",
+          "spec": "^3.0.3",
+          "kind": "dependencies",
+          "parentVersion": "4.0.8"
+        }
+      ],
+      "validatedParentChains": [
+        [
+          {
+            "location": "apps/medusa",
+            "version": "0.0.0"
+          },
+          {
+            "location": "node_modules/@medusajs/medusa",
+            "version": "2.21.2"
+          },
+          {
+            "location": "node_modules/@medusajs/admin-bundler",
+            "version": "2.21.2"
+          },
+          {
+            "location": "node_modules/@medusajs/admin-bundler/node_modules/tailwindcss",
+            "version": "3.4.19"
+          },
+          {
+            "location": "node_modules/@medusajs/admin-bundler/node_modules/chokidar",
+            "version": "3.6.0"
+          },
+          {
+            "location": "node_modules/braces",
+            "version": "3.0.3"
+          }
+        ]
+      ]
+    },
+    {
+      "ghsa": "GHSA-hp3w-g68c-fv3c",
+      "name": "sprintf-js",
+      "version": "1.0.3",
+      "severity": "moderate",
+      "range": "<=1.1.3",
+      "nodes": [
+        "node_modules/sprintf-js"
+      ],
+      "residualRisk": "RangeError if attacker-controlled precision format strings reach CLI help formatting; trusted command definitions only.",
+      "immediateParents": [
+        {
+          "parent": "node_modules/@rushstack/ts-command-line/node_modules/argparse",
+          "child": "node_modules/sprintf-js",
+          "name": "sprintf-js",
+          "spec": "~1.0.2",
+          "kind": "dependencies",
+          "parentVersion": "1.0.10"
+        }
+      ],
+      "validatedParentChains": [
+        [
+          {
+            "location": "apps/medusa",
+            "version": "0.0.0"
+          },
+          {
+            "location": "node_modules/@medusajs/cli",
+            "version": "2.21.2"
+          },
+          {
+            "location": "node_modules/@medusajs/deps",
+            "version": "2.21.2"
+          },
+          {
+            "location": "node_modules/@mikro-orm/migrations",
+            "version": "6.6.14"
+          },
+          {
+            "location": "node_modules/umzug",
+            "version": "3.8.2"
+          },
+          {
+            "location": "node_modules/@rushstack/ts-command-line",
+            "version": "4.23.7"
+          },
+          {
+            "location": "node_modules/@rushstack/ts-command-line/node_modules/argparse",
+            "version": "1.0.10"
+          },
+          {
+            "location": "node_modules/sprintf-js",
+            "version": "1.0.3"
+          }
+        ]
+      ]
+    }
+  ],
+  "mandatoryReviewTriggers": [
+    "Before M1b authentication implementation",
+    "Before remotely accessible Medusa functionality",
+    "Any changed dependency, manifest, ancestry, security surface or policy",
+    "Any customer authentication, Store mutation, payment or commerce activation",
+    "Any user-controlled glob pattern, format string or plugin configuration",
+    "New advisory or changed originating advisory record",
+    "Patched dependency availability: separately review fingerprint reconciliation and retire obsolete exception",
+    "Absolute expiry; no automatic renewal"
+  ],
+  "externalReviewGates": [
+    {
+      "condition": "Medusa remains local and synthetic-only, with no access by untrusted external clients",
+      "ciCanProve": false,
+      "action": "Founder review is mandatory before any remote exposure; no deployment authorized"
+    },
+    {
+      "condition": "No M1b, real payments, production workflows, customer provisioning or operational feature activation outside the reviewed source",
+      "ciCanProve": false,
+      "action": "Operator must retain gates OFF; new environment or deployment requires review"
+    }
+  ],
+  "fingerprint": {
+    "securityRoots": [
+      "apps",
+      "packages",
+      "services",
+      "scripts",
+      ".github/workflows",
+      "package.json",
+      ".env.example",
+      "security/fixtures"
+    ],
+    "lockSha256": "3f1110253020bd8b640c51d1d6ea04339ca2bfd8613cab442d29b5b09820b2d3",
+    "manifests": {
+      "apps/medusa/package.json": "22388a62acdb0cb5ed98a1ecb8f795d77cc98e32d1855e5e4fd03495e02fb077",
+      "apps/web/package.json": "9897f2ded66794c743b58e25ec22a508ed7e1662dd4bb9301eaba1e642406062",
+      "design/reference/package.json": "90975762ee6a311b2662c361086bb719961c890bdb2c2b7f5118db468ad4c0fa",
+      "package.json": "082d149280ec8adb5fcb3682fe89a82375da949e64b3bf6912f3c9ca70017692",
+      "packages/commerce/package.json": "255a8f25533218be6ac1aa2e8e3c1d1dc6577bb570a5816e893d63b0baf36033",
+      "packages/db/package.json": "7ae045efa96f64aab3213aee5c61f6cf0b45bf3f8c61cdf6e8b4a1652fae09bb",
+      "packages/shared/package.json": "11ddd3f827dfb0707433f928ebdc1689b29936d0864d2a9b615b764b5348bda9",
+      "services/image-processing/package.json": "43f6cd5946c21f2cdd14f6a99c332cf8d478a694a45f830bed1cffc78ad5b96b"
+    },
+    "securitySurface": {
+      "apps/medusa/.env.example": "e9df50dce8a6afe0d3b22b89785ab98c747e64779417039d543f85850909acd4",
+      "apps/medusa/medusa-config.ts": "b0c2e85e50e1322111ea393140fa642732dce10baecd10eb8ba0bc5b291f9542",
+      "apps/medusa/package.json": "4046ec09277ddbccb59ae2c72bf84fed25f1952a6ad8d162473e60c0a47ea9be",
+      "apps/medusa/scripts/build.mjs": "8868aa160e04151a6e00688f36a395f024a02e9ba2e1d1fd1f0f31ae845142f9",
+      "apps/medusa/src/api/admin/m2-readiness/route.ts": "dd681d11e701dafcf28b4688a2c56488b52de90b182ebdfa25a5587ed298e8c4",
+      "apps/medusa/src/api/middlewares.ts": "355cd05604ebd4e441a70aabd48260540ce0a0410b515285916bbc160e1f5e5b",
+      "apps/medusa/src/config.ts": "9b9f692ec5dbf998aed501c996c6e7136126fc429046179626ca862ec3286509",
+      "apps/medusa/tests/config.test.ts": "b7c572654513cf892d43346a0008688635bea1ce1ed5508531183924b5b99470",
+      "apps/medusa/tsconfig.json": "1129febc94f4baddab564973df7996eafc83ac132eee0cb78d0a01e4c24f072c",
+      "apps/web/ASSET-PROVENANCE.md": "99ea2c8734067286d66f34fb8029a12a11a9d9efee8d12adda65a07bf44e6e0e",
+      "apps/web/components.json": "7d40c2f33acbca3cf2f37aa4d80b248838d4e8ae676453d3926b57bdc3a9ad2d",
+      "apps/web/next.config.mjs": "cea44b45af43a4fe3fc5703f3aaf975944e13dead34df6167cf95a36034fcef6",
+      "apps/web/package.json": "90d148eeef8e4f9f59d4220a247a692993e147b5116a8e71e6f293460c16d6e2",
+      "apps/web/postcss.config.mjs": "b783348d5618047d0f37e12acd15c5a2c5f02809d8711e0764c9cea52750346c",
+      "apps/web/public/assets/arch-study.svg": "d36f718579ee02897fc3578c8678f8bb988d170dda463770df6f190364a66a5d",
+      "apps/web/public/assets/blank-garment.png": "10d578946947155098dc82e8de437afacd0e0ec92eef6dda5609c31d5aef5269",
+      "apps/web/public/assets/campaign.png": "ed6ea3013401cc7c4cdecd84c6a8158365dff9a16180bdeffba59ef7e3e2aed9",
+      "apps/web/public/assets/studio-sentinel-study.svg": "849acc55c754f8b4ddd1a7067f61bc25358a643a28f8df1a8b795f793856e2cc",
+      "apps/web/public/assets/vynvori-symbol-black.svg": "286e5a48edfb5de113c7521998ee5efa0dbfa9096314337e9bb968c3e39da8dc",
+      "apps/web/public/assets/vynvori-wordmark-black.svg": "097f1666c8cc05bd4c1d11e5f7c81ac09573083221b930773508d37c79f446ea",
+      "apps/web/src/app/account/page.tsx": "cdd343a9ef04b143b10d87bb7cfc1ac5ad9d0165cb7738893f0613163439ac65",
+      "apps/web/src/app/api/health/route.ts": "e37a51b2c42aedb4e933001d1be23fe56c300e7e27346aea23e72049eb33c81d",
+      "apps/web/src/app/cart/page.tsx": "9f9dc5b4d33444dcad64e0e0f675b824ec2689ffcf92bc3f9dbbe1700da3f724",
+      "apps/web/src/app/customize/page.tsx": "d4dfcdcf8addd83bba73b6f938795a9895ed0928fb4b667dbbfc3cc2651c3c1c",
+      "apps/web/src/app/error.tsx": "4895b2c3943c2f166b2e460b1de9359759ae8a280320036fa49d3e230ffae28a",
+      "apps/web/src/app/gallery/page.tsx": "32adf941d27330de779375897061faa35b2864352d4c07b0bff8fc29f31b5e19",
+      "apps/web/src/app/global-error.tsx": "142dbabc6c0e959b16bb6afa847f6dc161a2dd639ec019a5b1d8e6c80896770a",
+      "apps/web/src/app/globals.css": "42932662d8eb8c397c085fcee60b2a6547d6dec653826cde06854bb5024e693d",
+      "apps/web/src/app/layout.tsx": "b35ac57c4b30ce387725440efeff0a43ae4766cb0c89c65f2d952e04bc91f72e",
+      "apps/web/src/app/loading.tsx": "c6b45797a27ee6c5ef763a61886ebd5530a08321d658c240c93c60cc2b62211a",
+      "apps/web/src/app/not-found.tsx": "895d5bd6dc4ae68425a407b6c0e1a725d7fcc8082b63f85b5258322b3ced2cee",
+      "apps/web/src/app/page.tsx": "6ffd6711bdc25ac33168655966b8cc845a30b085daf8a2c25f862a9c7e13b241",
+      "apps/web/src/app/products/[handle]/page.tsx": "00870e5faf7c6bf30b00d72b51b1c2092fffcf3ee578eb02f5dcc77e21564ef7",
+      "apps/web/src/app/studio/page.tsx": "b53ef34d2050b9318542f8bbca57938d6b290055fd028b47caed7ef049ebec5c",
+      "apps/web/src/components/link-button.tsx": "27c678da0ed702d52286d42ccd1180ab0a1cbdbe41d136e72642d01e9ada4532",
+      "apps/web/src/components/site-footer.tsx": "896e947054e75103731190d1f13af17f8ac9d132d15414229298f1ec89191ad7",
+      "apps/web/src/components/site-header.tsx": "eb344450cfed38198126af9044d0db1008c87e093145feab18da6dd2b8f1de8b",
+      "apps/web/src/components/ui/button.tsx": "2aa9b2b30b0f873ef33098e424d79232301815966b25891900807a22f4e5fd91",
+      "apps/web/src/components/unavailable.tsx": "07d79f01974ba6b54dbfe598707b4746e36a68611f0893a65e2effeae911686a",
+      "apps/web/src/fonts/archivo-METADATA.pb": "a2e8f63ffa4f9dfe43a65c349b4742e9cd85298802aed890a6315152f2ae231d",
+      "apps/web/src/fonts/archivo-OFL.txt": "108b4e57c9c796d3d38d0428ca7ee39de47ad93187302718d9b2d8864b9b716b",
+      "apps/web/src/fonts/archivo.ttf": "0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053",
+      "apps/web/src/instrumentation.ts": "60c3b793213bf8a2346ce389c1703ceb389882e1682b77e844977db24a054ab4",
+      "apps/web/src/lib/utils.ts": "64fc84c1be627f0d586fb4ba64d824a1604f44282381f5bae68cdf86e10bb6ec",
+      "apps/web/tests/health.test.ts": "ba061e6e637f289a8762a0258828027d22e1d43bef6970156c0987bb9f5b188f",
+      "apps/web/tsconfig.json": "ed16b4d8fe23ee924f976a84f152f7a18265ad003cdaf8929b1d4e8f96f2bd43",
+      "packages/commerce/package.json": "025de72d5297f2f9f5dabcd6c0fc801f04883c150d51582fa7fa5c8085a12dd0",
+      "packages/commerce/src/medusa.ts": "28ad7ae6c94b45c9e2d91edd0275515855429b597dcfb2601c0e0e5829404082",
+      "packages/commerce/src/processing.ts": "1a3fef01327e82004257e01ca79ac941450f3249610c5154d34949e0677d5d4a",
+      "packages/commerce/src/storage.ts": "a4dc325a49647debb9ccc716c24e537637442b5d352c538adf6001b503f674b5",
+      "packages/commerce/tests/adapters.test.ts": "f2db0bed15da1a74e13408074b8fb34f45e61cd3603b3e9e014c0945445f7a01",
+      "packages/commerce/tsconfig.json": "73520ccf3ea01f81e554dc039001f202c4262e7a6eeedcb28a9ac5ea7d8d8955",
+      "packages/db/drizzle.config.ts": "e9fa9d5d2a13eaa8afe58410fa1aefc5f1473453111442c330d7d8b7c364c112",
+      "packages/db/migrations/0000_organic_valkyrie.sql": "57fc08491edd7bc06546b45803662dbe1d799bb86f4e337817a04206e14084ac",
+      "packages/db/migrations/meta/0000_snapshot.json": "36d98cfa7b37403fb6eed40c6f9ed207fc6de3d079a58f1cc16a31dbb584ae02",
+      "packages/db/migrations/meta/_journal.json": "cb6e287213d315214a1cb47938eb6bb4e551315dca23f89aa4c0ed7b578f07d1",
+      "packages/db/package.json": "6c2536a4372aa2cd65a806c58462b55100afc07479086bceade7a2a7662e50ce",
+      "packages/db/src/index.ts": "198fff1d2e44cd764376a7e6cac97d4965b1a3046ecd1f7c639ec4aa587092fa",
+      "packages/db/src/migrate.ts": "39987f25dbf0e2e966bc27e12021a2b9e7a737cdb7217fb67a969e43e056bb9e",
+      "packages/db/src/schema.ts": "732fe326c7eb9b60c1fcf104cd320a20bd1d8728195915e77393a16032bef116",
+      "packages/db/tests/postgres.test.ts": "624e4b394faba511b6977beadeeb6aba0f59dbd894b1a96e78d4755b9d2e5177",
+      "packages/db/tsconfig.json": "b215e6abf333df28372380af8556f77054525f4f6275521d21645826d85778c5",
+      "packages/shared/package.json": "ef3625d12a2c40395b93054a7c6b3c15e5855e3b7c125a5b5f116e6b200b12ea",
+      "packages/shared/src/infrastructure.ts": "c66a3221386a52e0eeaf54a80e136a40081fdd4c942cb54185afb5e12305bdac",
+      "packages/shared/src/public.ts": "0fd5b4ff5f9388429fb437e0f99e7bd70ec14e9f6cdf3392ad19fcade3291b1d",
+      "packages/shared/src/server.ts": "2e0ae5c8390b5308ed621d215f2539a3437cef989e2f215578ec8903fdcd58dd",
+      "packages/shared/tests/config.test.ts": "5381ea302dd262aa13ce01596d10fcc38e83fa699f87429db2558825fc0811e3",
+      "packages/shared/tests/infrastructure.test.ts": "fd995b21ec7480d3a05e24409cd74a6668ac89aaa75fe9990a401f1474420221",
+      "packages/shared/tsconfig.json": "6e0127468af04f4d62f173026ec145d9d509b8351b6cccee7d80b228d466c059",
+      "services/image-processing/.dockerignore": "250a56b3613099c910de03423928c8f9ed2aa15dec7c9b751b0c894767c01501",
+      "services/image-processing/Dockerfile": "6c21fa35c8cd9e6f94ef60e1908e86962cbe3ec758f29462a9baa1cd297f102f",
+      "services/image-processing/cloud-run.yaml": "6ff6b08cc3e7768bd6b8359e3a5a22f911f0c4c6a63c0aa52dc8105678b08bd9",
+      "services/image-processing/package.json": "819512cc3f616af2d6df1a88f3741ac8d97dd32e3e9b5bb311821ea7adb08d7b",
+      "services/image-processing/src/server.mjs": "e38b834c5ab66aa8f0a39f32a395556fba41c6e4dc2c969b511df48042bc84db",
+      "services/image-processing/tests/worker.test.mjs": "8c39e899a457bf8f1e34dec6a9f670e19095f46126bb3c1cef3bc8bd1117aacc",
+      "scripts/browser-preview.mjs": "45fb1ca1176787c7ed3cca62a2bb310b9bbeb5fb203a47d4096ca21c2dd315c1",
+      "scripts/browser-web.mjs": "c71d3e17911bf166a53f00bc508b6371cb574bf763c2619cde8b0605b3eee66c",
+      "scripts/deployment-check.mjs": "2be1f65d6fb1acdaa7d5d8caca25f8a885f3aaa1492f766aecab430a93d10aaf",
+      "scripts/editorial-layout.mjs": "d4fd0b554a277f444bb3d10967c6b39f2608bb584ec0b1d893fb521f2aa4ab3f",
+      "scripts/integrity.mjs": "b28588c1ca0767d5abb1b51cb66b2f81d699323a9576c4b9fc93cdb054e4a1aa",
+      "scripts/m2-security.mjs": "79693718efae5d7f8e334327133e6991999f70c280b34b7830b278475a4b8ec5",
+      "scripts/process-lifecycle.mjs": "6d03367aa663189ef6a58e60d763d2660ea77eeefd97afe1a32bfae41c6aaecc",
+      "scripts/security-smoke.mjs": "d1c983c33cccd968a5e667c7fce4dedd6999dd7ccc981bfe11fec2a865f8b127",
+      "scripts/security/audit-policy.mjs": "ecab04c684b639c6cfd72d97e1ade0577bf68881dc2b1f9bac29256a20021d9a",
+      "scripts/security/run-audit.mjs": "1062cc9df903771545c2736bcdf64e8f38a620c081bc6dcddfabcaa0140446b5",
+      "scripts/staging-smoke.ts": "55261fd71a882707904582d4396925f4e33dff0de829fcd47b86a473fd53fdfb",
+      "scripts/test-medusa.mjs": "2458621c91d7923e58805bff6aa7c9b834915a90fb8cd8224bf0887d1bbc32fc",
+      "scripts/test-worker-container.mjs": "067f426f0b515d6bbde13aeb83eba6113fd715391c2d1f8ac1252bbebc992562",
+      "scripts/tests/dependency-compat.test.mjs": "e4cf20ed86bdeb94abb79c4882dcd6e9f082a1814cd8d176588cee5ea0caa18b",
+      "scripts/tests/process-lifecycle.test.mjs": "5b76b19591445f6ec0b02983956ff823c55208897579b055cc5ecb2d951360bd",
+      "scripts/tests/security-policy.test.mjs": "3e396933c6cc1300d04d2ca2f75d1f01fba06d695644c62d6a91db78dd8fffd3",
+      "scripts/web.mjs": "18296910c5d9297c0dfe50a196753a6373a54fe1519ec1673768fa80df5d64e8",
+      ".github/workflows/m0.yml": "0a27f0ca905f35ca22e5c43518567b2df20cb0b5441d52a702168ffdab5531a2",
+      ".github/workflows/m2.yml": "46dc862d234c2fecd61730788fc11e2c651a338d325683236c1ca5cd92b5bd51",
+      "package.json": "59d90058afa6d8df0f6cc7f50d472288a0fe42fe72e65b5c2d8b4088240c96e0",
+      ".env.example": "ddaf5b826a24a121d0b5b1b8b7a4faac9cfd3c945375f10cd084b90fcf628a13",
+      "security/fixtures/m2-reviewed-audit.json": "6aaa3b3a363960a4e0c783c15ea3846afb5ab73e8be37787d01b0007504bda36"
+    },
+    "ancestryEdges": [
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/admin-bundler",
+        "name": "@medusajs/admin-bundler",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/admin-bundler/node_modules/tailwindcss",
+        "child": "node_modules/@medusajs/admin-bundler/node_modules/chokidar",
+        "name": "chokidar",
+        "spec": "^3.6.0",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/admin-bundler/node_modules/tailwindcss",
+        "child": "node_modules/@medusajs/admin-bundler/node_modules/fast-glob",
+        "name": "fast-glob",
+        "spec": "^3.3.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/admin-bundler",
+        "child": "node_modules/@medusajs/admin-bundler/node_modules/tailwindcss",
+        "name": "tailwindcss",
+        "spec": "^3.4.3",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/analytics-local",
+        "name": "@medusajs/analytics-local",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/analytics-posthog",
+        "name": "@medusajs/analytics-posthog",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/analytics",
+        "name": "@medusajs/analytics",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/api-key",
+        "name": "@medusajs/api-key",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/auth-emailpass",
+        "name": "@medusajs/auth-emailpass",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/auth-github",
+        "name": "@medusajs/auth-github",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/auth-google",
+        "name": "@medusajs/auth-google",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/auth-oidc",
+        "name": "@medusajs/auth-oidc",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/auth",
+        "name": "@medusajs/auth",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/cache-inmemory",
+        "name": "@medusajs/cache-inmemory",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/cache-redis",
+        "name": "@medusajs/cache-redis",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/caching-redis",
+        "name": "@medusajs/caching-redis",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/caching",
+        "name": "@medusajs/caching",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/cart",
+        "name": "@medusajs/cart",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "apps/medusa",
+        "child": "node_modules/@medusajs/cli",
+        "name": "@medusajs/cli",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/draft-order",
+        "child": "node_modules/@medusajs/cli",
+        "name": "@medusajs/cli",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/framework",
+        "child": "node_modules/@medusajs/cli",
+        "name": "@medusajs/cli",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/core-flows",
+        "name": "@medusajs/core-flows",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/currency",
+        "name": "@medusajs/currency",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/customer",
+        "name": "@medusajs/customer",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/cli",
+        "child": "node_modules/@medusajs/deps",
+        "name": "@medusajs/deps",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/framework",
+        "child": "node_modules/@medusajs/deps",
+        "name": "@medusajs/deps",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/modules-sdk",
+        "child": "node_modules/@medusajs/deps",
+        "name": "@medusajs/deps",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/orchestration",
+        "child": "node_modules/@medusajs/deps",
+        "name": "@medusajs/deps",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/query",
+        "child": "node_modules/@medusajs/deps",
+        "name": "@medusajs/deps",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/utils",
+        "child": "node_modules/@medusajs/deps",
+        "name": "@medusajs/deps",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/workflows-sdk",
+        "child": "node_modules/@medusajs/deps",
+        "name": "@medusajs/deps",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/draft-order",
+        "name": "@medusajs/draft-order",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/event-bus-local",
+        "name": "@medusajs/event-bus-local",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/event-bus-redis",
+        "name": "@medusajs/event-bus-redis",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/file-local",
+        "name": "@medusajs/file-local",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/file-s3",
+        "name": "@medusajs/file-s3",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/file",
+        "name": "@medusajs/file",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "apps/medusa",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/analytics-local",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/analytics-posthog",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/analytics",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/api-key",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/auth-emailpass",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/auth-github",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/auth-google",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/auth-oidc",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/auth",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/cache-inmemory",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/cache-redis",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/caching-redis",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/caching",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/cart",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/core-flows",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/currency",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/customer",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/draft-order",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/event-bus-local",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/event-bus-redis",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/file-local",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/file-s3",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/file",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/fulfillment-manual",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/fulfillment",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/index",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/inventory",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/link-modules",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/locking-postgres",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/locking-redis",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/locking",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/notification-local",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/notification-sendgrid",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/notification",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/order",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/payment-stripe",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/payment",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/pricing",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/product",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/promotion",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/rbac",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/region",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/sales-channel",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/search-postgres",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/search",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/settings",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/stock-location",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/store",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/tax",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/translation",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/user",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/workflow-engine-inmemory",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/workflow-engine-redis",
+        "child": "node_modules/@medusajs/framework",
+        "name": "@medusajs/framework",
+        "spec": "2.21.2",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/fulfillment-manual",
+        "name": "@medusajs/fulfillment-manual",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/fulfillment",
+        "name": "@medusajs/fulfillment",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/index",
+        "name": "@medusajs/index",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/inventory",
+        "name": "@medusajs/inventory",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/link-modules",
+        "name": "@medusajs/link-modules",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/locking-postgres",
+        "name": "@medusajs/locking-postgres",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/locking-redis",
+        "name": "@medusajs/locking-redis",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/locking",
+        "name": "@medusajs/locking",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "apps/medusa",
+        "child": "node_modules/@medusajs/medusa",
+        "name": "@medusajs/medusa",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/framework",
+        "child": "node_modules/@medusajs/modules-sdk",
+        "name": "@medusajs/modules-sdk",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/workflows-sdk",
+        "child": "node_modules/@medusajs/modules-sdk",
+        "name": "@medusajs/modules-sdk",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/notification-local",
+        "name": "@medusajs/notification-local",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/notification-sendgrid",
+        "name": "@medusajs/notification-sendgrid",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/notification",
+        "name": "@medusajs/notification",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/framework",
+        "child": "node_modules/@medusajs/orchestration",
+        "name": "@medusajs/orchestration",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/workflows-sdk",
+        "child": "node_modules/@medusajs/orchestration",
+        "name": "@medusajs/orchestration",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/order",
+        "name": "@medusajs/order",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/payment-stripe",
+        "name": "@medusajs/payment-stripe",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/payment",
+        "name": "@medusajs/payment",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/pricing",
+        "name": "@medusajs/pricing",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/product",
+        "name": "@medusajs/product",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/promotion",
+        "name": "@medusajs/promotion",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/modules-sdk",
+        "child": "node_modules/@medusajs/query",
+        "name": "@medusajs/query",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/rbac",
+        "name": "@medusajs/rbac",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/region",
+        "name": "@medusajs/region",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/sales-channel",
+        "name": "@medusajs/sales-channel",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/search-postgres",
+        "name": "@medusajs/search-postgres",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/search",
+        "name": "@medusajs/search",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/settings",
+        "name": "@medusajs/settings",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/stock-location",
+        "name": "@medusajs/stock-location",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/store",
+        "name": "@medusajs/store",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/tax",
+        "name": "@medusajs/tax",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/translation",
+        "name": "@medusajs/translation",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/user",
+        "name": "@medusajs/user",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/cli",
+        "child": "node_modules/@medusajs/utils",
+        "name": "@medusajs/utils",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/framework",
+        "child": "node_modules/@medusajs/utils",
+        "name": "@medusajs/utils",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/modules-sdk",
+        "child": "node_modules/@medusajs/utils",
+        "name": "@medusajs/utils",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/orchestration",
+        "child": "node_modules/@medusajs/utils",
+        "name": "@medusajs/utils",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/query",
+        "child": "node_modules/@medusajs/utils",
+        "name": "@medusajs/utils",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/workflows-sdk",
+        "child": "node_modules/@medusajs/utils",
+        "name": "@medusajs/utils",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/workflow-engine-inmemory",
+        "name": "@medusajs/workflow-engine-inmemory",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/medusa",
+        "child": "node_modules/@medusajs/workflow-engine-redis",
+        "name": "@medusajs/workflow-engine-redis",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/framework",
+        "child": "node_modules/@medusajs/workflows-sdk",
+        "name": "@medusajs/workflows-sdk",
+        "spec": "2.21.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/deps",
+        "child": "node_modules/@mikro-orm/cli",
+        "name": "@mikro-orm/cli",
+        "spec": "6.6.14",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/deps",
+        "child": "node_modules/@mikro-orm/core",
+        "name": "@mikro-orm/core",
+        "spec": "6.6.14",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@mikro-orm/cli",
+        "child": "node_modules/@mikro-orm/core",
+        "name": "@mikro-orm/core",
+        "spec": "6.6.14",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@mikro-orm/knex",
+        "child": "node_modules/@mikro-orm/core",
+        "name": "@mikro-orm/core",
+        "spec": "^6.0.0",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@mikro-orm/migrations",
+        "child": "node_modules/@mikro-orm/core",
+        "name": "@mikro-orm/core",
+        "spec": "^6.0.0",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@mikro-orm/postgresql",
+        "child": "node_modules/@mikro-orm/core",
+        "name": "@mikro-orm/core",
+        "spec": "^6.0.0",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/deps",
+        "child": "node_modules/@mikro-orm/knex",
+        "name": "@mikro-orm/knex",
+        "spec": "6.6.14",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@mikro-orm/cli",
+        "child": "node_modules/@mikro-orm/knex",
+        "name": "@mikro-orm/knex",
+        "spec": "6.6.14",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@mikro-orm/migrations",
+        "child": "node_modules/@mikro-orm/knex",
+        "name": "@mikro-orm/knex",
+        "spec": "6.6.14",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@mikro-orm/postgresql",
+        "child": "node_modules/@mikro-orm/knex",
+        "name": "@mikro-orm/knex",
+        "spec": "6.6.14",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/deps",
+        "child": "node_modules/@mikro-orm/migrations",
+        "name": "@mikro-orm/migrations",
+        "spec": "6.6.14",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/deps",
+        "child": "node_modules/@mikro-orm/postgresql",
+        "name": "@mikro-orm/postgresql",
+        "spec": "6.6.14",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/umzug",
+        "child": "node_modules/@rushstack/ts-command-line",
+        "name": "@rushstack/ts-command-line",
+        "spec": "^4.12.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@rushstack/ts-command-line",
+        "child": "node_modules/@rushstack/ts-command-line/node_modules/argparse",
+        "name": "argparse",
+        "spec": "~1.0.9",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/deps",
+        "child": "node_modules/awilix",
+        "name": "awilix",
+        "spec": "^8.0.1",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/caching",
+        "child": "node_modules/awilix",
+        "name": "awilix",
+        "spec": "^8.0.1",
+        "kind": "peerDependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/admin-bundler/node_modules/chokidar",
+        "child": "node_modules/braces",
+        "name": "braces",
+        "spec": "~3.0.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/micromatch",
+        "child": "node_modules/braces",
+        "name": "braces",
+        "spec": "^3.0.3",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/awilix",
+        "child": "node_modules/fast-glob",
+        "name": "fast-glob",
+        "spec": "^3.2.12",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/globby",
+        "child": "node_modules/fast-glob",
+        "name": "fast-glob",
+        "spec": "^3.2.9",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@mikro-orm/core",
+        "child": "node_modules/globby",
+        "name": "globby",
+        "spec": "11.1.0",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/admin-bundler/node_modules/fast-glob",
+        "child": "node_modules/micromatch",
+        "name": "micromatch",
+        "spec": "^4.0.8",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@medusajs/admin-bundler/node_modules/tailwindcss",
+        "child": "node_modules/micromatch",
+        "name": "micromatch",
+        "spec": "^4.0.8",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/fast-glob",
+        "child": "node_modules/micromatch",
+        "name": "micromatch",
+        "spec": "^4.0.4",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/umzug/node_modules/fast-glob",
+        "child": "node_modules/micromatch",
+        "name": "micromatch",
+        "spec": "^4.0.8",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@rushstack/ts-command-line/node_modules/argparse",
+        "child": "node_modules/sprintf-js",
+        "name": "sprintf-js",
+        "spec": "~1.0.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/@mikro-orm/migrations",
+        "child": "node_modules/umzug",
+        "name": "umzug",
+        "spec": "3.8.2",
+        "kind": "dependencies"
+      },
+      {
+        "parent": "node_modules/umzug",
+        "child": "node_modules/umzug/node_modules/fast-glob",
+        "name": "fast-glob",
+        "spec": "^3.3.2",
+        "kind": "dependencies"
+      }
+    ],
+    "rootConfiguration": {
+      ".npmrc": null,
+      "npm-shrinkwrap.json": null
+    }
+  },
+  "reviewedAuditGraph": {
+    "@medusajs/admin-bundler": {
+      "nodes": [
+        "node_modules/@medusajs/admin-bundler"
+      ],
+      "severity": "high",
+      "via": [
+        "tailwindcss"
+      ],
+      "origins": []
+    },
+    "@medusajs/analytics": {
+      "nodes": [
+        "node_modules/@medusajs/analytics"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/analytics-local": {
+      "nodes": [
+        "node_modules/@medusajs/analytics-local"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/analytics-posthog": {
+      "nodes": [
+        "node_modules/@medusajs/analytics-posthog"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/api-key": {
+      "nodes": [
+        "node_modules/@medusajs/api-key"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/auth": {
+      "nodes": [
+        "node_modules/@medusajs/auth"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/auth-emailpass": {
+      "nodes": [
+        "node_modules/@medusajs/auth-emailpass"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/auth-github": {
+      "nodes": [
+        "node_modules/@medusajs/auth-github"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/auth-google": {
+      "nodes": [
+        "node_modules/@medusajs/auth-google"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/auth-oidc": {
+      "nodes": [
+        "node_modules/@medusajs/auth-oidc"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/cache-inmemory": {
+      "nodes": [
+        "node_modules/@medusajs/cache-inmemory"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/cache-redis": {
+      "nodes": [
+        "node_modules/@medusajs/cache-redis"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/caching": {
+      "nodes": [
+        "node_modules/@medusajs/caching"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework",
+        "awilix"
+      ],
+      "origins": []
+    },
+    "@medusajs/caching-redis": {
+      "nodes": [
+        "node_modules/@medusajs/caching-redis"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/cart": {
+      "nodes": [
+        "node_modules/@medusajs/cart"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/cli": {
+      "nodes": [
+        "node_modules/@medusajs/cli"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/deps",
+        "@medusajs/utils"
+      ],
+      "origins": []
+    },
+    "@medusajs/core-flows": {
+      "nodes": [
+        "node_modules/@medusajs/core-flows"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/currency": {
+      "nodes": [
+        "node_modules/@medusajs/currency"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/customer": {
+      "nodes": [
+        "node_modules/@medusajs/customer"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/deps": {
+      "nodes": [
+        "node_modules/@medusajs/deps"
+      ],
+      "severity": "high",
+      "via": [
+        "@mikro-orm/cli",
+        "@mikro-orm/core",
+        "@mikro-orm/knex",
+        "@mikro-orm/migrations",
+        "@mikro-orm/postgresql",
+        "awilix"
+      ],
+      "origins": []
+    },
+    "@medusajs/draft-order": {
+      "nodes": [
+        "node_modules/@medusajs/draft-order"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/cli",
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/event-bus-local": {
+      "nodes": [
+        "node_modules/@medusajs/event-bus-local"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/event-bus-redis": {
+      "nodes": [
+        "node_modules/@medusajs/event-bus-redis"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/file": {
+      "nodes": [
+        "node_modules/@medusajs/file"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/file-local": {
+      "nodes": [
+        "node_modules/@medusajs/file-local"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/file-s3": {
+      "nodes": [
+        "node_modules/@medusajs/file-s3"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/framework": {
+      "nodes": [
+        "node_modules/@medusajs/framework"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/cli",
+        "@medusajs/deps",
+        "@medusajs/modules-sdk",
+        "@medusajs/orchestration",
+        "@medusajs/utils",
+        "@medusajs/workflows-sdk"
+      ],
+      "origins": []
+    },
+    "@medusajs/fulfillment": {
+      "nodes": [
+        "node_modules/@medusajs/fulfillment"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/fulfillment-manual": {
+      "nodes": [
+        "node_modules/@medusajs/fulfillment-manual"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/index": {
+      "nodes": [
+        "node_modules/@medusajs/index"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/inventory": {
+      "nodes": [
+        "node_modules/@medusajs/inventory"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/link-modules": {
+      "nodes": [
+        "node_modules/@medusajs/link-modules"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/locking": {
+      "nodes": [
+        "node_modules/@medusajs/locking"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/locking-postgres": {
+      "nodes": [
+        "node_modules/@medusajs/locking-postgres"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/locking-redis": {
+      "nodes": [
+        "node_modules/@medusajs/locking-redis"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/medusa": {
+      "nodes": [
+        "node_modules/@medusajs/medusa"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/admin-bundler",
+        "@medusajs/analytics",
+        "@medusajs/analytics-local",
+        "@medusajs/analytics-posthog",
+        "@medusajs/api-key",
+        "@medusajs/auth",
+        "@medusajs/auth-emailpass",
+        "@medusajs/auth-github",
+        "@medusajs/auth-google",
+        "@medusajs/auth-oidc",
+        "@medusajs/cache-inmemory",
+        "@medusajs/cache-redis",
+        "@medusajs/caching",
+        "@medusajs/caching-redis",
+        "@medusajs/cart",
+        "@medusajs/core-flows",
+        "@medusajs/currency",
+        "@medusajs/customer",
+        "@medusajs/draft-order",
+        "@medusajs/event-bus-local",
+        "@medusajs/event-bus-redis",
+        "@medusajs/file",
+        "@medusajs/file-local",
+        "@medusajs/file-s3",
+        "@medusajs/framework",
+        "@medusajs/fulfillment",
+        "@medusajs/fulfillment-manual",
+        "@medusajs/index",
+        "@medusajs/inventory",
+        "@medusajs/link-modules",
+        "@medusajs/locking",
+        "@medusajs/locking-postgres",
+        "@medusajs/locking-redis",
+        "@medusajs/notification",
+        "@medusajs/notification-local",
+        "@medusajs/notification-sendgrid",
+        "@medusajs/order",
+        "@medusajs/payment",
+        "@medusajs/payment-stripe",
+        "@medusajs/pricing",
+        "@medusajs/product",
+        "@medusajs/promotion",
+        "@medusajs/rbac",
+        "@medusajs/region",
+        "@medusajs/sales-channel",
+        "@medusajs/search",
+        "@medusajs/search-postgres",
+        "@medusajs/settings",
+        "@medusajs/stock-location",
+        "@medusajs/store",
+        "@medusajs/tax",
+        "@medusajs/translation",
+        "@medusajs/user",
+        "@medusajs/workflow-engine-inmemory",
+        "@medusajs/workflow-engine-redis"
+      ],
+      "origins": []
+    },
+    "@medusajs/modules-sdk": {
+      "nodes": [
+        "node_modules/@medusajs/modules-sdk"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/deps",
+        "@medusajs/query",
+        "@medusajs/utils"
+      ],
+      "origins": []
+    },
+    "@medusajs/notification": {
+      "nodes": [
+        "node_modules/@medusajs/notification"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/notification-local": {
+      "nodes": [
+        "node_modules/@medusajs/notification-local"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/notification-sendgrid": {
+      "nodes": [
+        "node_modules/@medusajs/notification-sendgrid"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/orchestration": {
+      "nodes": [
+        "node_modules/@medusajs/orchestration"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/deps",
+        "@medusajs/utils"
+      ],
+      "origins": []
+    },
+    "@medusajs/order": {
+      "nodes": [
+        "node_modules/@medusajs/order"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/payment": {
+      "nodes": [
+        "node_modules/@medusajs/payment"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/payment-stripe": {
+      "nodes": [
+        "node_modules/@medusajs/payment-stripe"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/pricing": {
+      "nodes": [
+        "node_modules/@medusajs/pricing"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/product": {
+      "nodes": [
+        "node_modules/@medusajs/product"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/promotion": {
+      "nodes": [
+        "node_modules/@medusajs/promotion"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/query": {
+      "nodes": [
+        "node_modules/@medusajs/query"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/deps",
+        "@medusajs/utils"
+      ],
+      "origins": []
+    },
+    "@medusajs/rbac": {
+      "nodes": [
+        "node_modules/@medusajs/rbac"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/region": {
+      "nodes": [
+        "node_modules/@medusajs/region"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/sales-channel": {
+      "nodes": [
+        "node_modules/@medusajs/sales-channel"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/search": {
+      "nodes": [
+        "node_modules/@medusajs/search"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/search-postgres": {
+      "nodes": [
+        "node_modules/@medusajs/search-postgres"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/settings": {
+      "nodes": [
+        "node_modules/@medusajs/settings"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/stock-location": {
+      "nodes": [
+        "node_modules/@medusajs/stock-location"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/store": {
+      "nodes": [
+        "node_modules/@medusajs/store"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/tax": {
+      "nodes": [
+        "node_modules/@medusajs/tax"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/translation": {
+      "nodes": [
+        "node_modules/@medusajs/translation"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/user": {
+      "nodes": [
+        "node_modules/@medusajs/user"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/utils": {
+      "nodes": [
+        "node_modules/@medusajs/utils"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/deps"
+      ],
+      "origins": []
+    },
+    "@medusajs/workflow-engine-inmemory": {
+      "nodes": [
+        "node_modules/@medusajs/workflow-engine-inmemory"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/workflow-engine-redis": {
+      "nodes": [
+        "node_modules/@medusajs/workflow-engine-redis"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/framework"
+      ],
+      "origins": []
+    },
+    "@medusajs/workflows-sdk": {
+      "nodes": [
+        "node_modules/@medusajs/workflows-sdk"
+      ],
+      "severity": "high",
+      "via": [
+        "@medusajs/deps",
+        "@medusajs/modules-sdk",
+        "@medusajs/orchestration",
+        "@medusajs/utils"
+      ],
+      "origins": []
+    },
+    "@mikro-orm/cli": {
+      "nodes": [
+        "node_modules/@mikro-orm/cli"
+      ],
+      "severity": "high",
+      "via": [
+        "@mikro-orm/core",
+        "@mikro-orm/knex"
+      ],
+      "origins": []
+    },
+    "@mikro-orm/core": {
+      "nodes": [
+        "node_modules/@mikro-orm/core"
+      ],
+      "severity": "high",
+      "via": [
+        "globby"
+      ],
+      "origins": []
+    },
+    "@mikro-orm/knex": {
+      "nodes": [
+        "node_modules/@mikro-orm/knex"
+      ],
+      "severity": "high",
+      "via": [
+        "@mikro-orm/core"
+      ],
+      "origins": []
+    },
+    "@mikro-orm/migrations": {
+      "nodes": [
+        "node_modules/@mikro-orm/migrations"
+      ],
+      "severity": "high",
+      "via": [
+        "@mikro-orm/core",
+        "@mikro-orm/knex",
+        "umzug"
+      ],
+      "origins": []
+    },
+    "@mikro-orm/postgresql": {
+      "nodes": [
+        "node_modules/@mikro-orm/postgresql"
+      ],
+      "severity": "high",
+      "via": [
+        "@mikro-orm/core",
+        "@mikro-orm/knex"
+      ],
+      "origins": []
+    },
+    "@rushstack/ts-command-line": {
+      "nodes": [
+        "node_modules/@rushstack/ts-command-line"
+      ],
+      "severity": "moderate",
+      "via": [
+        "argparse"
+      ],
+      "origins": []
+    },
+    "argparse": {
+      "nodes": [
+        "node_modules/@rushstack/ts-command-line/node_modules/argparse"
+      ],
+      "severity": "moderate",
+      "via": [
+        "sprintf-js"
+      ],
+      "origins": []
+    },
+    "awilix": {
+      "nodes": [
+        "node_modules/awilix"
+      ],
+      "severity": "high",
+      "via": [
+        "fast-glob"
+      ],
+      "origins": []
+    },
+    "braces": {
+      "nodes": [
+        "node_modules/braces"
+      ],
+      "severity": "high",
+      "via": [],
+      "origins": [
+        "GHSA-vfj7-8cjw-p6xm"
+      ]
+    },
+    "chokidar": {
+      "nodes": [
+        "node_modules/@medusajs/admin-bundler/node_modules/chokidar"
+      ],
+      "severity": "high",
+      "via": [
+        "braces"
+      ],
+      "origins": []
+    },
+    "fast-glob": {
+      "nodes": [
+        "node_modules/@medusajs/admin-bundler/node_modules/fast-glob",
+        "node_modules/fast-glob",
+        "node_modules/umzug/node_modules/fast-glob"
+      ],
+      "severity": "high",
+      "via": [
+        "micromatch"
+      ],
+      "origins": []
+    },
+    "globby": {
+      "nodes": [
+        "node_modules/globby"
+      ],
+      "severity": "high",
+      "via": [
+        "fast-glob"
+      ],
+      "origins": []
+    },
+    "micromatch": {
+      "nodes": [
+        "node_modules/micromatch"
+      ],
+      "severity": "high",
+      "via": [
+        "braces"
+      ],
+      "origins": []
+    },
+    "sprintf-js": {
+      "nodes": [
+        "node_modules/sprintf-js"
+      ],
+      "severity": "moderate",
+      "via": [],
+      "origins": [
+        "GHSA-hp3w-g68c-fv3c"
+      ]
+    },
+    "tailwindcss": {
+      "nodes": [
+        "node_modules/@medusajs/admin-bundler/node_modules/tailwindcss"
+      ],
+      "severity": "high",
+      "via": [
+        "chokidar",
+        "fast-glob",
+        "micromatch"
+      ],
+      "origins": []
+    },
+    "umzug": {
+      "nodes": [
+        "node_modules/umzug"
+      ],
+      "severity": "high",
+      "via": [
+        "@rushstack/ts-command-line",
+        "fast-glob"
+      ],
+      "origins": []
+    }
+  }
+}

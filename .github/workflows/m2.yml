@@ -1,0 +1,64 @@
+name: M2 backend foundation
+on:
+  pull_request:
+  push:
+    branches: [main, feat/m2-staging-foundation]
+permissions:
+  contents: read
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17.6-bookworm
+        env:
+          POSTGRES_USER: synthetic
+          POSTGRES_PASSWORD: synthetic-local-only
+          POSTGRES_DB: vynvori_creative_staging
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U synthetic -d vynvori_creative_staging" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      M2_ENV: local
+      M2_CREATIVE_DATABASE_URL: postgres://synthetic:synthetic-local-only@127.0.0.1:5432/vynvori_creative_staging
+      M2_MEDUSA_DATABASE_URL: postgres://synthetic:synthetic-local-only@127.0.0.1:5432/vynvori_medusa_staging
+      M2_APPLY_MIGRATIONS: vynvori-creative-staging
+      PGPASSWORD: synthetic-local-only
+      NEXT_TELEMETRY_DISABLED: '1'
+      MEDUSA_DISABLE_TELEMETRY: 'true'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.3'
+          cache: npm
+      - run: npm ci
+      - run: psql -h 127.0.0.1 -U synthetic -d postgres -c 'CREATE DATABASE vynvori_medusa_staging'
+      - run: npm run lint
+      - run: npm run typecheck:m2
+      - run: npm run db:check
+      - run: npm run db:generate && git diff --exit-code -- packages/db/migrations
+      - run: npm run db:migrate && npm run db:migrate
+      - run: npm run test:m2
+      - run: npm run build:m2
+        env:
+          M2_MEDUSA_DATABASE_NAME: vynvori_medusa_staging
+          M2_MEDUSA_JWT_SECRET: synthetic-build-jwt-only-0000000000000
+          M2_MEDUSA_COOKIE_SECRET: synthetic-build-cookie-only-000000000
+          M2_MEDUSA_STORE_CORS: http://localhost:3000
+          M2_MEDUSA_ADMIN_CORS: http://localhost:19000
+          M2_MEDUSA_AUTH_CORS: http://localhost:19000
+      - run: node scripts/test-medusa.mjs
+        timeout-minutes: 8
+      - run: npm run smoke:m2-security
+      - run: docker build -t vynvori-m2-worker services/image-processing
+      - run: |
+          docker run -d --name vynvori-m2-worker --label vynvori.milestone=M2 -p 127.0.0.1:18080:8080 -e M2_ENV=local -e M2_PROCESSING_TOKEN=synthetic-ci-worker-token-000000000000 vynvori-m2-worker
+          node scripts/test-worker-container.mjs
+      - if: always()
+        run: |
+          container_id="$(docker ps -aq --filter name=^/vynvori-m2-worker$)"
+          if [ -n "$container_id" ]; then
+            test "$(docker inspect --format '{{ index .Config.Labels "vynvori.milestone" }}' "$container_id")" = M2
+            docker rm -f "$container_id"
+          fi

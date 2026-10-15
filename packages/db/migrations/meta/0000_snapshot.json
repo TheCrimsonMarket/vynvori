@@ -1,0 +1,58 @@
+{
+  "id": "7c67f5ce-b4a4-4ca6-8a0a-cbbdb5178e39",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "vynvori_infrastructure.synthetic_probes": {
+      "name": "synthetic_probes",
+      "schema": "vynvori_infrastructure",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "fixture": {
+          "name": "fixture",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "synthetic_only": {
+          "name": "synthetic_only",
+          "value": "\"vynvori_infrastructure\".\"synthetic_probes\".\"fixture\" = 'm2-synthetic-v1'"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {
+    "vynvori_infrastructure": "vynvori_infrastructure"
+  },
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

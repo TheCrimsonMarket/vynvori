@@ -4,7 +4,11 @@
   "workspaces": [
     "design/reference",
     "apps/web",
-    "packages/shared"
+    "packages/shared",
+    "apps/medusa",
+    "packages/db",
+    "packages/commerce",
+    "services/image-processing"
   ],
   "scripts": {
     "preview": "npm run preview --workspace @vynvori/design-reference",
@@ -12,9 +16,9 @@
     "dev:web": "node scripts/web.mjs dev",
     "build:web": "node scripts/web.mjs build",
     "start:web": "node scripts/web.mjs start",
-    "lint": "eslint apps/web packages/shared scripts",
-    "typecheck": "npm run typecheck --workspace @vynvori/shared && npm run typecheck --workspace @vynvori/web && npm run typecheck --workspace @vynvori/design-reference",
-    "test": "npm run test:m0 && npm run test:reference",
+    "lint": "eslint apps/web apps/medusa packages/shared packages/db packages/commerce services/image-processing scripts",
+    "typecheck": "npm run typecheck --workspace @vynvori/shared && npm run typecheck --workspace @vynvori/web && npm run typecheck --workspace @vynvori/design-reference && npm run typecheck:m2",
+    "test": "npm run test:m0 && npm run test:reference && npm run test:m2 && npm run test:security-policy",
     "test:m0": "node --conditions=react-server --import tsx --test packages/shared/tests/config.test.ts apps/web/tests/health.test.ts",
     "test:reference": "npm run test --workspace @vynvori/design-reference && npm run test:legacy --workspace @vynvori/design-reference",
     "test:browser:web": "node scripts/browser-web.mjs",
@@ -22,14 +26,44 @@
     "test:browser": "npm run test:browser --workspace @vynvori/design-reference",
     "verify:reference": "npm run verify --workspace @vynvori/design-reference && node scripts/integrity.mjs",
     "smoke:security": "node scripts/security-smoke.mjs",
-    "verify": "npm run lint && npm run typecheck && npm test && npm run build:web && npm run verify:reference && npm run smoke:security"
+    "verify": "npm run lint && npm run typecheck && npm test && npm run build:web && npm run verify:reference && npm run smoke:security",
+    "dev:medusa": "npm run dev -w @vynvori/medusa",
+    "build:medusa": "npm run build -w @vynvori/medusa",
+    "dev:worker": "npm run dev -w @vynvori/image-processing",
+    "build:m2": "npm run build -w @vynvori/db && npm run build -w @vynvori/commerce && npm run build -w @vynvori/image-processing && npm run build:medusa",
+    "typecheck:m2": "npm run typecheck -w @vynvori/db && npm run typecheck -w @vynvori/commerce && npm run typecheck -w @vynvori/medusa && npm run typecheck -w @vynvori/image-processing",
+    "test:m2": "node --conditions=react-server --import tsx --test packages/shared/tests/infrastructure.test.ts packages/db/tests/*.test.ts packages/commerce/tests/*.test.ts apps/medusa/tests/*.test.ts && npm test -w @vynvori/image-processing && npm run test:lifecycle",
+    "db:generate": "npm run generate -w @vynvori/db",
+    "db:check": "npm run check -w @vynvori/db",
+    "db:migrate": "npm run migrate -w @vynvori/db",
+    "smoke:m2": "node --conditions=react-server --import tsx scripts/staging-smoke.ts",
+    "smoke:m2-security": "node scripts/m2-security.mjs",
+    "test:lifecycle": "node --test scripts/tests/process-lifecycle.test.mjs scripts/tests/dependency-compat.test.mjs",
+    "security:audit": "node scripts/security/run-audit.mjs",
+    "test:security-policy": "node --test scripts/tests/security-policy.test.mjs"
   },
   "devDependencies": {
     "eslint": "9.39.5",
     "eslint-config-next": "16.4.0",
-    "tsx": "4.23.15"
+    "tsx": "4.23.15",
+    "@medusajs/medusa": "2.21.2"
   },
   "engines": {
     "node": ">=22.23.0 <23"
+  },
+  "packageManager": "npm@10.9.9",
+  "overrides": {
+    "lodash": "4.18.1",
+    "@graphql-tools/utils": "12.0.4",
+    "@opentelemetry/instrumentation-pg": "0.75.0",
+    "postcss-selector-parser": "7.1.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "@rushstack/node-core-library@5.13.0": {
+      "ajv": "8.20.0"
+    },
+    "bullmq@5.13.0": {
+      "uuid": "11.1.1"
+    }
   }
 }
