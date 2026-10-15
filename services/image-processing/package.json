@@ -1,0 +1,5 @@
+{
+  "name": "@vynvori/image-processing", "version": "0.0.0", "private": true, "type": "module",
+  "scripts": { "dev": "node src/server.mjs", "start": "node src/server.mjs", "build": "node --check src/server.mjs", "typecheck": "node --check src/server.mjs", "test": "node --test tests/*.test.mjs" },
+  "engines": { "node": ">=22.23.0 <23" }
+}

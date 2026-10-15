@@ -1,0 +1,31 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createWorker, workerConfig } from "../src/server.mjs";
+const token = "synthetic-test-only-token-000000000000";
+test("worker rejects unsafe deployment configuration", () => {
+  for (const env of [{}, { M2_ENV: "production", M2_PROCESSING_TOKEN: token }, { M2_ENV: "local", M2_PROCESSING_TOKEN: "short" }, { M2_ENV: "local", M2_PROCESSING_TOKEN: token, K_SERVICE: "worker" }]) assert.throws(() => workerConfig(env));
+});
+test("real local HTTP boundary, deterministic replay, limits and redacted logs", async t => {
+  const logs = [];
+  const server = createWorker(workerConfig({ M2_ENV: "local", M2_PROCESSING_TOKEN: token }), entry => logs.push(entry));
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const headers = { authorization: `Bearer ${token}`, "content-type": "application/json", "x-correlation-id": "synthetic-m2" };
+  assert.equal((await fetch(`${base}/health`)).status, 200);
+  assert.equal((await fetch(`${base}/ready`)).status, 401);
+  assert.equal((await fetch(`${base}/v1/dry-run`, { method: "POST", headers: { ...headers, authorization: "Bearer forged" }, body: "{}" })).status, 401);
+  const input = { version: 1, fixture: "m2-synthetic-v1", requestId: "12345678-1234-4123-8123-123456789abc" };
+  const call = body => fetch(`${base}/v1/dry-run`, { method: "POST", headers, body: JSON.stringify(body) });
+  const first = await call(input);
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get("x-correlation-id"), "synthetic-m2");
+  const result = await first.json();
+  assert.equal(result.printed, false);
+  assert.deepEqual(await (await call(input)).json(), result);
+  for (const invalid of [{ ...input, url: "https://private.example" }, { ...input, fixture: "customer" }, { ...input, version: 2 }, null]) assert.equal((await call(invalid)).status, 400);
+  assert.equal((await call({ ...input, padding: "x".repeat(1025) })).status, 413);
+  assert.equal((await fetch(`${base}/v1/dry-run`, { method: "POST", headers: { authorization: headers.authorization }, body: "{}" })).status, 415);
+  assert.ok(!JSON.stringify(logs).includes(token));
+  assert.ok(!JSON.stringify(logs).includes("private.example"));
+});

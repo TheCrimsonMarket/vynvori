@@ -20,7 +20,10 @@ async function copy(from, to) {
 }
 await copy(path.join(root,"apps/web"),path.join(output,"apps/web"));
 await copy(path.join(root,"packages/shared"),path.join(output,"packages/shared"));
-for (const file of ["package.json","package-lock.json","design/reference/package.json"]) {
+// Keep every workspace manifest so a Vercel npm install does not prune the lockfile.
+// Only web/shared source is copied; backend source never enters the web artifact.
+const workspaceManifest = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
+for (const file of ["package.json", "package-lock.json", ...workspaceManifest.workspaces.map(workspace => `${workspace}/package.json`)]) {
   await fs.mkdir(path.dirname(path.join(output,file)),{recursive:true});
   await fs.copyFile(path.join(root,file),path.join(output,file));
 }

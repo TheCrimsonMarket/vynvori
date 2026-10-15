@@ -3,8 +3,19 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { "./public": "./src/public.ts", "./server": "./src/server.ts" },
-  "scripts": { "typecheck": "tsc --project tsconfig.json" },
-  "dependencies": { "server-only": "0.0.1" },
-  "devDependencies": { "typescript": "5.9.3", "@types/node": "22.20.5" }
+  "exports": {
+    "./public": "./src/public.ts",
+    "./server": "./src/server.ts",
+    "./infrastructure": "./src/infrastructure.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "server-only": "0.0.1"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "@types/node": "22.20.5"
+  }
 }

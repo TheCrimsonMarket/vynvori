@@ -12,3 +12,5 @@ playwright-report/
 test-results/
 apps/web/next-env.d.ts
 .vercel/
+.medusa/
+dist/

@@ -53,8 +53,14 @@ The founder made the repository public during this session to use Hobby Git inte
 - Browser unavailable: install Chrome, or install Playwright Chromium and select `M0_BROWSER=chromium`.
 - Existing `.next` error: inspect and preserve any needed output before manually moving it aside. The runner refuses to remove unknown output.
 - Flag error: remove it or set it to false. M0 cannot activate an integration.
-- npm audit: five high-severity dev-only findings originate in unpatched `braces` under Next's lint plugin. Production audit is clean. ESLint 9.39.5 is deprecated but matches published plugin peers; ESLint 10 does not. See the security review; do not force a framework downgrade.
+- npm audit: M2 introduces Medusa transitive advisories; production audit is no longer clean. See the current [M2 evidence and blockers](docs/implementation/M2.md). Do not force a framework downgrade or hide the audit failure.
 
 Historical benchmark, design phases, reviews, temporary extractions and old output/install trees were removed from the active workspace. Their previously verified private archive remains untouched at E:/dev/VYNVORI-ARCHIVE-2026-10-14-50190edd. Canonical chapters retain historical context mentioning those old paths; those mentions do not indicate installed packages or current executable dependencies.
 
 Central auth/LuckyLittleDevil audit, merchant/payment eligibility, qualified AI models and rights, supplier/DTF profiles and physical QA, shipping terms, financial reconciliation and operational launch approvals remain unresolved. Live features remain OFF. Immediate next milestone: separately authorized **M1a source audit**; M2 staging must also precede M1b integration. Stop after M0 review.
+
+## M2 backend foundation
+
+The founder authorized M2 after the merged M1a source audit. Current implementation, commands, resource status and remaining security/permission gates are in [M2](docs/implementation/M2.md) and [ADR-0003](docs/implementation/ADR-0003-M2-foundation.md). New npm workspaces are `apps/medusa`, `packages/db`, `packages/commerce` and `services/image-processing`. Existing storefront routes and public health remain independent. Root typecheck/tests include the new workspaces; PostgreSQL tests explicitly skip when no isolated test database is configured. CI supplies one. `npm run build:m2` builds the foundation without cloud credentials; `npm run smoke:m2` is an operator-only optional connectivity check.
+
+All operational features remain disabled. M2 infrastructure and deployment acceptance remain blocked; no production launch or M1b authorization follows from this code. Earlier M0 deployment/status paragraphs above describe historical evidence; consult M2 for current observed Vercel protection and approval blockers.
