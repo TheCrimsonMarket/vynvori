@@ -17,7 +17,7 @@ jobs:
           POSTGRES_PASSWORD: synthetic-local-only
           POSTGRES_DB: vynvori_creative_staging
         ports: ['5432:5432']
-        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+        options: --health-cmd "pg_isready -U synthetic -d vynvori_creative_staging" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       M2_ENV: local
       M2_CREATIVE_DATABASE_URL: postgres://synthetic:synthetic-local-only@127.0.0.1:5432/vynvori_creative_staging
@@ -49,10 +49,16 @@ jobs:
           M2_MEDUSA_ADMIN_CORS: http://localhost:19000
           M2_MEDUSA_AUTH_CORS: http://localhost:19000
       - run: node scripts/test-medusa.mjs
+        timeout-minutes: 8
       - run: npm run smoke:m2-security
       - run: docker build -t vynvori-m2-worker services/image-processing
       - run: |
-          docker run -d --name vynvori-m2-worker -p 127.0.0.1:18080:8080 -e M2_ENV=local -e M2_PROCESSING_TOKEN=synthetic-ci-worker-token-000000000000 vynvori-m2-worker
+          docker run -d --name vynvori-m2-worker --label vynvori.milestone=M2 -p 127.0.0.1:18080:8080 -e M2_ENV=local -e M2_PROCESSING_TOKEN=synthetic-ci-worker-token-000000000000 vynvori-m2-worker
           node scripts/test-worker-container.mjs
       - if: always()
-        run: docker rm -f vynvori-m2-worker || true
+        run: |
+          container_id="$(docker ps -aq --filter name=^/vynvori-m2-worker$)"
+          if [ -n "$container_id" ]; then
+            test "$(docker inspect --format '{{ index .Config.Labels "vynvori.milestone" }}' "$container_id")" = M2
+            docker rm -f "$container_id"
+          fi

@@ -32,12 +32,13 @@
     "dev:worker": "npm run dev -w @vynvori/image-processing",
     "build:m2": "npm run build -w @vynvori/db && npm run build -w @vynvori/commerce && npm run build -w @vynvori/image-processing && npm run build:medusa",
     "typecheck:m2": "npm run typecheck -w @vynvori/db && npm run typecheck -w @vynvori/commerce && npm run typecheck -w @vynvori/medusa && npm run typecheck -w @vynvori/image-processing",
-    "test:m2": "node --conditions=react-server --import tsx --test packages/shared/tests/infrastructure.test.ts packages/db/tests/*.test.ts packages/commerce/tests/*.test.ts apps/medusa/tests/*.test.ts && npm test -w @vynvori/image-processing",
+    "test:m2": "node --conditions=react-server --import tsx --test packages/shared/tests/infrastructure.test.ts packages/db/tests/*.test.ts packages/commerce/tests/*.test.ts apps/medusa/tests/*.test.ts && npm test -w @vynvori/image-processing && npm run test:lifecycle",
     "db:generate": "npm run generate -w @vynvori/db",
     "db:check": "npm run check -w @vynvori/db",
     "db:migrate": "npm run migrate -w @vynvori/db",
     "smoke:m2": "node --conditions=react-server --import tsx scripts/staging-smoke.ts",
-    "smoke:m2-security": "node scripts/m2-security.mjs"
+    "smoke:m2-security": "node scripts/m2-security.mjs",
+    "test:lifecycle": "node --test scripts/tests/process-lifecycle.test.mjs scripts/tests/dependency-compat.test.mjs"
   },
   "devDependencies": {
     "eslint": "9.39.5",
@@ -55,6 +56,12 @@
     "@opentelemetry/instrumentation-pg": "0.75.0",
     "postcss-selector-parser": "7.1.6",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "@rushstack/node-core-library@5.13.0": {
+      "ajv": "8.20.0"
+    },
+    "bullmq@5.13.0": {
+      "uuid": "11.1.1"
+    }
   }
 }

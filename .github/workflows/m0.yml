@@ -29,8 +29,10 @@ jobs:
       - run: npm run verify:reference
       - run: npm run smoke:security
       - run: npm ls --all --omit=optional
-      - run: npm audit --omit=dev
       - run: npm run test:deployment
+      # Keep the audit gate failing on advisories while still exercising deployment regression.
+      - run: npm audit --omit=dev
+        if: always()
   browser:
     runs-on: ubuntu-latest
     timeout-minutes: 15

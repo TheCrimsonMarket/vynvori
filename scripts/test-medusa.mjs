@@ -1,4 +1,4 @@
-import { spawn, execFileSync } from "node:child_process";
+import { startProcess, stopProcess, waitProcess } from "./process-lifecycle.mjs";
 import { randomBytes, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -22,35 +22,46 @@ function capture(child) {
 }
 if (!env.M2_MEDUSA_DATABASE_URL) throw new Error("Local Medusa database required");
 async function command(args) {
-  const child = spawn(process.execPath, [cli, ...args], { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
-  capture(child);
-  const code = await new Promise(resolve => child.once("exit", resolve));
-  if (code !== 0) { await fs.writeFile(path.join(evidence, "runtime.log"), log); throw new Error(`Medusa ${args[0]} failed; evidence ${evidence}`); }
+  const processHandle = startProcess(process.execPath, [cli, ...args], { cwd, env });
+  capture(processHandle.child);
+  try { await waitProcess(processHandle, 120000, `Medusa ${args[0]}`); }
+  finally {
+    await stopProcess(processHandle);
+    await fs.writeFile(path.join(evidence, "runtime.log"), log);
+  }
 }
 await command(["db:migrate"]);
 const email = `synthetic-${randomUUID()}@example.invalid`;
 const password = randomBytes(32).toString("hex");
 await command(["user", "--email", email, "--password", password]);
-const server = spawn(process.execPath, [cli, "start", "--port", "19000"], { cwd: path.join(cwd, ".medusa/server"), env: { ...env, NODE_ENV: "production" }, stdio: ["ignore", "pipe", "pipe"] });
+const serverHandle = startProcess(process.execPath, [cli, "start", "--port", "19000"], { cwd: path.join(cwd, ".medusa/server"), env: { ...env, NODE_ENV: "production" } });
+const server = serverHandle.child;
 capture(server);
+// Drain every response and close HTTP connections before requesting server shutdown.
+async function request(url, options = {}) {
+  const response = await fetch(url, { ...options, signal: AbortSignal.timeout(5000), redirect: "error", headers: { ...options.headers, connection: "close" } });
+  const text = await response.text();
+  return { status: response.status, json: async () => JSON.parse(text) };
+}
+let failure;
 try {
   let ready = false;
   const deadline = Date.now() + 120000;
-  while (Date.now() < deadline && server.exitCode === null) {
-    try { ready = (await fetch("http://127.0.0.1:19000/health", { signal: AbortSignal.timeout(1000) })).status === 200; } catch {}
+  while (Date.now() < deadline && !serverHandle.closed) {
+    try { ready = (await request("http://127.0.0.1:19000/health")).status === 200; } catch {}
     if (ready) break;
     await new Promise(resolve => setTimeout(resolve, 500));
   }
   assert.ok(ready, "Medusa must boot against isolated PostgreSQL");
-  const login = await fetch("http://127.0.0.1:19000/auth/user/emailpass", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, password }) });
+  const login = await request("http://127.0.0.1:19000/auth/user/emailpass", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, password }) });
   assert.equal(login.status, 200);
   const { token } = await login.json();
   assert.equal(typeof token, "string");
-  const keyResponse = await fetch("http://127.0.0.1:19000/admin/api-keys", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ title: "M2 synthetic boundary fixture", type: "publishable" }) });
+  const keyResponse = await request("http://127.0.0.1:19000/admin/api-keys", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ title: "M2 synthetic boundary fixture", type: "publishable" }) });
   assert.equal(keyResponse.status, 200);
   const { api_key: apiKey } = await keyResponse.json();
   assert.equal(typeof apiKey.token, "string");
-  const dependencyReady = await fetch("http://127.0.0.1:19000/admin/m2-readiness", { headers: { authorization: `Bearer ${token}` } });
+  const dependencyReady = await request("http://127.0.0.1:19000/admin/m2-readiness", { headers: { authorization: `Bearer ${token}` } });
   assert.equal(dependencyReady.status, 200);
   assert.equal((await dependencyReady.json()).status, "ready");
   for (const [path, method, expected] of [
@@ -58,20 +69,22 @@ try {
     ["/auth/customer/emailpass/register", "POST", 403], ["/auth/customer/emailpass", "POST", 403],
     ["/store/customers", "POST", 403], ["/store/carts", "POST", 403], ["/STORE/carts", "POST", 403],
   ]) {
-    const response = await fetch(`http://127.0.0.1:19000${path}`, { method, headers: { "content-type": "application/json", "x-publishable-api-key": apiKey.token }, ...(method === "POST" ? { body: "{}" } : {}) });
+    const response = await request(`http://127.0.0.1:19000${path}`, { method, headers: { "content-type": "application/json", "x-publishable-api-key": apiKey.token }, ...(method === "POST" ? { body: "{}" } : {}) });
     assert.equal(response.status, expected, `${method} ${path}`);
     console.log(`PASS actual Medusa boundary ${method} ${path}: ${expected}`);
   }
-  const wrongActor = await fetch("http://127.0.0.1:19000/store/customers/me", { headers: { "x-publishable-api-key": apiKey.token, authorization: `Bearer ${token}` } });
+  const wrongActor = await request("http://127.0.0.1:19000/store/customers/me", { headers: { "x-publishable-api-key": apiKey.token, authorization: `Bearer ${token}` } });
   assert.equal(wrongActor.status, 401, "Admin bearer cannot impersonate customer");
   console.log("PASS actual Medusa synthetic Admin login/key and wrong-actor rejection; no customer provisioned");
-} finally {
-  if (server.exitCode === null) {
-    if (process.platform === "win32") execFileSync("taskkill", ["/pid", String(server.pid), "/T", "/F"], { stdio: "ignore" });
-    else server.kill("SIGTERM");
+} catch (error) { failure = error; }
+finally {
+  try {
+    await stopProcess(serverHandle);
+    await assert.rejects(request("http://127.0.0.1:19000/health"), "Medusa port must be closed after cleanup");
+  } catch (error) {
+    failure = failure ? new AggregateError([failure, error], "Medusa assertions and cleanup failed") : error;
   }
-  server.stdout.destroy();
-  server.stderr.destroy();
   await fs.writeFile(path.join(evidence, "runtime.log"), log);
   console.log(`Medusa local evidence: ${evidence}`);
 }
+if (failure) throw failure;
