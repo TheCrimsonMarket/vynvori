@@ -57,7 +57,7 @@ test("cleanup reaches a descendant after its parent exits with inherited stdio o
   parent.child.stderr.resume();
   try {
     await once(parent.child.stdout, "data");
-    await new Promise(resolve => setTimeout(resolve, 100));
+    if (parent.child.exitCode === null) await once(parent.child, "exit");
     assert.equal(parent.child.exitCode, 0);
     assert.equal(parent.closed, false, "descendant holds inherited stdout open");
     await stopProcess(parent, { graceMs: 500, killMs: 2000 });
