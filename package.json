@@ -18,7 +18,7 @@
     "start:web": "node scripts/web.mjs start",
     "lint": "eslint apps/web apps/medusa packages/shared packages/db packages/commerce services/image-processing scripts",
     "typecheck": "npm run typecheck --workspace @vynvori/shared && npm run typecheck --workspace @vynvori/web && npm run typecheck --workspace @vynvori/design-reference && npm run typecheck:m2",
-    "test": "npm run test:m0 && npm run test:reference && npm run test:m2",
+    "test": "npm run test:m0 && npm run test:reference && npm run test:m2 && npm run test:security-policy",
     "test:m0": "node --conditions=react-server --import tsx --test packages/shared/tests/config.test.ts apps/web/tests/health.test.ts",
     "test:reference": "npm run test --workspace @vynvori/design-reference && npm run test:legacy --workspace @vynvori/design-reference",
     "test:browser:web": "node scripts/browser-web.mjs",
@@ -38,7 +38,9 @@
     "db:migrate": "npm run migrate -w @vynvori/db",
     "smoke:m2": "node --conditions=react-server --import tsx scripts/staging-smoke.ts",
     "smoke:m2-security": "node scripts/m2-security.mjs",
-    "test:lifecycle": "node --test scripts/tests/process-lifecycle.test.mjs scripts/tests/dependency-compat.test.mjs"
+    "test:lifecycle": "node --test scripts/tests/process-lifecycle.test.mjs scripts/tests/dependency-compat.test.mjs",
+    "security:audit": "node scripts/security/run-audit.mjs",
+    "test:security-policy": "node --test scripts/tests/security-policy.test.mjs"
   },
   "devDependencies": {
     "eslint": "9.39.5",

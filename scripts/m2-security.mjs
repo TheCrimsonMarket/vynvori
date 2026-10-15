@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("..", import.meta.url));
-const roots = ["apps/medusa", "packages/db", "packages/commerce", "packages/shared", "services/image-processing", "scripts/process-lifecycle.mjs", "scripts/test-medusa.mjs", "scripts/tests", "docs/implementation/M2.md", "docs/implementation/M2-security-advisories.md", "docs/implementation/ADR-0003-M2-foundation.md"];
+const roots = ["apps/medusa", "packages/db", "packages/commerce", "packages/shared", "services/image-processing", "scripts/process-lifecycle.mjs", "scripts/test-medusa.mjs", "scripts/tests", "scripts/security", "security", "docs/implementation/M2.md", "docs/implementation/M2-security-advisories.md", "docs/implementation/ADR-0003-M2-foundation.md"];
 let count = 0;
 async function inspect(relative) {
   const target = path.join(root, relative);
