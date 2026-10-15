@@ -259,7 +259,7 @@
       "scripts/tests/process-lifecycle.test.mjs": "5b76b19591445f6ec0b02983956ff823c55208897579b055cc5ecb2d951360bd",
       "scripts/tests/security-policy.test.mjs": "3e396933c6cc1300d04d2ca2f75d1f01fba06d695644c62d6a91db78dd8fffd3",
       "scripts/web.mjs": "18296910c5d9297c0dfe50a196753a6373a54fe1519ec1673768fa80df5d64e8",
-      ".github/workflows/m0.yml": "c6adc2673ff195a237f6357adba162d9144396bbec3c5d092627dc1f78d949aa",
+      ".github/workflows/m0.yml": "0a27f0ca905f35ca22e5c43518567b2df20cb0b5441d52a702168ffdab5531a2",
       ".github/workflows/m2.yml": "46dc862d234c2fecd61730788fc11e2c651a338d325683236c1ca5cd92b5bd51",
       "package.json": "59d90058afa6d8df0f6cc7f50d472288a0fe42fe72e65b5c2d8b4088240c96e0",
       ".env.example": "ddaf5b826a24a121d0b5b1b8b7a4faac9cfd3c945375f10cd084b90fcf628a13",

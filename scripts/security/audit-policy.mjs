@@ -3,7 +3,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 
 // Updated only by an explicitly reviewed policy change, never by the runner/tests.
-export const APPROVED_POLICY_SHA256 = "e3f07fcc8119bb09cb8dc95b6a3b7a927d97ab1def3eaf7b3ff8870977ded338";
+export const APPROVED_POLICY_SHA256 = "3326ad4a9cc66da4df299f0e7adf42648563486f51207140983fcf5936064f4b";
 export const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 const canonical = value => JSON.stringify(value, (_, entry) => entry && typeof entry === "object" && !Array.isArray(entry)
   ? Object.fromEntries(Object.entries(entry).sort(([a], [b]) => a.localeCompare(b, "en"))) : entry);
