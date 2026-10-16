@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
+import { EventEmitter } from "node:events";
 import { medusaEnvironment } from "../src/config";
 import { GET } from "../src/api/admin/m2-readiness/route";
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
@@ -44,23 +45,20 @@ test("proposed migration owner requires an explicit migration invocation", () =>
   assert.throws(() => medusaEnvironment(authorized));
   assert.ok(medusaEnvironment({ ...authorized, M2_MEDUSA_DATABASE_URL: migrationUrl }));
 });
-test("protected dependency handler bounds and cancels DB work and redacts failure", async () => {
-  for (const failure of [false, true]) {
-    const req = { scope: { resolve: () => ({ raw: (sql: string) => {
-      assert.equal(sql, "SELECT 1");
-      return { timeout: async (milliseconds: number, options: { cancel: boolean }) => {
-        assert.equal(milliseconds, 3000); assert.equal(options.cancel, true);
-        if (failure) throw new Error("private database detail");
-      } };
-    } }) } } as unknown as MedusaRequest;
+test("protected dependency handler releases request listeners and sanitizes real connection failure", async () => {
+    const req = Object.assign(new EventEmitter(), { scope: { resolve: () => ({ projectConfig: {
+      databaseUrl: "postgres://synthetic:private-detail@127.0.0.1:9/vynvori_medusa_staging",
+      databaseDriverOptions: { connection: { ssl: false } },
+    } }) } }) as unknown as MedusaRequest;
     let status = 200;
-    const res = { setHeader: () => {}, status: (code: number) => { status = code; return res; }, json: (body: unknown) => {
+    const res = Object.assign(new EventEmitter(), { setHeader: () => {}, status: (code: number) => { status = code; return res; }, json: (body: unknown) => {
       assert.ok(!JSON.stringify(body).includes("private"));
       return body;
-    } } as unknown as MedusaResponse;
+    } }) as unknown as MedusaResponse;
     await GET(req, res);
-    assert.equal(status, failure ? 503 : 200);
-  }
+    assert.equal(status, 503);
+    assert.equal(req.listenerCount("aborted"), 0);
+    assert.equal(res.listenerCount("close"), 0);
 });
 test("deployment template keeps single private service, bounded resources and pinned secret references", () => {
   const service = load(readFileSync(new URL("../../../deploy/medusa/service.yaml", import.meta.url), "utf8"));

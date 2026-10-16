@@ -1,23 +1,66 @@
 {
   "image": "vynvori-medusa-local:readiness",
-  "coldStartMs": 11026,
+  "coldStartMs": 10977,
   "requests": 40,
   "concurrency": 8,
-  "p95Ms": 108,
+  "p95Ms": 22,
   "samples": [
-    "248.4MiB / 2GiB | 0.02%",
-    "248.7MiB / 2GiB | 0.02%",
+    "247.6MiB / 2GiB | 0.03%",
+    "249MiB / 2GiB | 0.02%",
     "249.5MiB / 2GiB | 0.01%",
-    "225.3MiB / 2GiB | 4.29%",
-    "226MiB / 2GiB | 0.01%"
+    "249.8MiB / 2GiB | 0.01%",
+    "251.3MiB / 2GiB | 0.01%"
+  ],
+  "outageMeasurements": [
+    {
+      "mode": "timeout",
+      "stages": {
+        "connectStartMs": 0.99,
+        "connectedMs": 6.05,
+        "queryStartMs": 183.55,
+        "querySettledMs": 2185.6,
+        "closeStartMs": 2185.67,
+        "socketClosedMs": 2186.19
+      },
+      "socketsClosed": 1,
+      "cancellationConnections": 0
+    },
+    {
+      "mode": "abort",
+      "stages": {
+        "connectStartMs": 0.89,
+        "connectedMs": 5.05,
+        "queryStartMs": 183.89,
+        "closeStartMs": 284.37,
+        "socketClosedMs": 285.07,
+        "querySettledMs": 285.11
+      },
+      "socketsClosed": 1,
+      "cancellationConnections": 0
+    },
+    {
+      "mode": "http-paused-connect",
+      "httpMs": 941,
+      "status": 503
+    },
+    {
+      "mode": "http-paused-connect",
+      "httpMs": 939,
+      "status": 503
+    },
+    {
+      "mode": "http-paused-connect",
+      "httpMs": 932,
+      "status": 503
+    }
   ],
   "cpuLimit": 1,
   "memoryLimit": "2g",
   "tls": "trusted/untrusted/wrong-host",
   "result": "PASS_LOCAL_SYNTHETIC_ONLY",
   "validationDate": "2026-10-17 Asia/Dhaka",
-  "baseCommit": "259d3883f9d346cbfd117b014beb6bc5d9b18a72",
-  "imageId": "sha256:94cb6edf0e2be8a31f73a7edef95b5c9fe5d86892fd68eb21fe79a57474610bf",
-  "deployment": "NOT_RUN",
+  "reviewedHead": "ed4c734cd22614dc5dc0c45a5ecd8ef8fecb7ae4",
+  "imageConfigId": "sha256:8029c6f5ff85be3fd8288d30a7266ee7c4f1755094020e5b1bae3418c2a672f5",
+  "deployment": "NOT_RUN_REMOTE_CONTEXT_REFUSED",
   "securityGate": "BLOCKED_SECURITY_BOUNDARY_CHANGED"
 }

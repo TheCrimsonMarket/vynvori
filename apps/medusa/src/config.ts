@@ -52,7 +52,9 @@ export function medusaEnvironment(env: Env) {
     databaseUrl: database.toString(),
     databaseDriverOptions: {
       connection: { ssl: env.M2_ENV === "staging" ? { rejectUnauthorized: true } : false, connectionTimeoutMillis: 5000 },
-      pool: { min: 0, max: 5, acquireTimeoutMillis: 5000, createTimeoutMillis: 5000, idleTimeoutMillis: 10000 },
+      // The pinned Medusa loader forwards only these pool settings. Readiness
+      // owns a separate bounded pg connection; do not claim a shared acquire cap.
+      pool: { min: 0, max: 5, idleTimeoutMillis: 10000 },
     },
     http: {
       storeCors: origins("M2_MEDUSA_STORE_CORS"), adminCors: origins("M2_MEDUSA_ADMIN_CORS"), authCors: origins("M2_MEDUSA_AUTH_CORS"),

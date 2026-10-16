@@ -2,6 +2,12 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import readline from "node:readline";
 const require = createRequire(import.meta.url);
+// This PR authorizes local preparation only. Removing this guard requires a
+// separately approved security resolution and remote execution review.
+if (process.env.K_SERVICE || process.env.CLOUD_RUN_JOB || process.env.VERCEL === "1") {
+  console.error("Remote execution remains unauthorized for M2 preparation");
+  process.exit(1);
+}
 const mode = process.argv[2];
 if (!["serve", "migrate"].includes(mode) || (mode === "migrate" && process.env.M2_AUTHORIZE_MEDUSA_MIGRATION !== "vynvori_medusa_staging")) {
   console.error("Explicit serve or separately authorized migration required");

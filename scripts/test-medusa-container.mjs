@@ -1,5 +1,5 @@
 // Local synthetic integration only. No cloud SDK, registry push or remote URL.
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import { appendFileSync } from "node:fs";
@@ -52,7 +52,50 @@ async function health() {
 const runBase = ["run", "--rm", "--network", `container:${db}`, "--env-file", envFile];
 // AbortSignal.timeout is unref'd. Keep the harness alive through fetch/socket cleanup.
 const keepAlive = setInterval(() => {}, 1000);
+const outageMeasurements = [];
+async function exerciseOwnedQuery(mode) {
+  const code = await fs.readFile(new URL("./medusa-readiness-resource-probe.mjs", import.meta.url), "utf8");
+  const name = `${id}-resource-${mode}`;
+  const child = spawn("docker", ["run", "--rm", "-i", "--name", name, "--label", `vynvori.test=${id}`, "--network", `container:${db}`, "--env-file", envFile, "--entrypoint", "node", image, "--input-type=module", "-e", code, mode], { stdio: ["pipe", "pipe", "pipe"] });
+  let output = "", stderr = "", paused = false;
+  const deadline = setTimeout(() => child.kill(), 15000);
+  try {
+    child.stdout.on("data", bytes => {
+      output += bytes;
+      if (!paused && output.includes("READY_TO_PAUSE")) {
+        docker(["pause", db]); paused = true; child.stdin.write("run\n");
+      }
+    });
+    child.stderr.on("data", bytes => { stderr += bytes; });
+    await new Promise((resolve, reject) => {
+      child.once("error", reject);
+      child.once("close", code => code === 0 ? resolve() : reject(new Error(`Owned query ${mode} failed`)));
+    });
+    assert.ok(paused);
+    const measurement = JSON.parse(output.trim().split(/\r?\n/).at(-1));
+    outageMeasurements.push(measurement);
+    console.log(`PASS owned readiness ${mode}: ${JSON.stringify(measurement)}`);
+  } finally {
+    clearTimeout(deadline);
+    if (paused) docker(["unpause", db]);
+    await fs.writeFile(path.join(evidence, `owned-query-${mode}.log`), redact(output + stderr));
+  }
+}
+async function noDiagnosticBackends() {
+  const deadline = Date.now() + 2000;
+  do {
+    const count = docker(["exec", db, "psql", "-U", "synthetic", "-d", "vynvori_medusa_staging", "-Atc", "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'vynvori_dependency_readiness'"]);
+    if (count === "0") return;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  } while (Date.now() < deadline);
+  assert.fail("No diagnostic backend or abandoned query after recovery");
+}
 try {
+  for (const marker of ["K_SERVICE", "CLOUD_RUN_JOB", "VERCEL"]) {
+    const denied = spawnSync("docker", ["run", "--rm", "--name", `${id}-deny-${marker.toLowerCase()}`, "--label", `vynvori.test=${id}`, "-e", `${marker}=1`, image, "serve"], { encoding: "utf8", timeout: 10000 });
+    assert.equal(denied.status, 1);
+    assert.match(denied.stdout + denied.stderr, /Remote execution remains unauthorized/);
+  }
   docker(["run", "-d", "--name", db, "--label", `vynvori.test=${id}`, "-p", `127.0.0.1:${port}:8080`,
     "-e", `POSTGRES_PASSWORD=${password}`, "-e", "POSTGRES_USER=synthetic", "-e", "POSTGRES_DB=vynvori_medusa_staging", "postgres:17.6-bookworm"]);
   let pgReady = false;
@@ -122,22 +165,40 @@ try {
     }));
     samples.push(docker(["stats", "--no-stream", "--format", "{{.MemUsage}} | {{.CPUPerc}}", app]));
   }
+  await exerciseOwnedQuery("timeout");
+  await noDiagnosticBackends();
+  await exerciseOwnedQuery("abort");
+  await noDiagnosticBackends();
   docker(["pause", db]);
   try {
     assert.equal((await request("/health")).status, 200, "Liveness must not depend on DB");
-    const start = Date.now();
-    const failed = await request("/admin/m2-readiness", { headers });
-    assert.equal(failed.status, 503);
-    assert.ok(Date.now() - start < 8000, "Readiness failure must be bounded");
-    assert.equal(failed.json().code, "DEPENDENCY_UNAVAILABLE");
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const start = performance.now();
+      const failed = await request("/admin/m2-readiness", { headers });
+      const httpMs = Math.round(performance.now() - start);
+      assert.equal(failed.status, 503);
+      // Dedicated connect 1s + query 2s, plus 1s scheduling/HTTP margin.
+      assert.ok(httpMs < 4000, `Readiness failure must be bounded; observed ${httpMs}ms`);
+      assert.deepEqual(failed.json(), { version: 1, service: "medusa", status: "unavailable", code: "DEPENDENCY_UNAVAILABLE" });
+      outageMeasurements.push({ mode: "http-paused-connect", httpMs, status: failed.status });
+    }
   } finally { docker(["unpause", db]); }
   assert.equal((await request("/admin/m2-readiness", { headers })).status, 200, "Dependency recovery");
-  docker(["restart", "--time", "10", app]);
+  await noDiagnosticBackends();
+  const processes = docker(["top", app, "-eo", "pid,ppid,args"]);
+  assert.equal(processes.split(/\r?\n/).filter(line => /node .*container.mjs|node .*cli.js/.test(line)).length, 2, "Only supervisor and native Medusa process");
+  docker(["stop", "--time", "10", app]);
+  const stopped = JSON.parse(docker(["inspect", "--format", "{{json .State}}", app]));
+  assert.equal(stopped.ExitCode, 0, "SIGTERM must exit cleanly, without forced termination");
+  assert.equal(stopped.OOMKilled, false);
+  assert.equal(stopped.Pid, 0, "No container process survives shutdown");
+  await assert.rejects(request("/health"), "HTTP listener closes on shutdown");
+  docker(["start", app]);
   await health();
   assert.equal((await request("/admin/m2-readiness", { headers })).status, 200, "Admin identity persists after restart");
   latencies.sort((a, b) => a - b);
   await fs.writeFile(path.join(evidence, "results.json"), JSON.stringify({ image, coldStartMs, requests: latencies.length, concurrency: 8,
-    p95Ms: latencies[Math.ceil(latencies.length * 0.95) - 1], samples, cpuLimit: 1, memoryLimit: "2g", tls: "trusted/untrusted/wrong-host", result: "PASS_LOCAL_SYNTHETIC_ONLY" }, null, 2));
+    p95Ms: latencies[Math.ceil(latencies.length * 0.95) - 1], samples, outageMeasurements, cpuLimit: 1, memoryLimit: "2g", tls: "trusted/untrusted/wrong-host", result: "PASS_LOCAL_SYNTHETIC_ONLY" }, null, 2));
   console.log(`PASS container migration replay, non-root compiled runtime, Admin boundary, outage/recovery, restart and 1 CPU/2 GiB smoke. Evidence: ${evidence}`);
 } finally {
   try {
