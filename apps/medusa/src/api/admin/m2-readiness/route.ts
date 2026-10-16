@@ -4,8 +4,9 @@ import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
   res.setHeader("Cache-Control", "no-store");
   try {
-    const query = req.scope.resolve(ContainerRegistrationKeys.QUERY);
-    await query.graph({ entity: "product", fields: ["id"], pagination: { take: 1 } });
+    const connection = req.scope.resolve(ContainerRegistrationKeys.PG_CONNECTION);
+    // Native Knex query timeout cancels work instead of abandoning a Promise.race.
+    await connection.raw("SELECT 1").timeout(3000, { cancel: true });
     return res.json({ version: 1, service: "medusa", status: "ready", code: "OK" });
   } catch {
     return res.status(503).json({ version: 1, service: "medusa", status: "unavailable", code: "DEPENDENCY_UNAVAILABLE" });

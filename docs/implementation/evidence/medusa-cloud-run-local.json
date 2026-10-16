@@ -1,0 +1,23 @@
+{
+  "image": "vynvori-medusa-local:readiness",
+  "coldStartMs": 11026,
+  "requests": 40,
+  "concurrency": 8,
+  "p95Ms": 108,
+  "samples": [
+    "248.4MiB / 2GiB | 0.02%",
+    "248.7MiB / 2GiB | 0.02%",
+    "249.5MiB / 2GiB | 0.01%",
+    "225.3MiB / 2GiB | 4.29%",
+    "226MiB / 2GiB | 0.01%"
+  ],
+  "cpuLimit": 1,
+  "memoryLimit": "2g",
+  "tls": "trusted/untrusted/wrong-host",
+  "result": "PASS_LOCAL_SYNTHETIC_ONLY",
+  "validationDate": "2026-10-17 Asia/Dhaka",
+  "baseCommit": "259d3883f9d346cbfd117b014beb6bc5d9b18a72",
+  "imageId": "sha256:94cb6edf0e2be8a31f73a7edef95b5c9fe5d86892fd68eb21fe79a57474610bf",
+  "deployment": "NOT_RUN",
+  "securityGate": "BLOCKED_SECURITY_BOUNDARY_CHANGED"
+}

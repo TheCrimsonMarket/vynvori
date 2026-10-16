@@ -34,6 +34,10 @@ Use statuses `NOT_STARTED`, `NOT_RUN`, `IN_PROGRESS`, `PASSED`, `FAILED`, `BLOCK
 
 ## Release rules
 
+### M2 Cloud Run preparation — 2026-10-17
+
+ACC-24 remains **NOT_PASSED / BLOCKED** for deployment: [ADR-0004](../implementation/ADR-0004-Medusa-Cloud-Run.md) and [readiness evidence/runbook](../implementation/M2-Cloud-Run-readiness.md) prepare one shared-mode Medusa Cloud Run service only. Local container/migration/boundary/restart/outage smoke passed; remote Cloud Run, Neon identity/privileges, IAM, rollback drill and resource acceptance remain NOT_RUN. The unchanged LOCAL M2 dependency exception rejects the changed source fingerprint; independent security resolution is required. No customer authentication, Store mutation, payment or production gate passes through these tests.
+
 A row can be `PASSED` only with a reproducible link to test/evidence. No “conditionally passed” row may satisfy a mandatory production launch gate. A coding agent must not change founder-approved scope to make a test easier. Any architecture deviation requires an ADR and explicit founder approval.
 
 ## v1.1 traceability and status segregation (v1.1)
