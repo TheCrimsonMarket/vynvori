@@ -9,5 +9,5 @@ const env = {
 test("Medusa configuration isolates commerce and disables customer providers", () => {
   const config = medusaEnvironment(env);
   assert.deepEqual(config.http.authMethodsPerActor, { user: ["emailpass"], customer: [] });
-  for (const overrides of [{ M2_MEDUSA_JWT_SECRET: "short" }, { M2_MEDUSA_STORE_CORS: "*" }, { M2_MEDUSA_STORE_CORS: "http://localhost:3000/path" }, { M2_ENV: "production" }, { M2_MEDUSA_DATABASE_NAME: "vynvori_creative_staging" }, { M2_CREATIVE_DATABASE_URL: env.M2_MEDUSA_DATABASE_URL }]) assert.throws(() => medusaEnvironment({ ...env, ...overrides }));
+  for (const overrides of [{ NODE_TLS_REJECT_UNAUTHORIZED: "0" }, { M2_MEDUSA_JWT_SECRET: "short" }, { M2_MEDUSA_STORE_CORS: "*" }, { M2_MEDUSA_STORE_CORS: "http://localhost:3000/path" }, { M2_ENV: "production" }, { M2_MEDUSA_DATABASE_NAME: "vynvori_creative_staging" }, { M2_CREATIVE_DATABASE_URL: env.M2_MEDUSA_DATABASE_URL }]) assert.throws(() => medusaEnvironment({ ...env, ...overrides }));
 });

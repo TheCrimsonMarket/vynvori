@@ -6,6 +6,7 @@ function need(env: Env, key: string) {
   return value;
 }
 export function medusaEnvironment(env: Env) {
+  if (env.NODE_TLS_REJECT_UNAUTHORIZED && env.NODE_TLS_REJECT_UNAUTHORIZED !== "1") throw new Error("TLS verification override forbidden");
   if (env.M2_ENV !== "local" && env.M2_ENV !== "staging") throw new Error("M2_ENV must be local or staging");
   for (const key of Object.keys(env)) {
     if (key.startsWith("VYNVORI_") && env[key] !== undefined && env[key] !== "false") throw new Error("All operational features must remain disabled");
@@ -18,7 +19,7 @@ export function medusaEnvironment(env: Env) {
       decodeURIComponent(database.pathname.slice(1)) !== name || /creative/i.test(name)) throw new Error("Medusa database isolation failed");
   if (env.M2_ENV === "local" && (!["127.0.0.1", "localhost"].includes(database.hostname) || name !== "vynvori_medusa_staging")) throw new Error("Local Medusa database must be isolated on loopback");
   const databaseRole = env.M2_AUTHORIZE_MEDUSA_MIGRATION === "vynvori_medusa_staging"
-    ? "vynvori_medusa_migrator" : "vynvori_medusa_app";
+    ? "vynvori_medusa_migration_scoped" : "vynvori_medusa_runtime_scoped";
   if (env.M2_ENV === "staging" && (database.hostname !== need(env, "M2_MEDUSA_DATABASE_HOST") ||
       !database.hostname.endsWith(".neon.tech") || database.hostname.includes("-pooler.") ||
       name !== "vynvori_medusa_staging" || decodeURIComponent(database.username) !== databaseRole ||

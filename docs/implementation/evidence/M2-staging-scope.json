@@ -1,0 +1,31 @@
+{
+  "baseCommit": "1b99e23d7e47a82284ea5926e7b9ac0885092e46",
+  "remoteApproval": false,
+  "hashFormat": "SHA256 of Git text bytes (CRLF converted to LF), binaries unchanged; excluded evidence documents avoid circular hashes",
+  "lockSha256": "3f1110253020bd8b640c51d1d6ea04339ca2bfd8613cab442d29b5b09820b2d3",
+  "files": {
+    "apps/medusa/.env.example": "e9df50dce8a6afe0d3b22b89785ab98c747e64779417039d543f85850909acd4",
+    "apps/medusa/Dockerfile": "410072be32899218ec08618a39cc6e5533f98b501633464c43c2c2eac5ecf397",
+    "apps/medusa/Dockerfile.dockerignore": "7de591024d7e0423ddf9faa4675bd62049d9621f7188df80066c1f7ed9d9f432",
+    "apps/medusa/medusa-config.ts": "b0c2e85e50e1322111ea393140fa642732dce10baecd10eb8ba0bc5b291f9542",
+    "apps/medusa/package.json": "4046ec09277ddbccb59ae2c72bf84fed25f1952a6ad8d162473e60c0a47ea9be",
+    "apps/medusa/scripts/build.mjs": "8868aa160e04151a6e00688f36a395f024a02e9ba2e1d1fd1f0f31ae845142f9",
+    "apps/medusa/scripts/container.mjs": "96865cc4c2b3e01460e7d361986cf94756d21761e88dad5d3949f39cf263f6d1",
+    "apps/medusa/scripts/remote-staging-policy.json": "634fcfb424568ed91424ee709a8fd819eb294be24ba076b762e92ce8f36b7496",
+    "apps/medusa/scripts/remote-staging.mjs": "a4b2e74f3780a2266af9f58f59ea747cdab21beb16f68e309e7d86383d567bff",
+    "apps/medusa/src/api/admin/m2-readiness/route.ts": "94c051f8d62e32bd217e44d47d3a0baf66900f182ca5f9520f481e15980b64d2",
+    "apps/medusa/src/api/middlewares.ts": "355cd05604ebd4e441a70aabd48260540ce0a0410b515285916bbc160e1f5e5b",
+    "apps/medusa/src/config.ts": "9a0514a71a6157fe71eec5378e5fbdcfe89637b0b12c93cc47acfaf6efc0228b",
+    "apps/medusa/src/dependency-readiness.ts": "315c598a278b92f09e143fc8e62f5d162c77fafdd5a31a9d2c8ed00aa153bedd",
+    "apps/medusa/tests/cloud-run.test.ts": "b3d7a0d99f74e59d99989a5349577ee927ae2891f3d39c3eeabe67db12f5581e",
+    "apps/medusa/tests/config.test.ts": "d01ee53c51591e6501897dc2cfbc128e2ba9fd07541e2917f7c4fc1fbefd61be",
+    "apps/medusa/tsconfig.json": "1129febc94f4baddab564973df7996eafc83ac132eee0cb78d0a01e4c24f072c",
+    "deploy/medusa/release.example.json": "d3d2bd5ca8bae834180a0e3d4381066fb0c061d6a01250187a0bc7ae29a29594",
+    "deploy/medusa/service.yaml": "c5a49f95297e040e020804de332c3b50ead0110ae2c7bfd826a1cb00045d82c3",
+    "package-lock.json": "3f1110253020bd8b640c51d1d6ea04339ca2bfd8613cab442d29b5b09820b2d3",
+    "package.json": "5b155539847d7be429fd452c997d38ce581f90606f6f15998f8e86a1153a14ff",
+    "scripts/medusa-staging-release.mjs": "8eb7858f92439545545755cf3257c8c71909e9852e136ad6ac1b0db851040ed2",
+    "scripts/test-medusa-container.mjs": "d32c3aff3f575eff7c4ac38a294a633f6da85d63b13ab6217880fad723deeec8",
+    "scripts/tests/medusa-staging.test.mjs": "9061fcaa5bdc7ee771156d5dcdd9ce8a4edbdfdc7fd4ff265ba6b297fd7f59cf"
+  }
+}

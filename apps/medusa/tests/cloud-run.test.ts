@@ -12,7 +12,7 @@ const { Client } = require("@medusajs/deps/pg");
 const { load } = require("js-yaml");
 const env = {
   M2_ENV: "staging", M2_MEDUSA_DATABASE_HOST: "ep-synthetic.us-east-1.aws.neon.tech",
-  M2_MEDUSA_DATABASE_URL: "postgres://vynvori_medusa_app:synthetic@ep-synthetic.us-east-1.aws.neon.tech/vynvori_medusa_staging?sslmode=verify-full",
+  M2_MEDUSA_DATABASE_URL: "postgres://vynvori_medusa_runtime_scoped:synthetic@ep-synthetic.us-east-1.aws.neon.tech/vynvori_medusa_staging?sslmode=verify-full",
   M2_MEDUSA_DATABASE_NAME: "vynvori_medusa_staging",
   M2_MEDUSA_JWT_SECRET: "synthetic-jwt-only-000000000000000000", M2_MEDUSA_COOKIE_SECRET: "synthetic-cookie-only-0000000000000",
   M2_MEDUSA_STORE_CORS: "https://synthetic.example.invalid", M2_MEDUSA_ADMIN_CORS: "https://operator.example.invalid", M2_MEDUSA_AUTH_CORS: "https://operator.example.invalid",
@@ -22,7 +22,7 @@ test("Medusa pg consumer preserves verified TLS and bounded pool with shared mod
   const client = new Client({ connectionString: config.databaseUrl, ...config.databaseDriverOptions.connection });
   assert.deepEqual(client.connectionParameters.ssl, { rejectUnauthorized: true });
   assert.equal(client.connectionParameters.database, "vynvori_medusa_staging");
-  assert.equal(client.connectionParameters.user, "vynvori_medusa_app");
+  assert.equal(client.connectionParameters.user, "vynvori_medusa_runtime_scoped");
   assert.equal(config.workerMode, "shared");
   assert.equal(config.databaseDriverOptions.pool.min, 0);
   assert.equal(config.databaseDriverOptions.pool.max, 5);
@@ -32,18 +32,21 @@ test("unverified pooling, TLS downgrade, wrong role/database/host and URL overri
   for (const value of [env.M2_MEDUSA_DATABASE_URL.replace("ep-synthetic.", "ep-synthetic-pooler."),
     env.M2_MEDUSA_DATABASE_URL.replace("verify-full", "require"),
     env.M2_MEDUSA_DATABASE_URL + "&sslcert=untrusted", env.M2_MEDUSA_DATABASE_URL + "&options=untrusted",
-    env.M2_MEDUSA_DATABASE_URL.replace("vynvori_medusa_app", "neondb_owner"),
+    ...["neondb_owner", "vynvori_medusa_app", "vynvori_medusa_migrator", "vynvori_medusa_migration_scoped"].map(role => env.M2_MEDUSA_DATABASE_URL.replace("vynvori_medusa_runtime_scoped", role)),
     env.M2_MEDUSA_DATABASE_URL.replace("ep-synthetic.", "ep-other.")]) {
     assert.throws(() => medusaEnvironment({ ...env, M2_MEDUSA_DATABASE_URL: value }));
   }
   assert.throws(() => medusaEnvironment({ ...env, M2_MEDUSA_DATABASE_NAME: "other" }));
 });
 test("proposed migration owner requires an explicit migration invocation", () => {
-  const migrationUrl = env.M2_MEDUSA_DATABASE_URL.replace("vynvori_medusa_app", "vynvori_medusa_migrator");
+  const migrationUrl = env.M2_MEDUSA_DATABASE_URL.replace("vynvori_medusa_runtime_scoped", "vynvori_medusa_migration_scoped");
   assert.throws(() => medusaEnvironment({ ...env, M2_MEDUSA_DATABASE_URL: migrationUrl }));
   const authorized = { ...env, M2_AUTHORIZE_MEDUSA_MIGRATION: "vynvori_medusa_staging" };
   assert.throws(() => medusaEnvironment(authorized));
   assert.ok(medusaEnvironment({ ...authorized, M2_MEDUSA_DATABASE_URL: migrationUrl }));
+  for (const role of ["vynvori_medusa_app", "vynvori_medusa_migrator", "vynvori_medusa_runtime_scoped"]) {
+    assert.throws(() => medusaEnvironment({ ...authorized, M2_MEDUSA_DATABASE_URL: migrationUrl.replace("vynvori_medusa_migration_scoped", role) }));
+  }
 });
 test("protected dependency handler releases request listeners and sanitizes real connection failure", async () => {
     const req = Object.assign(new EventEmitter(), { scope: { resolve: () => ({ projectConfig: {

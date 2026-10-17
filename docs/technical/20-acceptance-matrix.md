@@ -34,6 +34,10 @@ Use statuses `NOT_STARTED`, `NOT_RUN`, `IN_PROGRESS`, `PASSED`, `FAILED`, `BLOCK
 
 ## Release rules
 
+### M2 private Cloud Run preparation — 2026-10-17
+
+Remote staging activation is **BLOCKED: independent security exception, provider identifiers/least-privilege evidence, migration/recovery and execution approval pending**. [Preparation ADR and evidence](../implementation/ADR-0005-Private-Medusa-Staging-Activation.md). Local synthetic regression results are recorded separately; they pass no remote/production gate. ACC-03, ACC-08, ACC-22, ACC-24 and ACC-27 remain unchanged. No real Neon migration, Cloud Run invocation, Vercel integration or customer activation has been tested by this preparation.
+
 A row can be `PASSED` only with a reproducible link to test/evidence. No “conditionally passed” row may satisfy a mandatory production launch gate. A coding agent must not change founder-approved scope to make a test easier. Any architecture deviation requires an ADR and explicit founder approval.
 
 ## v1.1 traceability and status segregation (v1.1)

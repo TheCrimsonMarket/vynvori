@@ -27,6 +27,7 @@ COPY --from=manifests /usr/local/bin/node /usr/local/bin/node
 COPY --from=dependencies --chown=65532:65532 /app /app
 COPY --from=build --chown=65532:65532 /app/apps/medusa/.medusa/server ./
 COPY --chown=65532:65532 apps/medusa/scripts/container.mjs /app/container.mjs
+COPY --chown=65532:65532 apps/medusa/scripts/remote-staging.mjs apps/medusa/scripts/remote-staging-policy.json /app/
 USER 65532:65532
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/node", "/app/container.mjs"]
