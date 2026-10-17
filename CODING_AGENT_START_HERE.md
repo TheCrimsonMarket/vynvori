@@ -1,5 +1,7 @@
 # Start here — VYNVORI
 
+Current execution status (2026-10-17): the founder has authorized remaining M2 implementation/testing/PR management and dependency-ordered continuation. Read [the unified milestone ledger](docs/implementation/MILESTONE-PROGRESS.md) for reconciled merged work, current evidence and next batch. The cleanup-era workspace/authorization statements below are historical; current root manifests and the latest founder mandate govern. Remote mutations, spending, IAM, deployments, security exceptions and live finances retain separate approval gates.
+
 Read AGENTS.md, docs/technical/00-master-specification.md and its linked domain chapters before changing code. Chapters 00–25 and the proposed reference contracts include published Phase 6E corrections and remain canonical. Their examples describe future implementation, not deployed services.
 
 The active npm workspace is design/reference, the editable approved Design Release 1.1.1 simulation. Read its README, inspect index.html and review.html, and verify REFERENCE-MANIFEST.json. Preserve Monumental Atelier, Archivo, original logo, current UX/contract behavior and mock fixtures. Run root npm run verify, npm run build, npm run typecheck and npm test. Test/build results belong in a new external temporary destination.
