@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
+import os from "node:os";
 import { digest, sha256, snapshot, resolveLock } from "./audit-policy.mjs";
 
 export const REVIEWED_HEAD = "b99197ad814d7bffde402e4ee5fde3d18b260f06";
@@ -19,6 +20,20 @@ const check = (condition, code) => { if (!condition) throw new Error(code); };
 const equal = (a, b) => digest(a) === digest(b);
 const git = (root, args) => execFileSync("git", args, { cwd: root, encoding: "utf8", windowsHide: true, maxBuffer: 16 * 1024 * 1024 }).trim();
 const blob = (root, commit, file) => execFileSync("git", ["show", `${commit}:${file}`], { cwd: root, encoding: "utf8", windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
+
+export async function verifyCleanCheckout(root) {
+  const status = git(root, ["status", "--porcelain", "--untracked-files=all"]);
+  if (!status) return;
+  // scripts/web.mjs deliberately links generated Next output into os.tmpdir().
+  // Git ignores .next directories but reports this symlink on Linux. It is not
+  // source and cannot enter the Docker allowlist. Permit only that exact link,
+  // with the same ownership-of-output checks as the unchanged web runner.
+  check(status === "?? apps/web/.next", "UNCOMMITTED_SECURITY_BOUNDARY");
+  const link = path.join(root, "apps/web/.next");
+  check((await fs.lstat(link)).isSymbolicLink(), "UNCOMMITTED_SECURITY_BOUNDARY");
+  const target = await fs.realpath(link);
+  check(path.dirname(target) === await fs.realpath(os.tmpdir()) && path.basename(target).startsWith("VYNVORI-M0-next-"), "UNCOMMITTED_SECURITY_BOUNDARY");
+}
 
 export function auditIdentity(audit) {
   check(audit?.auditReportVersion === 2 && audit.metadata?.dependencies && audit.vulnerabilities && !audit.error, "AUDIT_INCOMPLETE");
@@ -98,7 +113,7 @@ export async function collectLocalState(root, implementationCommit, policyDigest
   check(equal(git(root, ["diff", "--name-only", REVIEWED_HEAD, implementationCommit]).split("\n").sort(), IMPLEMENTATION_PATHS), "UNAUTHORIZED_IMPLEMENTATION_DELTA");
   const modified = git(root, ["diff", "--name-only", implementationCommit, "HEAD"]).split("\n").sort();
   check(equal(modified, [POLICY_PATH, "scripts/security/run-audit.mjs"].sort()), "UNAUTHORIZED_ACTIVATION_DELTA");
-  check(!git(root, ["status", "--porcelain", "--untracked-files=all"]), "UNCOMMITTED_SECURITY_BOUNDARY");
+  await verifyCleanCheckout(root);
   const template = blob(root, implementationCommit, "scripts/security/run-audit.mjs");
   const expectedRunner = template.replace('PR5_IMPLEMENTATION_COMMIT = "UNACTIVATED"', `PR5_IMPLEMENTATION_COMMIT = "${implementationCommit}"`)
     .replace('PR5_POLICY_DIGEST = "UNACTIVATED"', `PR5_POLICY_DIGEST = "${policyDigest}"`);
@@ -180,7 +195,7 @@ export function evaluateLocal(input) {
   try {
     validateLocalInputs(input);
     const { policy, state, production, all, image, implementationCommit } = input;
-    check(image && equal(image.inventory, state.runtime.inventory), "RUNTIME_FILES_OR_BINARY_CHANGED");
+    check(image && [state.runtime.inventory, state.runtime.linuxInventory].filter(Boolean).some(expected => equal(image.inventory, expected)), "RUNTIME_FILES_OR_BINARY_CHANGED");
     check(image.localEngineVerified === true, "REMOTE_DOCKER_ENGINE_FORBIDDEN");
     check(image.database && new Date(image.database.UpdatedAt) <= (input.now ?? new Date()) && new Date(image.database.NextUpdate) > (input.now ?? new Date()), "VULNERABILITY_DATABASE_STALE");
     check(equal(image.configuration, state.runtime.configuration), "RUNTIME_CONFIGURATION_CHANGED");

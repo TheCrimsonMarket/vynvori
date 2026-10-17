@@ -1,9 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { digest } from "../security/audit-policy.mjs";
-import { evaluateLocal, collectLocalState, REVIEWED_HEAD, POLICY_PATH } from "../security/pr5-local-policy.mjs";
+import { evaluateLocal, collectLocalState, verifyCleanCheckout, REVIEWED_HEAD, POLICY_PATH } from "../security/pr5-local-policy.mjs";
 import { PR5_IMPLEMENTATION_COMMIT, PR5_POLICY_DIGEST } from "../security/run-audit.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
@@ -113,6 +116,35 @@ test("npm redundant cycle/fix suggestions do not alter exact advisory origins or
 });
 test("unexpected image files, Node binary, base, configuration or incomplete evidence fail", () => {
   for (const [key, value] of [["inventory", {}], ["baseLayers", []], ["configuration", {}], ["archiveSha256", "missing"], ["imageId", "missing"], ["localEngineVerified", false], ["database", {}]]) rejected({ ...input, image: { ...input.image, [key]: value } });
+});
+test("exact reviewed Linux checkout inventory passes; changed file/mode fingerprint does not", () => {
+  const image = { ...input.image, inventory: runtime.linuxInventory };
+  assert.equal(evaluateLocal({ ...input, image }).accepted, true);
+  rejected({ ...input, image: { ...image, inventory: { ...image.inventory, appFileTreeSha256: "0".repeat(64) } } }, "RUNTIME_FILES_OR_BINARY_CHANGED");
+});
+test("only the web runner's exact external generated-output symlink may be untracked", async () => {
+  const folder = await fs.mkdtemp(path.join(os.tmpdir(), "VYNVORI-policy-test-"));
+  const output = await fs.mkdtemp(path.join(os.tmpdir(), "VYNVORI-M0-next-"));
+  const link = path.join(folder, "apps/web/.next");
+  try {
+    execFileSync("git", ["init", "--quiet", folder]);
+    await fs.mkdir(path.dirname(link), { recursive: true });
+    await verifyCleanCheckout(folder);
+    await fs.symlink(output, link, process.platform === "win32" ? "junction" : "dir");
+    await verifyCleanCheckout(folder);
+    await fs.writeFile(path.join(folder, "unreviewed.mjs"), "changed");
+    await assert.rejects(verifyCleanCheckout(folder), /UNCOMMITTED_SECURITY_BOUNDARY/);
+    await fs.unlink(path.join(folder, "unreviewed.mjs"));
+    await fs.unlink(link);
+    await fs.symlink(folder, link, process.platform === "win32" ? "junction" : "dir");
+    await assert.rejects(verifyCleanCheckout(folder), /UNCOMMITTED_SECURITY_BOUNDARY/);
+    await fs.unlink(link);
+    await fs.writeFile(link, "not a generated-output link");
+    await assert.rejects(verifyCleanCheckout(folder), /UNCOMMITTED_SECURITY_BOUNDARY/);
+  } finally {
+    await fs.rm(folder, { recursive: true, force: true });
+    await fs.rm(output, { recursive: true, force: true });
+  }
 });
 test("OS/JS new finding, advisory modification, package change or truncated report fail", () => {
   for (const change of ["finding", "metadata", "package", "truncate"]) {
