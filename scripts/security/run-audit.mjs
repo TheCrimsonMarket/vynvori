@@ -10,8 +10,8 @@ import { collectLocalState, evaluateLocal, validateLocalInputs, contextAllowed, 
 import { verifyLocalImage } from "./pr5-runtime-check.mjs";
 
 // Rendered only in the separately committed activation step; never by this runner.
-export const PR5_IMPLEMENTATION_COMMIT = "UNACTIVATED";
-export const PR5_POLICY_DIGEST = "UNACTIVATED";
+export const PR5_IMPLEMENTATION_COMMIT = "e9c32147499b6539e82a35d4a7a6a88adcdd6ef8";
+export const PR5_POLICY_DIGEST = "067f558301ee72c4d46cff24ad2ea8e2942224a532af2cda0db0ff9351596cfc";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const policyPath = path.join(root, "security/m2-exception-policy.json");
