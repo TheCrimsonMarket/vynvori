@@ -6,6 +6,12 @@ import { startProcess, stopProcess } from "../process-lifecycle.mjs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { evaluate, snapshot, digest, sha256, validatePolicy } from "./audit-policy.mjs";
+import { collectLocalState, evaluateLocal, validateLocalInputs, contextAllowed, POLICY_PATH } from "./pr5-local-policy.mjs";
+import { verifyLocalImage } from "./pr5-runtime-check.mjs";
+
+// Rendered only in the separately committed activation step; never by this runner.
+export const PR5_IMPLEMENTATION_COMMIT = "UNACTIVATED";
+export const PR5_POLICY_DIGEST = "UNACTIVATED";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const policyPath = path.join(root, "security/m2-exception-policy.json");
@@ -33,12 +39,12 @@ export function summarizeAudit(stdout, state) {
   } catch { return { parsed: false, totals: null, records: [] }; }
 }
 
-async function runAudit() {
+async function runAudit(productionOnly = true) {
   const npmCli = process.env.npm_execpath;
   if (!npmCli || !path.isAbsolute(npmCli) || !npmCli.endsWith("npm-cli.js")) throw new Error("RUN_THROUGH_NPM");
   const registry = await exec(process.execPath, [npmCli, "config", "get", "registry"], { cwd: root, timeout: 10000, maxBuffer: 4096, windowsHide: true });
   if (!["https://registry.npmjs.org/", "https://registry.npmjs.org"].includes(registry.stdout.trim())) throw new Error("UNREVIEWED_AUDIT_REGISTRY");
-  const handle = startProcess(process.execPath, [npmCli, "audit", "--omit=dev", "--json"], { cwd: root, env: process.env });
+  const handle = startProcess(process.execPath, [npmCli, "audit", ...(productionOnly ? ["--omit=dev"] : []), "--json"], { cwd: root, env: process.env });
   let stdout = "", stderr = "", exceeded = false;
   const capture = which => bytes => {
     if (stdout.length + stderr.length + bytes.length > MAX_BYTES) { exceeded = true; return; }
@@ -69,21 +75,40 @@ async function main() {
   let result;
   let policy;
   let state;
+  let historicalResult, localPolicy, localState, image;
+  let allAudit = { stdout: "", stderr: "", exitCode: null, signal: null, executionError: true };
   // Always attempt the full unfiltered audit before checking the exception fingerprint.
   try { audit = await runAudit(); } catch { result = { accepted: false, status: "REJECTED", code: "AUDIT_EXECUTION_FAILURE" }; }
+  try { allAudit = await runAudit(false); } catch { /* Recorded as a failed full audit; never except execution errors. */ }
   try {
     policy = JSON.parse(await fs.readFile(policyPath, "utf8"));
     validatePolicy(policy);
     state = await snapshot(root, policy);
     result ??= evaluate({ ...audit, policy, state, now: new Date(), env: process.env });
-  } catch { result ??= { accepted: false, status: "REJECTED", code: "POLICY_OR_STATE_COLLECTION_FAILED" }; }
-  const raw = { stdout: audit.stdout, stderr: audit.stderr };
+    historicalResult = result;
+    if (!result.accepted) {
+      // No supplied snapshot, image/report override, automatic policy rewrite or
+      // historical-state substitution is accepted by the production command.
+      localPolicy = JSON.parse(await fs.readFile(path.join(root, POLICY_PATH), "utf8"));
+      contextAllowed(process.env);
+      localState = await collectLocalState(root, PR5_IMPLEMENTATION_COMMIT, PR5_POLICY_DIGEST, localPolicy, policy);
+      // Expiry/graph checks precede any container execution as well as final evaluation.
+      validateLocalInputs({ policy: localPolicy, policyDigest: PR5_POLICY_DIGEST, implementationCommit: PR5_IMPLEMENTATION_COMMIT,
+        state: localState, production: audit, all: allAudit, env: process.env });
+      image = await verifyLocalImage(root, evidence, localState.runtime);
+      result = evaluateLocal({ policy: localPolicy, policyDigest: PR5_POLICY_DIGEST, implementationCommit: PR5_IMPLEMENTATION_COMMIT,
+        state: localState, production: audit, all: allAudit, image, env: process.env });
+    }
+  } catch (error) { result = { accepted: false, status: "REJECTED", code: error.message }; }
+  const raw = { stdout: audit.stdout, stderr: audit.stderr, allStdout: allAudit.stdout, allStderr: allAudit.stderr };
   // A protected local copy preserves execution-error evidence. Only scanned output is publishable.
   const privateDir = await fs.mkdtemp(path.join(os.tmpdir(), "VYNVORI-audit-private-"));
   await fs.writeFile(path.join(privateDir, "raw-output.json"), JSON.stringify(raw), { mode: 0o600 });
-  const clean = safeEvidence(audit.stdout + audit.stderr, process.env);
+  const clean = safeEvidence(audit.stdout + audit.stderr + allAudit.stdout + allAudit.stderr, process.env);
   await fs.writeFile(path.join(evidence, "raw-audit.json"), clean ? audit.stdout : JSON.stringify({ redacted: true, reason: "POTENTIAL_CREDENTIAL", sha256: sha256(audit.stdout) }));
   await fs.writeFile(path.join(evidence, "audit-stderr.txt"), clean ? audit.stderr : "REDACTED: potential credential in command output\n");
+  await fs.writeFile(path.join(evidence, "all-dependencies-audit.json"), clean ? allAudit.stdout : JSON.stringify({ redacted: true, sha256: sha256(allAudit.stdout) }));
+  await fs.writeFile(path.join(evidence, "all-dependencies-audit-stderr.txt"), clean ? allAudit.stderr : "REDACTED\n");
   if (!clean) result = { accepted: false, status: "REJECTED", code: "UNSAFE_AUDIT_EVIDENCE" };
   const report = {
     startedAt, completedAt: new Date().toISOString(), command: "npm audit --omit=dev --json", originalAuditExitCode: audit.exitCode,
@@ -92,9 +117,14 @@ async function main() {
     manifestFingerprints: state?.manifests ?? null, securitySurfaceSha256: state ? digest(state.surface) : null,
     ancestrySha256: state ? digest(state.edges) : null, result,
     auditSummary: clean ? summarizeAudit(audit.stdout, state) : null,
+    historicalResult, allDependencyAudit: { originalExitCode: allAudit.exitCode, executionError: allAudit.executionError,
+      signal: allAudit.signal, stdoutSha256: sha256(allAudit.stdout), summary: clean ? summarizeAudit(allAudit.stdout, localState ? { installed: localState.installed } : state) : null },
+    localApproval: localPolicy ? { policySha256: digest(localPolicy), implementationCommit: PR5_IMPLEMENTATION_COMMIT,
+      sourceCommit: localState?.commit, sourceTree: localState?.tree, imageId: image?.imageId, archiveSha256: image?.archiveSha256 } : null,
   };
   await fs.writeFile(path.join(evidence, "evaluation.json"), JSON.stringify(report, null, 2) + "\n");
   if (policy) await fs.writeFile(path.join(evidence, "policy.json"), JSON.stringify(policy, null, 2) + "\n");
+  if (localPolicy) await fs.writeFile(path.join(evidence, "pr5-local-policy.json"), JSON.stringify(localPolicy, null, 2) + "\n");
   console.log(`Original unfiltered npm audit exit=${audit.exitCode}; findings=${result.counts?.total ?? "unavailable"}; effective security gate=${result.status}${result.code ? ` (${result.code})` : ""}`);
   console.log(`Security evidence: ${evidence}`);
   if (!result.accepted) process.exitCode = 1;

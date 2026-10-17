@@ -23,9 +23,13 @@ jobs:
           node-version: '22.23.3'
           cache: npm
       - run: npm ci
+      - name: Fetch immutable PR5 policy implementation
+        run: |
+          node --input-type=module -e 'import { execFileSync } from "node:child_process"; import { PR5_IMPLEMENTATION_COMMIT as sha } from "./scripts/security/run-audit.mjs"; if (!/^[a-f0-9]{40}$/.test(sha)) throw new Error("Unactivated local policy"); execFileSync("git", ["fetch", "--no-tags", "origin", sha], { stdio: "inherit" });'
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - run: node --test scripts/tests/pr5-local-policy.test.mjs
       - run: npm run build:web
       - run: npm run build
       - run: npm run verify:reference
@@ -33,10 +37,12 @@ jobs:
       - run: npm ls --all --omit=optional
       - run: npm run test:deployment
       # Runs npm audit --omit=dev --json unfiltered, preserves its exit status,
-      # and applies only the exact founder-approved, expiring M2 policy.
+      # The historical policy stays intact. PR5's separate local-only approval
+      # also checks the full npm audit and a freshly built/scanned local image.
       - run: npm run security:audit
         if: always()
         env:
+          PR5_SECURITY_SCOPE: local-synthetic-only
           SECURITY_AUDIT_EVIDENCE_DIR: ${{ runner.temp }}/m2-security-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()

@@ -1,0 +1,55 @@
+# PR #5 — founder-authorized local preparation acceptance
+
+Decision date: **2026-10-17 (Asia/Dhaka)**. Authority: VYNVORI founder's explicit “Finalize PR #5 and Unblock Merge” instruction. Reviewed application/container head: **`b99197ad814d7bffde402e4ee5fde3d18b260f06`**. Fixed expiry: **`2026-11-15T23:59:59Z`**, earlier on changed dependency, advisory or security boundary. This implements decision **A only**. **Remote Cloud Run execution remains unauthorized.**
+
+## Accepted residual risk and exact boundaries
+
+- `braces` **3.0.3**, GHSA-vfj7-8cjw-p6xm, exact reviewed installed node `node_modules/braces` and its reviewed discovery/migration ancestry. Trusted fixed patterns only; no request-selected globs.
+- `sprintf-js` **1.0.3**, GHSA-hp3w-g68c-fv3c, `node_modules/sprintf-js` and its reviewed ancestry. Fixed native CLI definitions/arguments only; no request-selected formats.
+- The documented **31 OS package/advisory pairs**, **23 medium / 8 low**, with exact package versions/advisory content and complete package inventory from the hardened reviewed image. No critical/high OS exception is granted.
+- Development-only `esbuild` **0.18.20**, GHSA-67mh-4wv8-2f99, exactly `node_modules/@esbuild-kit/core-utils/node_modules/esbuild` and its reviewed ancestry, only in the non-public build/test context. No esbuild development server exposure.
+
+The scope is synthetic developer-local Docker tests and isolated GitHub CI. No real customer data, production credentials, paid providers, payments, customer authentication, Store mutations, M1b activation or active commerce. The existing single shared-mode architecture, scale-to-zero, no Redis/separate worker, and remote-execution refusal are unchanged. `NODE_ENV=production` inside an inert compiled test container is not permission for production activity; a production context on the policy host is rejected.
+
+`security/pr5-local-preparation-policy.json` records these constraints, the exact dependency lock/manifests/ancestry, all 31 OS identities, reviewed evidence hashes, immutable implementation commit and runtime reference. The old `security/m2-exception-policy.json`, its hash anchor/evaluator, audit fixture and **25 regression tests remain byte-for-byte unchanged**. Its evaluation still rejects current source. The new result is separately named `ACCEPTED_WITH_FOUNDER_LOCAL_PR5_EXCEPTION`; it never reinterprets the old approval.
+
+## Commit binding without a self-approving fingerprint
+
+There is no current-tree fingerprint refresh command and no self-referential commit hash.
+
+1. Implementation commit **I** is frozen first, as a direct child of the reviewed `b99197a` head. It may change only the explicit policy-runner/evaluator/test/fixture/workflow/documentation paths listed in `IMPLEMENTATION_PATHS`. No application, Docker recipe, runtime guard, dependency, canonical specification or historical-policy change is permitted.
+2. A separate activation commit may differ from **I** in **only two files**: adding the new approval JSON and replacing the two `UNACTIVATED` literal selectors in I's audit-runner template with **I's exact SHA** and the canonical digest of that approval JSON. Every other byte of the runner must equal the immutable template. All other tracked files must equal I and the worktree must be clean.
+3. The evaluator reads its expected reviewed audit/runtime data from **I's immutable Git blobs**, never from a caller-supplied snapshot or a fingerprint calculated from changed code. New-policy metadata cannot broaden its hardcoded approved categories, versions, paths, expiry or remote prohibition. The implementation and activation SHAs, checked-out commit and complete tree are recorded in PR #5 / CI evaluation evidence. A PR synthetic merge or later metadata-equivalent squash is allowed only when it has exactly the validated source tree; no source delta is silently accepted.
+
+This is a review-sealed repository trust model, not a claim that a founder signed a cryptographic key. Deliberately replacing the trusted implementation selector/evaluator is itself a new approval boundary requiring independent review. The runner does not write policies, hashes, approvals or Git commits. The workflow fetches only the literal immutable I object for reproducibility after a squash/branch cleanup.
+
+## Actual gate behavior
+
+`npm run security:audit` retains the original full, unfiltered production command `npm audit --omit=dev --json` and also executes full `npm audit --json`. Neither original exit status is changed. Both raw outputs, stderr, summaries, policy hashes, the historical rejection and the new effective result remain visible in external evidence and the CI artifact. Network, execution, signal, malformed/truncated graph, changed advisory metadata, new severity/origin/path or inconsistent counts/exit fail closed. The accepted reviewed counts are 79 production findings and 85 all-dependency propagated findings; acceptance is checked against complete records and ancestry, **not counts alone**.
+
+The host must explicitly declare `PR5_SECURITY_SCOPE=local-synthetic-only`; that marker is not an authorization token. The committed policy/source checks still apply. Staging/Cloud Run service/job/execution/Vercel/production contexts, enabled operational flags, remote database/origin URLs, known provider/production credentials and remote Docker engines are rejected. Only a local Unix socket or Windows named-pipe engine may be used. The audit runner exposes no caller-selected image, scan-report, snapshot or acceptance-refresh override.
+
+For an allowed, unexpired exact source/dependency state, the gate builds an owned local image from the sealed Dockerfile/root lock, resolves its actual immutable image ID, and inventories it with networking disabled. It compares the **entire `/app` file/symlink tree including ownership/mode/content**, exact official Node binary, uid/architecture, reviewed runtime configuration and immutable base-layer prefix. The reviewed application file-tree SHA-256 is `04e310ae3b9962b04c633077e833f6ed5b6eb0efba40fa13e597facfb10c3b20`; the Node binary remains `fde6a4bf8d0562f7751d1a2d6cb9b417c4cfe107bbcb0aa3e9a24e125e348f48`.
+
+Trivy 0.75.0 is pinned to `aquasec/trivy@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa`. It scans that exact saved local image using a fresh database, with no severity, unfixed or VEX suppression and no stale-cache fallback. The scanner container has only the owned external evidence directory mounted; no repository, Docker socket, customer art or cloud credentials. Database update/next-update timestamps are recorded and must be current. Entire package inventories and advisory records (including severity, status, fix availability, references and dates) must equal the frozen reviewed data. Only per-rebuild layer/occurrence identifiers are excluded from advisory comparison; original raw scan identifiers remain in the artifact. Any changed advisory, package or runtime bytes reject approval. The actual rebuilt image ID/archive hash are recorded rather than pretending a reproducible build must retain timestamp/provenance metadata from the reference image.
+
+The reference scanned amd64 manifest remains `sha256:22046eb34e152aed183ec11c83ac0765be1f57a1672b6216c12237bb70615cfc`; runtime base and Node-donor digests stay pinned in the unchanged Dockerfile. A rebuilt image is covered only after all exact content/configuration/base/package/advisory comparisons succeed. The temporary image archive and owned scanner container/tag are cleaned up; raw JSON/log/hash evidence remains. No registry push or cloud operation exists in this gate.
+
+## Validation, expiry and withdrawal
+
+The original 25 historical-policy tests continue to prove historical acceptance, changed-current-source rejection and their original negative cases. Separate local-approval tests cover exact positive scope, real committed activation sealing, expiry/tampering, remote contexts and credentials, changed paths/resolutions/advisories, stale data, changed image content/configuration/base and incomplete evidence. Browser, backend and container tests are not weakened or removed. CI's existing security step may return zero **only** for an exact, live local acceptance match; ordinary raw audits still return nonzero and are retained.
+
+Local reproduction after activation (with a clean committed worktree and local Docker):
+
+```powershell
+$env:PR5_SECURITY_SCOPE = 'local-synthetic-only'
+npm run security:audit
+node --test scripts/tests/pr5-local-policy.test.mjs
+npm run test:security-policy
+```
+
+At the fixed expiry, a changed advisory/dependency/boundary, scan failure or unexpected runtime, stop and re-review. Do not renew automatically, alter the historical policy or generate fresh approval hashes to restore green. Withdrawal can disable the two activation selectors through a separately reviewed change; that makes the new local gate fail closed. No data/schema rollback is needed for this policy-only change.
+
+## Remote decision B is separate and not issued
+
+This approval authorizes no Cloud Run deployment or removal of the existing `K_SERVICE` / job / Vercel guard. Effective IAM, Secret Manager, direct Neon/TLS/role checks, migrations/backup/rollback and an independently approved remote-execution gate remain future work after founder merge. New remote source/config/dependency/image identities must be reviewed separately. No credentials, GCP resources, image push, Neon migration, Redis, separate worker, payments or customer operation follows from local acceptance or marking PR #5 ready for review. No automatic merge.

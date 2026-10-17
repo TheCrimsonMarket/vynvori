@@ -2,6 +2,8 @@
 
 2026-10-17 (Asia/Dhaka). Final container hardening baseline: reviewed head `04de5d2846f1b821a41de9a1a94926d686375e57`; earlier correction history follows below. **Draft; no advisory acceptance, amended exception, deployment or remote migration authorized.** The accepted architecture remains one Medusa 2.21.2 service in shared mode, no Redis/separate worker/queue, min 0/max 1, request CPU, 1 CPU/2 GiB.
 
+**Founder decision superseding the historical proposal status below:** on 2026-10-17 the founder explicitly approved **local synthetic preparation A only** for reviewed head `b99197ad814d7bffde402e4ee5fde3d18b260f06`, the two exact runtime advisories, the documented 31 medium/low OS pairs and reviewed non-public development esbuild findings, until **2026-11-15T23:59:59Z** or earlier boundary/dependency/advisory change. [Acceptance contract, immutable two-commit implementation/activation seal and actual gate](PR5-local-preparation-acceptance.md). Historical raw scan/audit risks remain visible; no existing M2 approval is modified. **Remote B is still unauthorized.** PR #5 may be marked ready only after every required check, including the real local-policy evaluator, passes; no automatic merge.
+
 ## Final runtime hardening and comparison
 
 The change is confined to the final Docker stage and runtime verification/evidence. Medusa source/config, dependency manifests/lock, supervisor, diagnostic, migration commands, deployment template and authentication boundaries are unchanged. A fresh `--no-cache` build ran the existing compiler, not a rewritten application: the compiled application tree, Node binary and installed application-package inventory all hash identically before/after. No provider binary or dependency is patched.
