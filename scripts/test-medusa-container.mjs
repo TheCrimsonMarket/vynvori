@@ -91,6 +91,10 @@ async function noDiagnosticBackends() {
   assert.fail("No diagnostic backend or abandoned query after recovery");
 }
 try {
+  const imageDetails = JSON.parse(docker(["image", "inspect", image]))[0];
+  const inventoryCode = await fs.readFile(new URL("./medusa-runtime-inventory.mjs", import.meta.url), "utf8");
+  const inventory = docker(["run", "--rm", "--entrypoint", "/usr/local/bin/node", image, "--input-type=module", "-e", inventoryCode]);
+  await fs.writeFile(path.join(evidence, "runtime-inventory.json"), inventory + "\n");
   for (const marker of ["K_SERVICE", "CLOUD_RUN_JOB", "VERCEL"]) {
     const denied = spawnSync("docker", ["run", "--rm", "--name", `${id}-deny-${marker.toLowerCase()}`, "--label", `vynvori.test=${id}`, "-e", `${marker}=1`, image, "serve"], { encoding: "utf8", timeout: 10000 });
     assert.equal(denied.status, 1);
@@ -139,7 +143,7 @@ try {
   docker(["run", "-d", "--name", app, "--label", `vynvori.test=${id}`, "--network", `container:${db}`, "--env-file", envFile, "--cpus=1", "--memory=2g", image]);
   await health();
   const coldStartMs = Date.now() - started;
-  assert.equal(docker(["exec", app, "id", "-u"]), "1000");
+  assert.equal(docker(["exec", app, "/usr/local/bin/node", "-p", "process.getuid()"]), "65532");
   const anonymous = await request("/admin/m2-readiness");
   assert.equal(anonymous.status, 401);
   const login = await request("/auth/user/emailpass", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "synthetic@example.invalid", password: userPassword }) });
@@ -197,7 +201,7 @@ try {
   await health();
   assert.equal((await request("/admin/m2-readiness", { headers })).status, 200, "Admin identity persists after restart");
   latencies.sort((a, b) => a - b);
-  await fs.writeFile(path.join(evidence, "results.json"), JSON.stringify({ image, coldStartMs, requests: latencies.length, concurrency: 8,
+  await fs.writeFile(path.join(evidence, "results.json"), JSON.stringify({ image, imageIdentity: { id: imageDetails.Id, descriptor: imageDetails.Descriptor, repoDigests: imageDetails.RepoDigests }, coldStartMs, requests: latencies.length, concurrency: 8,
     p95Ms: latencies[Math.ceil(latencies.length * 0.95) - 1], samples, outageMeasurements, cpuLimit: 1, memoryLimit: "2g", tls: "trusted/untrusted/wrong-host", result: "PASS_LOCAL_SYNTHETIC_ONLY" }, null, 2));
   console.log(`PASS container migration replay, non-root compiled runtime, Admin boundary, outage/recovery, restart and 1 CPU/2 GiB smoke. Evidence: ${evidence}`);
 } finally {
