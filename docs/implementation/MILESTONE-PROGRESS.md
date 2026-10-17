@@ -36,6 +36,8 @@ PR #6 checks: M2 foundation, container readiness, browser and Vercel SUCCESS; M0
 
 ## Current PR-sized batch: read-only commerce catalog evidence
 
+Published for independent review as draft [PR #7](https://github.com/TheCrimsonMarket/vynvori/pull/7), implementation commit `693dcfd3e8eebef87424ddcabb13050e270d9bed`, branch `codex/m2-runtime-catalog-verification`. The founder explicitly approved this branch's commit/push and draft PR after automatic review required clarification of the historical cleanup prohibition. No merge or operational activation is authorized. Exact latest-head CI results belong to the PR; publication alone does not satisfy acceptance.
+
 Implementation: [operator/tool contract](M2-Catalog-Verification.md). Collect actual public relations, object owners, effective runtime privileges, sequence dependencies, role memberships, default ACLs and callable-function metadata in one read-only snapshot. Bind a reviewer-authored grant proposal to observed objects/dependencies before passing it to the existing SQL builder. No grants, migrations, domain-row reads or remote activation.
 
 Executed on Node 22.23.3 / npm 10.9.9:
