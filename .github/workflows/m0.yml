@@ -29,6 +29,10 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - name: Diagnose unexpected checkout mutations
+        run: |
+          git status --short --untracked-files=all
+          git diff --stat
       - run: node --test scripts/tests/pr5-local-policy.test.mjs
       - run: npm run build:web
       - run: npm run build
