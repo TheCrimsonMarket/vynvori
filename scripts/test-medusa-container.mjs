@@ -18,6 +18,7 @@ const jwt = randomBytes(32).toString("hex");
 const cookie = randomBytes(32).toString("hex");
 const userPassword = randomBytes(24).toString("hex");
 const databaseUrl = `postgres://synthetic:${password}@127.0.0.1:5432/vynvori_medusa_staging`;
+const secretsForRoles = [];
 const env = { M2_ENV: "local", M2_MEDUSA_DATABASE_URL: databaseUrl, M2_MEDUSA_DATABASE_NAME: "vynvori_medusa_staging",
   M2_MEDUSA_JWT_SECRET: jwt, M2_MEDUSA_COOKIE_SECRET: cookie,
   M2_MEDUSA_STORE_CORS: "http://localhost:3000", M2_MEDUSA_ADMIN_CORS: `http://localhost:${port}`, M2_MEDUSA_AUTH_CORS: `http://localhost:${port}` };
@@ -32,7 +33,7 @@ function docker(args, timeout = 180000) {
   }
 }
 function redact(text) {
-  for (const secret of [password, jwt, cookie, userPassword, databaseUrl]) text = text.split(secret).join("[REDACTED]");
+  for (const secret of [...secretsForRoles, databaseUrl, password, jwt, cookie, userPassword]) text = text.split(secret).join("[REDACTED]");
   return text;
 }
 async function request(route, options = {}) {
@@ -134,10 +135,36 @@ try {
   const tlsOutput = docker([...runBase, "-e", `M2_TEST_CA_BASE64=${ca}`, "--entrypoint", "node", image, "-e", tlsTest]);
   await fs.writeFile(path.join(evidence, "tls.log"), tlsOutput);
   assert.throws(() => docker([...runBase, image, "migrate"]), "Migration must require explicit authorization");
+  // Disposable PostgreSQL only: establish DDL ownership separately from runtime.
+  const sql = statement => docker(["exec", db, "psql", "-U", "synthetic", "-d", "vynvori_medusa_staging", "-v", "ON_ERROR_STOP=1", "-c", statement]);
+  sql(`CREATE ROLE vynvori_medusa_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '${password}';
+    CREATE ROLE vynvori_medusa_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '${password}';
+    REVOKE ALL ON DATABASE vynvori_medusa_staging FROM PUBLIC;
+    GRANT CONNECT ON DATABASE vynvori_medusa_staging TO vynvori_medusa_migrator, vynvori_medusa_app;
+    REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+    GRANT USAGE, CREATE ON SCHEMA public TO vynvori_medusa_migrator;
+    GRANT USAGE ON SCHEMA public TO vynvori_medusa_app;`);
+  const migrationUrl = databaseUrl.replace("postgres://synthetic:", "postgres://vynvori_medusa_migrator:");
+  secretsForRoles.push(migrationUrl, databaseUrl.replace("postgres://synthetic:", "postgres://vynvori_medusa_app:"));
   for (let replay = 0; replay < 2; replay++) {
-    const output = docker([...runBase, "-e", "M2_AUTHORIZE_MEDUSA_MIGRATION=vynvori_medusa_staging", image, "migrate"], 600000);
+    const output = docker([...runBase, "-e", `M2_MEDUSA_DATABASE_URL=${migrationUrl}`, "-e", "M2_AUTHORIZE_MEDUSA_MIGRATION=vynvori_medusa_staging", image, "migrate"], 600000);
     await fs.writeFile(path.join(evidence, `migration-${replay}.log`), redact(output));
   }
+  sql(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO vynvori_medusa_app;
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO vynvori_medusa_app;
+    ALTER DEFAULT PRIVILEGES FOR ROLE vynvori_medusa_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO vynvori_medusa_app;
+    ALTER DEFAULT PRIVILEGES FOR ROLE vynvori_medusa_migrator IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO vynvori_medusa_app;`);
+  const migrationTables = sql("SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE '%migration%' ORDER BY tablename");
+  await fs.writeFile(path.join(evidence, "migration-tables.log"), migrationTables);
+  sql(`DO $block$ DECLARE item record; BEGIN
+    FOR item IN SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE '%migration%' LOOP
+      EXECUTE format('REVOKE INSERT, UPDATE, DELETE ON TABLE public.%I FROM vynvori_medusa_app', item.tablename);
+    END LOOP; END $block$;`);
+  for (const deniedSql of ["CREATE TABLE public.must_not_exist(id int)", "CREATE SCHEMA must_not_exist", "CREATE TEMP TABLE must_not_exist(id int)", "TRUNCATE public.store"]) {
+    assert.throws(() => docker(["exec", db, "psql", "-U", "vynvori_medusa_app", "-d", "vynvori_medusa_staging", "-v", "ON_ERROR_STOP=1", "-c", deniedSql]), "Runtime DDL/TEMP/TRUNCATE must be denied");
+  }
+  env.M2_MEDUSA_DATABASE_URL = databaseUrl.replace("postgres://synthetic:", "postgres://vynvori_medusa_app:");
+  await fs.writeFile(envFile, Object.entries(env).map(([key, value]) => `${key}=${value}`).join("\n"), { mode: 0o600 });
   docker([...runBase, "--entrypoint", "node", image, "/app/node_modules/@medusajs/cli/cli.js", "user", "--email", "synthetic@example.invalid", "--password", userPassword]);
   const started = Date.now();
   docker(["run", "-d", "--name", app, "--label", `vynvori.test=${id}`, "--network", `container:${db}`, "--env-file", envFile, "--cpus=1", "--memory=2g", image]);
@@ -202,7 +229,7 @@ try {
   assert.equal((await request("/admin/m2-readiness", { headers })).status, 200, "Admin identity persists after restart");
   latencies.sort((a, b) => a - b);
   await fs.writeFile(path.join(evidence, "results.json"), JSON.stringify({ image, imageIdentity: { id: imageDetails.Id, descriptor: imageDetails.Descriptor, repoDigests: imageDetails.RepoDigests }, coldStartMs, requests: latencies.length, concurrency: 8,
-    p95Ms: latencies[Math.ceil(latencies.length * 0.95) - 1], samples, outageMeasurements, cpuLimit: 1, memoryLimit: "2g", tls: "trusted/untrusted/wrong-host", result: "PASS_LOCAL_SYNTHETIC_ONLY" }, null, 2));
+    p95Ms: latencies[Math.ceil(latencies.length * 0.95) - 1], samples, outageMeasurements, cpuLimit: 1, memoryLimit: "2g", tls: "trusted/untrusted/wrong-host", leastPrivilege: "separate migrator DDL and app DML; runtime DDL/TEMP/TRUNCATE denied", result: "PASS_LOCAL_SYNTHETIC_ONLY" }, null, 2));
   console.log(`PASS container migration replay, non-root compiled runtime, Admin boundary, outage/recovery, restart and 1 CPU/2 GiB smoke. Evidence: ${evidence}`);
 } finally {
   try {

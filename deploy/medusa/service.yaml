@@ -46,6 +46,10 @@ spec:
             timeoutSeconds: 2
             failureThreshold: 3
           env:
+            - name: M2_REMOTE_STAGING_APPROVAL
+              value: m2-private-synthetic-staging-v1
+            - name: M2_REMOTE_SOURCE_COMMIT
+              value: REPLACE_REVIEWED_SOURCE_COMMIT
             - name: M2_ENV
               value: staging
             - name: M2_MEDUSA_DATABASE_NAME

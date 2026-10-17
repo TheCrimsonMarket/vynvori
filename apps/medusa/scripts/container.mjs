@@ -1,11 +1,12 @@
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import readline from "node:readline";
+import { authorizeExecution } from "./remote-staging.mjs";
 const require = createRequire(import.meta.url);
-// This PR authorizes local preparation only. Removing this guard requires a
-// separately approved security resolution and remote execution review.
-if (process.env.K_SERVICE || process.env.CLOUD_RUN_JOB || process.env.VERCEL === "1") {
-  console.error("Remote execution remains unauthorized for M2 preparation");
+// The bundled remote policy is deliberately unapproved. Environment markers
+// alone cannot authorize execution; independent review must activate the policy.
+try { await authorizeExecution(process.env, process.argv[2]); } catch {
+  console.error("Remote execution remains unauthorized: staging approval/context required");
   process.exit(1);
 }
 const mode = process.argv[2];

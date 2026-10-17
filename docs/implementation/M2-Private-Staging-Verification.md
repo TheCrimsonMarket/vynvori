@@ -1,0 +1,25 @@
+# M2 private staging preparation — local verification
+
+2026-10-17, Asia/Dhaka. Base `1b99e23d7e47a82284ea5926e7b9ac0885092e46`; no deployment/migration/real credentials authorized or used. [Machine evidence](evidence/M2-private-staging-results.json), [exact source/configuration inputs](evidence/M2-staging-scope.json). Final implementation commit and GitHub CI links are recorded in the PR, avoiding self-referential commit hashes inside source evidence.
+
+| Check | Actual outcome |
+|---|---|
+| Clean lockfile install | PASS: root npm ci (1284 packages); Docker build and production-dependency stages also execute npm ci from unchanged lock |
+| Lint / root typecheck | PASS after removing only a verified dangling generated `.next` junction; all application/source checks retained |
+| Root npm test | PASS: M0 7; reference unit/contracts; M2 11 pass/1 preexisting integration skip; worker 2; lifecycle 5 pass/2 Windows skips; historical security policy 25; remote staging 5 scenario groups |
+| New remote checks | PASS: unapproved bundled policy, wrong/expired context, production M2 environment, Job/Vercel/unmarked staging, feature/TLS bypass, failed/wrong metadata, IAM public grants, secret alias/substitution, image/spec/resource drift and unresolved template all reject; positive approvals exist only as synthetic in-memory fixtures |
+| PR5 local policy suite | **32 pass / 1 fail**: actual-checkout seal rejects this changed source scope. Expected approval boundary; do not claim this suite green or modify its policy/evaluator to suppress failure |
+| Unchanged security:audit | **REJECTED**, raw production audit exit 1: 79 propagated findings (76 high/3 moderate); full audit exit 1: 85 (78 high/7 moderate). Worktree result `UNCOMMITTED_SECURITY_BOUNDARY`; clean new commit will still reject the exact source delta. Both original policies/evaluators/fixtures unchanged |
+| Local Docker image/compiled runtime | PASS: pinned Node/base/Medusa unchanged; non-root UID 65532; no new hardening or global tooling. Final tested local manifest-list identity is in machine evidence, not a published registry digest |
+| PostgreSQL migration and least privilege | PASS on disposable PostgreSQL: native migration + deliberate replay as SQL-created migrator; service/Admin operations as separate app; CREATE schema/table/TEMP/TRUNCATE denied; writes revoked on observed link_module_migrations, mikro_orm_migrations and script_migrations |
+| Runtime boundaries/recovery | PASS: native Admin 401 without user; synthetic Admin bearer/readiness success; customer auth and Store writes denied even with valid publishable key; trusted TLS succeeds and untrusted/wrong hostname fails; dependency outage/recovery, abort/query socket cleanup, SIGTERM/restart all pass |
+| Local performance | 1 CPU/2 GiB, cold start 4453ms; 40 readiness requests at concurrency 8, p95 65ms; observed memory around 251–252MiB. DB outage 503 in 913–914ms; no production throughput/Neon cold-wake claim |
+| Storefront build/browser | PASS: production build; 51/51 existing browser checks, no external requests |
+| Vercel deployment-readiness simulation | PASS in fresh external extraction: npm ci + default npm install, unchanged lockfile, Next production build and 13 deployment traces excluding private reference/test material. No Vercel deployment |
+| Reference browser/integrity | PASS: existing reference browser suite; 146 payloads, 202 protected entries and 9 copied assets. Acceptance matrix adds BLOCKED note only; its exact LF/CRLF hash pair and previous hash are recorded in the protected manifest |
+| Freshly downloaded container scan | Report produced: 31 OS pairs (23 medium/8 low) and 1 high language occurrence (braces), matching the known category counts. **BLOCKED_STALE_DATABASE**: the newly downloaded DB reported UpdatedAt 2026-10-16T01:13:54.947090392Z / NextUpdate 2026-10-17T01:13:54.947090202Z, already elapsed when downloaded at 2026-10-17T01:28:16.326268688Z. Do not treat this scan as current or accepted. Preserve raw report/hash; require current DB and new scan before any approval |
+| Real GCP/Neon/IAM/secret/remote smoke | **NOT_RUN**, identifiers/grants/backup/restore/migration and separate security/execution approval pending |
+
+The first sandbox attempt at lifecycle tests was denied process cleanup permissions; the authorized local rerun passed, with the existing two platform skips. The stale generated frontend link was checked to resolve only to the missing task-temporary `VYNVORI-M0-next-*` location before unlinking; no source or historical evidence was deleted. Neither issue was worked around by weakening checks.
+
+CI may be red because the historical local source seal is deliberately intact. **NOT MERGEABLE / REMOTE EXECUTION BLOCKED.** Required next decisions: independent/founder risk scope, new exact local CI approval scope, remote policy activation, actual provider/least-privilege/recovery evidence, then separately approved image publication, migration and deployment. See [operator checklist](M2-Private-Staging-Operator-Checklist.md).

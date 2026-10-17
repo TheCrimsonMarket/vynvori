@@ -6,6 +6,7 @@ function need(env: Env, key: string) {
   return value;
 }
 export function medusaEnvironment(env: Env) {
+  if (env.NODE_TLS_REJECT_UNAUTHORIZED && env.NODE_TLS_REJECT_UNAUTHORIZED !== "1") throw new Error("TLS verification override forbidden");
   if (env.M2_ENV !== "local" && env.M2_ENV !== "staging") throw new Error("M2_ENV must be local or staging");
   for (const key of Object.keys(env)) {
     if (key.startsWith("VYNVORI_") && env[key] !== undefined && env[key] !== "false") throw new Error("All operational features must remain disabled");

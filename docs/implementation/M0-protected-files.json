@@ -671,7 +671,10 @@
     },
     {
       "path": "docs/technical/20-acceptance-matrix.md",
-      "sha256": "311a115f5fff3f5550f83b8c1bc20113196c813dc31244cd338b127d0545ff57"
+      "sha256": "136c0d48a5104e3266aaf7b15c8418dff44f602de44897d2ad47bd199b22cdee",
+      "previousBaselineSha256": "311a115f5fff3f5550f83b8c1bc20113196c813dc31244cd338b127d0545ff57",
+      "gitBlobSha256": "915642470e25a180086b7997986eca3db38b9485a2966b85fc5b349b479b99da",
+      "changeReason": "M2 private staging BLOCKED status note only; no acceptance gate promoted"
     },
     {
       "path": "docs/technical/21-studio-ux-screen-contract.md",
