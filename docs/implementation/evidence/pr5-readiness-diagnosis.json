@@ -1,0 +1,105 @@
+{
+  "reviewedHead": "ed4c734cd22614dc5dc0c45a5ecd8ef8fecb7ae4",
+  "originalLinuxHttpMs": 8004.688,
+  "originalJob": "https://github.com/TheCrimsonMarket/vynvori/actions/runs/38980223526/job/117239083367",
+  "localLinuxReplay": [
+    {
+      "stage": "acquireConnection",
+      "phase": "start",
+      "ms": 0.23
+    },
+    {
+      "stage": "acquireRawConnection",
+      "phase": "start",
+      "ms": 1.46
+    },
+    {
+      "stage": "acquireRawConnection",
+      "phase": "end",
+      "ms": 19.42
+    },
+    {
+      "stage": "acquireConnection",
+      "phase": "end",
+      "ms": 20.29
+    },
+    {
+      "stage": "_query",
+      "phase": "start",
+      "ms": 21.01
+    },
+    {
+      "stage": "_query",
+      "phase": "end",
+      "ms": 22.13
+    },
+    {
+      "stage": "releaseConnection",
+      "phase": "start",
+      "ms": 22.47
+    },
+    {
+      "stage": "releaseConnection",
+      "phase": "end",
+      "ms": 22.62
+    },
+    {
+      "actualAcquireTimeoutMs": 60000
+    },
+    {
+      "stage": "acquireConnection",
+      "phase": "start",
+      "ms": 0.17
+    },
+    {
+      "stage": "acquireConnection",
+      "phase": "end",
+      "ms": 0.38
+    },
+    {
+      "stage": "_query",
+      "phase": "start",
+      "ms": 0.47
+    },
+    {
+      "stage": "cancelQuery",
+      "phase": "start",
+      "ms": 3006.42
+    },
+    {
+      "stage": "acquireRawConnection",
+      "phase": "start",
+      "ms": 3006.88
+    },
+    {
+      "stage": "acquireRawConnection",
+      "phase": "end",
+      "ms": 8019.9
+    },
+    {
+      "stage": "cancelQuery",
+      "phase": "end",
+      "ms": 8020.04
+    },
+    {
+      "stage": "releaseConnection",
+      "phase": "start",
+      "ms": 8020.15
+    },
+    {
+      "stage": "releaseConnection",
+      "phase": "end",
+      "ms": 8020.23
+    },
+    {
+      "stage": "readiness",
+      "phase": "rejected",
+      "ms": 8020.27
+    },
+    {
+      "stage": "_query",
+      "phase": "end",
+      "ms": 8021.29
+    }
+  ]
+}

@@ -1,0 +1,148 @@
+{
+  "image": "vynvori-medusa-local:readiness",
+  "imageIdentity": {
+    "id": "sha256:c39b83dda91a2da944d75a0f7fd2a15cebfd829e8ab309048697385168c6e561",
+    "descriptor": {
+      "mediaType": "application/vnd.oci.image.index.v1+json",
+      "digest": "sha256:c39b83dda91a2da944d75a0f7fd2a15cebfd829e8ab309048697385168c6e561",
+      "size": 856
+    },
+    "repoDigests": [
+      "vynvori-medusa-local@sha256:c39b83dda91a2da944d75a0f7fd2a15cebfd829e8ab309048697385168c6e561"
+    ]
+  },
+  "coldStartMs": 10980,
+  "requests": 40,
+  "concurrency": 8,
+  "p95Ms": 27,
+  "samples": [
+    "250.2MiB / 2GiB | 0.02%",
+    "251.4MiB / 2GiB | 0.02%",
+    "251.6MiB / 2GiB | 0.02%",
+    "251.6MiB / 2GiB | 0.03%",
+    "251.6MiB / 2GiB | 0.01%"
+  ],
+  "outageMeasurements": [
+    {
+      "mode": "timeout",
+      "stages": {
+        "connectStartMs": 1.02,
+        "connectedMs": 6.15,
+        "queryStartMs": 193.25,
+        "querySettledMs": 2207.94,
+        "closeStartMs": 2208.21,
+        "socketClosedMs": 2209.6
+      },
+      "socketsClosed": 1,
+      "cancellationConnections": 0
+    },
+    {
+      "mode": "abort",
+      "stages": {
+        "connectStartMs": 0.82,
+        "connectedMs": 5.48,
+        "queryStartMs": 176.9,
+        "closeStartMs": 284.71,
+        "socketClosedMs": 285.65,
+        "querySettledMs": 285.7
+      },
+      "socketsClosed": 1,
+      "cancellationConnections": 0
+    },
+    {
+      "mode": "http-paused-connect",
+      "httpMs": 952,
+      "status": 503
+    },
+    {
+      "mode": "http-paused-connect",
+      "httpMs": 944,
+      "status": 503
+    },
+    {
+      "mode": "http-paused-connect",
+      "httpMs": 949,
+      "status": 503
+    }
+  ],
+  "cpuLimit": 1,
+  "memoryLimit": "2g",
+  "tls": "trusted/untrusted/wrong-host",
+  "result": "PASS_LOCAL_SYNTHETIC_ONLY",
+  "validationDate": "2026-10-17 Asia/Dhaka",
+  "reviewedHead": "04de5d2846f1b821a41de9a1a94926d686375e57",
+  "scannedManifest": "sha256:22046eb34e152aed183ec11c83ac0765be1f57a1672b6216c12237bb70615cfc",
+  "runtimeChecks": {
+    "node": "v22.23.3",
+    "uid": 65532,
+    "architecture": "x64",
+    "versions": {
+      "node": "22.23.3",
+      "acorn": "8.16.0",
+      "ada": "2.9.2",
+      "amaro": "1.1.8",
+      "ares": "1.34.8",
+      "brotli": "1.1.0",
+      "cjs_module_lexer": "2.2.0",
+      "cldr": "48.0",
+      "icu": "78.3",
+      "llhttp": "9.4.3",
+      "modules": "127",
+      "napi": "10",
+      "nbytes": "0.1.3",
+      "ncrypto": "0.0.1",
+      "nghttp2": "1.69.0",
+      "openssl": "3.5.8",
+      "simdjson": "4.5.0",
+      "simdutf": "6.4.2",
+      "sqlite": "3.51.3",
+      "tz": "2026c",
+      "undici": "6.28.1",
+      "unicode": "17.0",
+      "uv": "1.51.0",
+      "uvwasi": "0.0.23",
+      "v8": "12.4.254.21-node.57",
+      "zlib": "1.3.1-e00f703",
+      "zstd": "1.5.7"
+    },
+    "glibc": "2.41",
+    "nodeBinarySha256": "fde6a4bf8d0562f7751d1a2d6cb9b417c4cfe107bbcb0aa3e9a24e125e348f48",
+    "compiledTreeSha256": "ff96a64fa7dd453c06cbe10aae5211bebcfddfa32e8ea7abec143784ecd749f4",
+    "runtimeExports": [
+      "@medusajs/framework/pg",
+      "@medusajs/cli/cli.js",
+      "@medusajs/medusa"
+    ],
+    "nativeBindings": [
+      "lightningcss",
+      "@rollup/rollup-linux-x64-gnu",
+      "@napi-rs/lzma-linux-x64-gnu",
+      "msgpackr-extract"
+    ],
+    "absentTooling": [
+      "/usr/local/lib/node_modules/npm",
+      "/usr/local/lib/node_modules/corepack",
+      "/opt/yarn-v1.22.22",
+      "/usr/local/bin/npm",
+      "/usr/local/bin/npx",
+      "/usr/local/bin/yarn",
+      "/usr/bin/perl",
+      "/usr/lib/x86_64-linux-gnu/perl-base",
+      "/usr/bin/minizip",
+      "/usr/lib/x86_64-linux-gnu/libminizip.so.1",
+      "/bin/sh",
+      "/usr/bin/apt",
+      "/usr/bin/dpkg"
+    ],
+    "criticalChecks": {
+      "perlPresent": false,
+      "minizipPresent": false,
+      "minizipExportNamePresent": false,
+      "zlibVersion": "1:1.3.dfsg+really1.3.1-1+b1",
+      "zlibPath": "/usr/lib/x86_64-linux-gnu/libz.so.1.3.1"
+    },
+    "os": "PRETTY_NAME=\"Distroless\"\nNAME=\"Debian GNU/Linux\"\nID=\"debian\"\nVERSION_ID=\"13\"\nVERSION=\"Debian GNU/Linux 13 (trixie)\"\nHOME_URL=\"https://github.com/GoogleContainerTools/distroless\"\nSUPPORT_URL=\"https://github.com/GoogleContainerTools/distroless/blob/master/README.md\"\nBUG_REPORT_URL=\"https://github.com/GoogleContainerTools/distroless/issues/new\"\n"
+  },
+  "securityGate": "REJECTED_SECURITY_BOUNDARY_CHANGED",
+  "remoteDeployment": "UNAUTHORIZED_REMOTE_CONTEXT_REFUSED"
+}

@@ -1,0 +1,26 @@
+name: Medusa container readiness
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  local-container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.3'
+      - run: docker build -f apps/medusa/Dockerfile -t vynvori-medusa-local:readiness .
+      - run: node scripts/test-medusa-container.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: medusa-local-container-evidence
+          path: |
+            /tmp/VYNVORI-medusa-container-*/*.log
+            /tmp/VYNVORI-medusa-container-*/*.json
+          if-no-files-found: warn
+          retention-days: 14
+      # Deliberately no registry login, push, cloud credentials or deployment.

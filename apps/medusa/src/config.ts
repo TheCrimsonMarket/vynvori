@@ -17,7 +17,18 @@ export function medusaEnvironment(env: Env) {
   if (!["postgres:", "postgresql:"].includes(database.protocol) || !database.username || !database.password ||
       decodeURIComponent(database.pathname.slice(1)) !== name || /creative/i.test(name)) throw new Error("Medusa database isolation failed");
   if (env.M2_ENV === "local" && (!["127.0.0.1", "localhost"].includes(database.hostname) || name !== "vynvori_medusa_staging")) throw new Error("Local Medusa database must be isolated on loopback");
-  if (env.M2_ENV === "staging" && (database.hostname !== need(env, "M2_MEDUSA_DATABASE_HOST") || database.searchParams.get("sslmode") !== "verify-full")) throw new Error("Staging Medusa requires pinned host and verified TLS");
+  const databaseRole = env.M2_AUTHORIZE_MEDUSA_MIGRATION === "vynvori_medusa_staging"
+    ? "vynvori_medusa_migrator" : "vynvori_medusa_app";
+  if (env.M2_ENV === "staging" && (database.hostname !== need(env, "M2_MEDUSA_DATABASE_HOST") ||
+      !database.hostname.endsWith(".neon.tech") || database.hostname.includes("-pooler.") ||
+      name !== "vynvori_medusa_staging" || decodeURIComponent(database.username) !== databaseRole ||
+      database.searchParams.get("sslmode") !== "verify-full")) throw new Error("Staging Medusa requires pinned direct Neon host, isolated role and verified TLS");
+  // pg connection-string SSL options replace an explicit SSL object. Validate then
+  // strip them so Medusa/Knex and native migrations receive the same TLS policy.
+  for (const key of database.searchParams.keys()) {
+    if (key !== "sslmode") throw new Error("Unsupported Medusa database URL option");
+  }
+  database.search = "";
   if (env.M2_CREATIVE_DATABASE_URL) {
     let other: URL;
     try { other = new URL(env.M2_CREATIVE_DATABASE_URL); } catch { throw new Error("Invalid peer database configuration"); }
@@ -37,7 +48,14 @@ export function medusaEnvironment(env: Env) {
   const cookieSecret = need(env, "M2_MEDUSA_COOKIE_SECRET");
   if (jwtSecret.length < 32 || cookieSecret.length < 32 || jwtSecret === cookieSecret) throw new Error("Separate strong Medusa secrets required");
   return {
+    workerMode: "shared" as const,
     databaseUrl: database.toString(),
+    databaseDriverOptions: {
+      connection: { ssl: env.M2_ENV === "staging" ? { rejectUnauthorized: true } : false, connectionTimeoutMillis: 5000 },
+      // The pinned Medusa loader forwards only these pool settings. Readiness
+      // owns a separate bounded pg connection; do not claim a shared acquire cap.
+      pool: { min: 0, max: 5, idleTimeoutMillis: 10000 },
+    },
     http: {
       storeCors: origins("M2_MEDUSA_STORE_CORS"), adminCors: origins("M2_MEDUSA_ADMIN_CORS"), authCors: origins("M2_MEDUSA_AUTH_CORS"),
       jwtSecret, cookieSecret,
