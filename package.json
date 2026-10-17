@@ -19,7 +19,7 @@
     "lint": "eslint apps/web apps/medusa packages/shared packages/db packages/commerce services/image-processing scripts",
     "typecheck": "npm run typecheck --workspace @vynvori/shared && npm run typecheck --workspace @vynvori/web && npm run typecheck --workspace @vynvori/design-reference && npm run typecheck:m2",
     "test": "npm run test:m0 && npm run test:reference && npm run test:m2 && npm run test:security-policy && npm run test:staging",
-    "test:staging": "node --test scripts/tests/medusa-staging.test.mjs",
+    "test:staging": "node --test scripts/tests/medusa-staging.test.mjs scripts/tests/medusa-runtime-grants.test.mjs",
     "test:m0": "node --conditions=react-server --import tsx --test packages/shared/tests/config.test.ts apps/web/tests/health.test.ts",
     "test:reference": "npm run test --workspace @vynvori/design-reference && npm run test:legacy --workspace @vynvori/design-reference",
     "test:browser:web": "node scripts/browser-web.mjs",

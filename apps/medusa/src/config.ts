@@ -19,7 +19,7 @@ export function medusaEnvironment(env: Env) {
       decodeURIComponent(database.pathname.slice(1)) !== name || /creative/i.test(name)) throw new Error("Medusa database isolation failed");
   if (env.M2_ENV === "local" && (!["127.0.0.1", "localhost"].includes(database.hostname) || name !== "vynvori_medusa_staging")) throw new Error("Local Medusa database must be isolated on loopback");
   const databaseRole = env.M2_AUTHORIZE_MEDUSA_MIGRATION === "vynvori_medusa_staging"
-    ? "vynvori_medusa_migrator" : "vynvori_medusa_app";
+    ? "vynvori_medusa_migration_scoped" : "vynvori_medusa_runtime_scoped";
   if (env.M2_ENV === "staging" && (database.hostname !== need(env, "M2_MEDUSA_DATABASE_HOST") ||
       !database.hostname.endsWith(".neon.tech") || database.hostname.includes("-pooler.") ||
       name !== "vynvori_medusa_staging" || decodeURIComponent(database.username) !== databaseRole ||

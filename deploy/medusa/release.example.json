@@ -6,6 +6,10 @@
   "approvalId": "m2-private-synthetic-staging-v1",
   "image": "us-east1-docker.pkg.dev/lucky-little-devil/vynvori-staging-images/medusa@sha256:REPLACE_APPROVED_DIGEST",
   "databaseHost": "REPLACE_VERIFIED_DIRECT_NEON_HOST",
+  "databaseRoles": {
+    "runtime": "vynvori_medusa_runtime_scoped",
+    "migration": "vynvori_medusa_migration_scoped"
+  },
   "operatorHost": "REPLACE_VERIFIED_OPERATOR_HOST",
   "configurationSha256": "REPLACE_REVIEWED_CONFIGURATION_SHA256",
   "secretVersions": {

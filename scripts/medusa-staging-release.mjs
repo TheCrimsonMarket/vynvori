@@ -11,6 +11,8 @@ const canonical = value => JSON.stringify(value, (_, entry) => entry && typeof e
   ? Object.fromEntries(Object.entries(entry).sort(([a], [b]) => a.localeCompare(b))) : entry);
 export const hash = value => createHash("sha256").update(canonical(value)).digest("hex");
 export function validateConfiguration(service, release, template) {
+  check(release.databaseRoles?.runtime === "vynvori_medusa_runtime_scoped" &&
+    release.databaseRoles?.migration === "vynvori_medusa_migration_scoped", "SCOPED_DATABASE_ROLES_REQUIRED");
   check(release.project === target.project && release.region === target.region &&
     /^[a-f0-9]{40}$/.test(release.sourceCommit ?? "") &&
     new RegExp(`^${target.registry.replaceAll(".", "\\.")}@sha256:[a-f0-9]{64}$`).test(release.image ?? ""), "RELEASE_TARGET_OR_DIGEST_INVALID");

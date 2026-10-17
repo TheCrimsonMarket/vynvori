@@ -12,6 +12,7 @@ const approval = { ...await bundledPolicy(), approved: true, approvedBy: "synthe
 const env = { K_SERVICE: target.service, K_CONFIGURATION: target.service, K_REVISION: `${target.service}-synthetic`,
   NODE_ENV: "production", M2_ENV: "staging", M2_REMOTE_STAGING_APPROVAL: approval.id, M2_REMOTE_SOURCE_COMMIT: approval.sourceCommit };
 const release = { project: target.project, region: target.region, sourceCommit: approval.sourceCommit, approvalId: approval.id,
+  databaseRoles: { runtime: "vynvori_medusa_runtime_scoped", migration: "vynvori_medusa_migration_scoped" },
   image: `${target.registry}@sha256:${"b".repeat(64)}`, databaseHost: "ep-synthetic.us-east-1.aws.neon.tech", operatorHost: "operator.example.com",
   secretVersions: { "vynvori-medusa-database-url": "1", "vynvori-medusa-jwt-secret": "2", "vynvori-medusa-cookie-secret": "3" } };
 let yaml = JSON.stringify(template).replaceAll("REPLACE_REVIEWED_DIGEST", "b".repeat(64)).replaceAll("REPLACE_REVIEWED_SOURCE_COMMIT", approval.sourceCommit)
@@ -87,6 +88,8 @@ test("exact resolved config, secret versions, image digest and IAM are independe
     assert.throws(() => validateConfiguration(changed, release, template));
   }
   for (const patch of [{ project: "other" }, { region: "us-central1" }, { image: `${target.registry}:latest` },
+    { databaseRoles: undefined }, { databaseRoles: { runtime: "vynvori_medusa_app", migration: "vynvori_medusa_migration_scoped" } },
+    { databaseRoles: { runtime: "vynvori_medusa_runtime_scoped", migration: "vynvori_medusa_migrator" } },
     { databaseHost: release.databaseHost.replace("ep-synthetic.", "ep-synthetic-pooler.") }, { secretVersions: {} }]) {
     assert.throws(() => validateConfiguration(service, { ...release, ...patch }, template));
   }

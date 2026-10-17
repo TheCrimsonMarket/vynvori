@@ -6,6 +6,7 @@ import { appendFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import assert from "node:assert/strict";
+import { runtimeGrantProposal } from "./medusa-runtime-grants.mjs";
 const image = process.env.MEDUSA_TEST_IMAGE || "vynvori-medusa-local:readiness";
 const id = `vynvori-medusa-${randomBytes(5).toString("hex")}`;
 const db = `${id}-pg`;
@@ -14,6 +15,8 @@ const port = 19001;
 const evidence = await fs.mkdtemp(path.join(os.tmpdir(), "VYNVORI-medusa-container-"));
 const envFile = path.join(evidence, "synthetic.env");
 const password = randomBytes(24).toString("hex");
+const runtimePassword = randomBytes(24).toString("hex");
+const migrationPassword = randomBytes(24).toString("hex");
 const jwt = randomBytes(32).toString("hex");
 const cookie = randomBytes(32).toString("hex");
 const userPassword = randomBytes(24).toString("hex");
@@ -33,7 +36,7 @@ function docker(args, timeout = 180000) {
   }
 }
 function redact(text) {
-  for (const secret of [...secretsForRoles, databaseUrl, password, jwt, cookie, userPassword]) text = text.split(secret).join("[REDACTED]");
+  for (const secret of [...secretsForRoles, databaseUrl, password, runtimePassword, migrationPassword, jwt, cookie, userPassword]) text = text.split(secret).join("[REDACTED]");
   return text;
 }
 async function request(route, options = {}) {
@@ -137,33 +140,54 @@ try {
   assert.throws(() => docker([...runBase, image, "migrate"]), "Migration must require explicit authorization");
   // Disposable PostgreSQL only: establish DDL ownership separately from runtime.
   const sql = statement => docker(["exec", db, "psql", "-U", "synthetic", "-d", "vynvori_medusa_staging", "-v", "ON_ERROR_STOP=1", "-c", statement]);
-  sql(`CREATE ROLE vynvori_medusa_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '${password}';
-    CREATE ROLE vynvori_medusa_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '${password}';
+  const query = statement => docker(["exec", db, "psql", "-U", "synthetic", "-d", "vynvori_medusa_staging", "-At", "-v", "ON_ERROR_STOP=1", "-c", statement]);
+  sql(`CREATE ROLE vynvori_medusa_migration_scoped LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '${migrationPassword}';
+    CREATE ROLE vynvori_medusa_runtime_scoped LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '${runtimePassword}';
     REVOKE ALL ON DATABASE vynvori_medusa_staging FROM PUBLIC;
-    GRANT CONNECT ON DATABASE vynvori_medusa_staging TO vynvori_medusa_migrator, vynvori_medusa_app;
+    GRANT CONNECT ON DATABASE vynvori_medusa_staging TO vynvori_medusa_migration_scoped, vynvori_medusa_runtime_scoped;
     REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-    GRANT USAGE, CREATE ON SCHEMA public TO vynvori_medusa_migrator;
-    GRANT USAGE ON SCHEMA public TO vynvori_medusa_app;`);
-  const migrationUrl = databaseUrl.replace("postgres://synthetic:", "postgres://vynvori_medusa_migrator:");
-  secretsForRoles.push(migrationUrl, databaseUrl.replace("postgres://synthetic:", "postgres://vynvori_medusa_app:"));
+    GRANT USAGE, CREATE ON SCHEMA public TO vynvori_medusa_migration_scoped;
+    GRANT USAGE ON SCHEMA public TO vynvori_medusa_runtime_scoped;`);
+  const migrationUrl = databaseUrl.replace(`synthetic:${password}@`, `vynvori_medusa_migration_scoped:${migrationPassword}@`);
+  const runtimeUrl = databaseUrl.replace(`synthetic:${password}@`, `vynvori_medusa_runtime_scoped:${runtimePassword}@`);
+  secretsForRoles.push(migrationUrl, runtimeUrl);
   for (let replay = 0; replay < 2; replay++) {
     const output = docker([...runBase, "-e", `M2_MEDUSA_DATABASE_URL=${migrationUrl}`, "-e", "M2_AUTHORIZE_MEDUSA_MIGRATION=vynvori_medusa_staging", image, "migrate"], 600000);
     await fs.writeFile(path.join(evidence, `migration-${replay}.log`), redact(output));
   }
-  sql(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO vynvori_medusa_app;
-    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO vynvori_medusa_app;
-    ALTER DEFAULT PRIVILEGES FOR ROLE vynvori_medusa_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO vynvori_medusa_app;
-    ALTER DEFAULT PRIVILEGES FOR ROLE vynvori_medusa_migrator IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO vynvori_medusa_app;`);
+  // Derive this disposable fixture's object list; production must independently
+  // review actual objects and per-object operation needs before any grant.
+  const catalog = JSON.parse(docker(["exec", db, "psql", "-U", "synthetic", "-d", "vynvori_medusa_staging", "-At", "-v", "ON_ERROR_STOP=1", "-c", `
+    SELECT coalesce(json_agg(json_build_object('schema', n.nspname, 'name', c.relname, 'owner', pg_get_userbyid(c.relowner),
+      'kind', CASE WHEN c.relkind='S' THEN 'sequence' ELSE 'table' END,
+      'table', (SELECT parent.relname FROM pg_depend d JOIN pg_class parent ON parent.oid=d.refobjid
+        WHERE d.classid='pg_class'::regclass AND d.objid=c.oid AND d.refclassid='pg_class'::regclass
+          AND d.deptype IN ('a','i') LIMIT 1)) ORDER BY c.relname), '[]'::json)
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='public' AND c.relkind IN ('r','p','S')
+      AND pg_get_userbyid(c.relowner)='vynvori_medusa_migration_scoped';`]));
+  const fixturePlan = catalog.filter(o => o.kind === "table" || !/migration/i.test(o.name) && o.table && !/migration/i.test(o.table))
+    .map(o => ({ ...o, privileges: o.kind === "sequence" ? ["USAGE"] : /migration/i.test(o.name) ? ["SELECT"] : ["SELECT", "INSERT", "UPDATE", "DELETE"],
+      reason: "Disposable synthetic native module fixture; production grants require independent catalog and operation review" }));
+  const grantSql = runtimeGrantProposal(fixturePlan);
+  await fs.writeFile(path.join(evidence, "runtime-grant-plan.json"), JSON.stringify(fixturePlan, null, 2));
+  await fs.writeFile(path.join(evidence, "runtime-grants.sql"), grantSql);
+  sql(grantSql);
   const migrationTables = sql("SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE '%migration%' ORDER BY tablename");
   await fs.writeFile(path.join(evidence, "migration-tables.log"), migrationTables);
-  sql(`DO $block$ DECLARE item record; BEGIN
-    FOR item IN SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE '%migration%' LOOP
-      EXECUTE format('REVOKE INSERT, UPDATE, DELETE ON TABLE public.%I FROM vynvori_medusa_app', item.tablename);
-    END LOOP; END $block$;`);
+  assert.equal(query(`SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename LIKE '%migration%'
+    AND (has_table_privilege('vynvori_medusa_runtime_scoped', format('public.%I', tablename), 'INSERT')
+      OR has_table_privilege('vynvori_medusa_runtime_scoped', format('public.%I', tablename), 'UPDATE')
+      OR has_table_privilege('vynvori_medusa_runtime_scoped', format('public.%I', tablename), 'DELETE'))`), "0");
+  assert.equal(query(`SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='public' AND c.relkind='S' AND c.relname LIKE '%migration%'
+      AND (has_sequence_privilege('vynvori_medusa_runtime_scoped', c.oid, 'USAGE')
+        OR has_sequence_privilege('vynvori_medusa_runtime_scoped', c.oid, 'SELECT')
+        OR has_sequence_privilege('vynvori_medusa_runtime_scoped', c.oid, 'UPDATE'))`), "0");
   for (const deniedSql of ["CREATE TABLE public.must_not_exist(id int)", "CREATE SCHEMA must_not_exist", "CREATE TEMP TABLE must_not_exist(id int)", "TRUNCATE public.store"]) {
-    assert.throws(() => docker(["exec", db, "psql", "-U", "vynvori_medusa_app", "-d", "vynvori_medusa_staging", "-v", "ON_ERROR_STOP=1", "-c", deniedSql]), "Runtime DDL/TEMP/TRUNCATE must be denied");
+    assert.throws(() => docker(["exec", db, "psql", "-U", "vynvori_medusa_runtime_scoped", "-d", "vynvori_medusa_staging", "-v", "ON_ERROR_STOP=1", "-c", deniedSql]), "Runtime DDL/TEMP/TRUNCATE must be denied");
   }
-  env.M2_MEDUSA_DATABASE_URL = databaseUrl.replace("postgres://synthetic:", "postgres://vynvori_medusa_app:");
+  env.M2_MEDUSA_DATABASE_URL = runtimeUrl;
   await fs.writeFile(envFile, Object.entries(env).map(([key, value]) => `${key}=${value}`).join("\n"), { mode: 0o600 });
   docker([...runBase, "--entrypoint", "node", image, "/app/node_modules/@medusajs/cli/cli.js", "user", "--email", "synthetic@example.invalid", "--password", userPassword]);
   const started = Date.now();

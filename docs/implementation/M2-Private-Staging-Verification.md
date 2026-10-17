@@ -1,5 +1,7 @@
 # M2 private staging preparation — local verification
 
+Historical results for initial PR #6 commit `97f5c75045419af34967d40edac6f32a2003d1c8`. They do not validate the later scoped-login/per-object-grant changes. See [scoped-role follow-up review and current checks](M2-Scoped-Roles-Review.md); no migration harness was executed by the agent for that follow-up.
+
 2026-10-17, Asia/Dhaka. Base `1b99e23d7e47a82284ea5926e7b9ac0885092e46`; no deployment/migration/real credentials authorized or used. [Machine evidence](evidence/M2-private-staging-results.json), [exact source/configuration inputs](evidence/M2-staging-scope.json). Final implementation commit and GitHub CI links are recorded in the PR, avoiding self-referential commit hashes inside source evidence.
 
 | Check | Actual outcome |
