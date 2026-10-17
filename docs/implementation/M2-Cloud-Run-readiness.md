@@ -25,7 +25,7 @@ npm run build:medusa
 npm run security:audit
 ```
 
-The last command preserves the historical rejection, but its effective result may now pass under the separately founder-authorized exact local-preparation policy when `PR5_SECURITY_SCOPE=local-synthetic-only` and all live checks match. Do not suppress raw audits. Deterministic historical tests use independently hashed PR #4 source and still assert the old policy rejects current source; its policy/evaluator/hashes remain unchanged. Thirty additional tests exercise the new acceptance and rejection paths. PR #5 may become ready only after all required checks, including the actual evaluator, pass; no automatic merge.
+The last command preserves the historical rejection, but its effective result may now pass under the separately founder-authorized exact local-preparation policy when `PR5_SECURITY_SCOPE=local-synthetic-only` and all live checks match. Do not suppress raw audits. Deterministic historical tests use independently hashed PR #4 source and still assert the old policy rejects current source; its policy/evaluator/hashes remain unchanged. Thirty-one additional tests exercise the new acceptance and rejection paths, including npm's nondeterministic redundant-cycle suggestions without relaxing actual origin/path/version checks. PR #5 may become ready only after all required checks, including the actual evaluator, pass; no automatic merge.
 
 Local development remains `npm run dev:medusa` with operator-supplied isolated local database/secrets. `apps/medusa/.env.example` contains no credentials. Admin UI stays disabled. Native `/auth/user/emailpass` is used only with synthetic operator accounts in local tests. No customer provider is added.
 

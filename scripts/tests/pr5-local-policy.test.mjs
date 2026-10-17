@@ -99,6 +99,18 @@ test("esbuild exact path, version and advisory cannot borrow runtime acceptance"
   const audit = structuredClone(audits.rawAll); audit.vulnerabilities.esbuild.nodes = ["node_modules/esbuild"];
   rejected({ ...input, all: { ...input.all, stdout: JSON.stringify(audit) } }, "LOCAL_AUDIT_ADVISORY_OR_GRAPH_CHANGED");
 });
+test("npm redundant cycle/fix suggestions do not alter exact advisory origins or locked scope", () => {
+  const audit = structuredClone(audits.rawProduction);
+  const name = Object.keys(audit.vulnerabilities).find(key => typeof audit.vulnerabilities[key].fixAvailable === "object" && !audit.vulnerabilities[key].via.some(value => typeof value === "object"));
+  assert.ok(name);
+  audit.vulnerabilities[name].fixAvailable.name = "different-redundant-parent-suggestion";
+  const result = evaluateLocal({ ...input, production: { ...input.production, stdout: JSON.stringify(audit) } });
+  assert.equal(result.accepted, true, result.code);
+  audit.vulnerabilities.braces.fixAvailable = { name: "eslint-config-next", version: "14.2.35", isSemVerMajor: true };
+  assert.equal(evaluateLocal({ ...input, production: { ...input.production, stdout: JSON.stringify(audit) } }).accepted, true);
+  audit.vulnerabilities.braces.fixAvailable = { name: "braces", version: "3.0.4", isSemVerMajor: false };
+  rejected({ ...input, production: { ...input.production, stdout: JSON.stringify(audit) } }, "LOCAL_AUDIT_ADVISORY_OR_GRAPH_CHANGED");
+});
 test("unexpected image files, Node binary, base, configuration or incomplete evidence fail", () => {
   for (const [key, value] of [["inventory", {}], ["baseLayers", []], ["configuration", {}], ["archiveSha256", "missing"], ["imageId", "missing"], ["localEngineVerified", false], ["database", {}]]) rejected({ ...input, image: { ...input.image, [key]: value } });
 });

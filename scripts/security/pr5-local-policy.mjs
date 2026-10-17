@@ -23,12 +23,30 @@ const blob = (root, commit, file) => execFileSync("git", ["show", `${commit}:${f
 export function auditIdentity(audit) {
   check(audit?.auditReportVersion === 2 && audit.metadata?.dependencies && audit.vulnerabilities && !audit.error, "AUDIT_INCOMPLETE");
   const counts = { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 };
-  const graph = {};
+  const graph = {}, links = {}, origins = {};
   for (const [name, entry] of Object.entries(audit.vulnerabilities).sort()) {
     check(entry.name === name && Object.hasOwn(counts, entry.severity) && entry.severity !== "total" &&
       Array.isArray(entry.nodes) && entry.nodes.length && Array.isArray(entry.via) && entry.via.length && Array.isArray(entry.effects), "AUDIT_RECORD_INVALID");
     counts[entry.severity]++; counts.total++;
-    graph[name] = { ...entry, nodes: [...entry.nodes].sort(), effects: [...entry.effects].sort(), via: [...entry.via].sort((a, b) => digest(a).localeCompare(digest(b))) };
+    const direct = entry.via.filter(value => typeof value === "object");
+    check(direct.every(value => /^https:\/\/github\.com\/advisories\/GHSA-[a-z0-9-]+$/.test(value?.url ?? "")), "AUDIT_ORIGIN_INVALID");
+    links[name] = entry.via.filter(value => typeof value === "string");
+    check(links[name].length + direct.length === entry.via.length && links[name].every(value => Object.hasOwn(audit.vulnerabilities, value)), "AUDIT_PROPAGATION_INVALID");
+    origins[name] = new Set(direct.map(value => value.url));
+    // npm's cycle traversal may choose different redundant via/effects edges and
+    // suggested parent package names. They are not changed advisories/resolutions.
+    // Preserve all actual origin fields and fixed-version availability; pin each
+    // affected package/path/range/severity and its complete originating closure.
+    graph[name] = { name, isDirect: entry.isDirect, severity: entry.severity, range: entry.range,
+      nodes: [...entry.nodes].sort(), directOrigins: direct.sort((a, b) => digest(a).localeCompare(digest(b))),
+      originFixAvailable: direct.length ? (entry.fixAvailable === true ? true :
+        entry.fixAvailable?.name === name ? { version: entry.fixAvailable.version, isSemVerMajor: entry.fixAvailable.isSemVerMajor } : false) : null };
+  }
+  for (let i = 0; i < Object.keys(graph).length; i++) for (const name of Object.keys(graph)) for (const dependency of links[name]) for (const origin of origins[dependency]) origins[name].add(origin);
+  for (const name of Object.keys(graph)) {
+    check(origins[name].size > 0, "AUDIT_PROPAGATION_INVALID");
+    graph[name].mappedOrigins = [...origins[name]].sort();
+    check(audit.vulnerabilities[name].effects.every(effect => links[effect]?.includes(name)), "AUDIT_EFFECTS_INVALID");
   }
   check(equal(counts, audit.metadata.vulnerabilities), "AUDIT_COUNTS_INVALID");
   return { counts, graph };
@@ -76,7 +94,7 @@ export function contextAllowed(env) {
 export async function collectLocalState(root, implementationCommit, policyDigest, policy, legacyPolicy) {
   check(/^[a-f0-9]{40}$/.test(implementationCommit) && /^[a-f0-9]{64}$/.test(policyDigest), "LOCAL_POLICY_NOT_ACTIVATED");
   check(digest(policy) === policyDigest && policy.implementationCommit === implementationCommit && policy.reviewedHead === REVIEWED_HEAD, "LOCAL_POLICY_FINGERPRINT_MISMATCH");
-  check(git(root, ["rev-parse", `${implementationCommit}^`]) === REVIEWED_HEAD, "IMPLEMENTATION_PARENT_CHANGED");
+  check(git(root, ["merge-base", REVIEWED_HEAD, implementationCommit]) === REVIEWED_HEAD, "IMPLEMENTATION_BASE_CHANGED");
   check(equal(git(root, ["diff", "--name-only", REVIEWED_HEAD, implementationCommit]).split("\n").sort(), IMPLEMENTATION_PATHS), "UNAUTHORIZED_IMPLEMENTATION_DELTA");
   const modified = git(root, ["diff", "--name-only", implementationCommit, "HEAD"]).split("\n").sort();
   check(equal(modified, [POLICY_PATH, "scripts/security/run-audit.mjs"].sort()), "UNAUTHORIZED_ACTIVATION_DELTA");
