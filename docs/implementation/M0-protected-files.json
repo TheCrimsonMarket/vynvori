@@ -671,7 +671,7 @@
     },
     {
       "path": "docs/technical/20-acceptance-matrix.md",
-      "sha256": "666a57c751392e9fd1c74b29ac2074634a9cec99a47f14715b0290a14f353a92",
+      "sha256": "d028007080ff78b7aee631db17b41c4c5f932acaed415fc24735d73916c61717",
       "previousBaselineSha256": "311a115f5fff3f5550f83b8c1bc20113196c813dc31244cd338b127d0545ff57",
       "gitBlobSha256": "666a57c751392e9fd1c74b29ac2074634a9cec99a47f14715b0290a14f353a92",
       "changeReason": "2026-10-18 authorized M2 synthetic infrastructure PASSED status with exact implementation CI receipt; ACC requirement rows remain unchanged; prior hashes preserved",
@@ -681,7 +681,8 @@
           "gitBlobSha256": "915642470e25a180086b7997986eca3db38b9485a2966b85fc5b349b479b99da",
           "changeReason": "M2 private staging BLOCKED status note only; no acceptance gate promoted"
         }
-      ]
+      ],
+      "checkoutHashEncoding": "sha256 is exact CRLF Git checkout bytes; gitBlobSha256 is exact LF Git blob bytes; no arbitrary normalization"
     },
     {
       "path": "docs/technical/21-studio-ux-screen-contract.md",
