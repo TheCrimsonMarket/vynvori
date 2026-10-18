@@ -3,8 +3,14 @@ import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { databaseUrl, type InfraEnv } from "@vynvori/shared/infrastructure";
 import * as schema from "./schema";
+import { creativeMigrationUrl } from "./migration-config";
 export function connectDatabase(env: InfraEnv) {
-  const url = databaseUrl(env, "CREATIVE");
+  return connection(databaseUrl(env, "CREATIVE"));
+}
+export function connectMigrationDatabase(env: InfraEnv) {
+  return connection(creativeMigrationUrl(env));
+}
+function connection(url: URL) {
   const pool = new Pool({ connectionString: url.toString(), max: 3, connectionTimeoutMillis: 4000, idleTimeoutMillis: 10000, statement_timeout: 5000, query_timeout: 6000, application_name: "vynvori-m2" });
   return { pool, db: drizzle(pool, { schema }), close: () => pool.end(),
     async ready() {

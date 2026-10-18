@@ -671,10 +671,17 @@
     },
     {
       "path": "docs/technical/20-acceptance-matrix.md",
-      "sha256": "136c0d48a5104e3266aaf7b15c8418dff44f602de44897d2ad47bd199b22cdee",
+      "sha256": "666a57c751392e9fd1c74b29ac2074634a9cec99a47f14715b0290a14f353a92",
       "previousBaselineSha256": "311a115f5fff3f5550f83b8c1bc20113196c813dc31244cd338b127d0545ff57",
-      "gitBlobSha256": "915642470e25a180086b7997986eca3db38b9485a2966b85fc5b349b479b99da",
-      "changeReason": "M2 private staging BLOCKED status note only; no acceptance gate promoted"
+      "gitBlobSha256": "666a57c751392e9fd1c74b29ac2074634a9cec99a47f14715b0290a14f353a92",
+      "changeReason": "2026-10-18 authorized M2 synthetic infrastructure PASSED status with exact implementation CI receipt; ACC requirement rows remain unchanged; prior hashes preserved",
+      "acceptedUpdateHistory": [
+        {
+          "sha256": "136c0d48a5104e3266aaf7b15c8418dff44f602de44897d2ad47bd199b22cdee",
+          "gitBlobSha256": "915642470e25a180086b7997986eca3db38b9485a2966b85fc5b349b479b99da",
+          "changeReason": "M2 private staging BLOCKED status note only; no acceptance gate promoted"
+        }
+      ]
     },
     {
       "path": "docs/technical/21-studio-ux-screen-contract.md",

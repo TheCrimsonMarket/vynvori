@@ -1,0 +1,72 @@
+{
+  "checkedAt": "2026-10-18T05:23:30.455Z",
+  "status": "PASS",
+  "checks": [
+    {
+      "version": 1,
+      "service": "medusa",
+      "status": "ready",
+      "code": "OK"
+    },
+    {
+      "version": 1,
+      "service": "database",
+      "status": "ready",
+      "code": "OK"
+    },
+    {
+      "version": 1,
+      "service": "storage",
+      "status": "ready",
+      "code": "OK"
+    },
+    {
+      "version": 1,
+      "service": "processing",
+      "status": "ready",
+      "code": "OK"
+    }
+  ],
+  "medusaTransport": "Existing adapter with caller-supplied authenticated fetch transport; bare default adapter does not mint GCP tokens",
+  "storage": {
+    "proof": {
+      "checkedAt": "2026-10-18T05:23:25.764Z",
+      "account": "e95858a5212c8d7f848a29e9c8332c43",
+      "bucket": "vynvori-staging-assets",
+      "jurisdiction": "us",
+      "endpoint": "https://e95858a5212c8d7f848a29e9c8332c43.us.r2.cloudflarestorage.com",
+      "bucketCreatedAt": "2026-10-15T05:06:15.263Z",
+      "location": "WNAM",
+      "bucketId": "9bed88391a124b84b474af423c4f572e",
+      "publicDevelopmentEnabled": false,
+      "customDomains": [],
+      "lifecycleRules": [
+        {
+          "id": "Default Multipart Abort Rule",
+          "enabled": true,
+          "conditions": {},
+          "abortMultipartUploadsTransition": {
+            "condition": {
+              "type": "Age",
+              "maxAge": 604800
+            }
+          }
+        }
+      ]
+    },
+    "journal": "C:\\Users\\User\\AppData\\Local\\Temp\\VYNVORI-R2-Ncl1k4\\journal.json",
+    "result": {
+      "version": 1,
+      "account": "e95858a5212c8d7f848a29e9c8332c43",
+      "bucket": "vynvori-staging-assets",
+      "jurisdiction": "us",
+      "runId": "665fdf89-f976-4a75-a75c-bad0bbbd0e51",
+      "key": "private/staging/synthetic/v1/665fdf89-f976-4a75-a75c-bad0bbbd0e51/e25ee002218606bc42b55e38c01ece666dec1518c891550398483cb8aecc199e.png",
+      "sha256": "e25ee002218606bc42b55e38c01ece666dec1518c891550398483cb8aecc199e",
+      "phase": "COMPLETE",
+      "putAttempts": 1,
+      "deleteAttempts": 1,
+      "verified": true
+    }
+  }
+}

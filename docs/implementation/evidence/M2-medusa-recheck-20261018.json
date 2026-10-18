@@ -1,0 +1,11 @@
+{
+  "checkedAt": "2026-10-18T05:10:36.862Z",
+  "service": "vynvori-medusa-staging",
+  "url": "https://vynvori-medusa-staging-srvptfc7ba-ue.a.run.app",
+  "revision": "vynvori-medusa-staging-00001-qqf",
+  "image": "us-east1-docker.pkg.dev/lucky-little-devil/vynvori-staging-images/medusa@sha256:c84b6291314cbfdb14b2193765891cd52ec6046b809d74bc42a1c67887c23f43",
+  "anonymousHttp": 403,
+  "authenticatedHttp": 200,
+  "publicPrincipals": [],
+  "sourceUnchanged": true
+}

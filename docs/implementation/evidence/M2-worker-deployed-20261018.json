@@ -1,0 +1,97 @@
+{
+  "checkedAt": "2026-10-18T05:21:52.343Z",
+  "status": "PASS",
+  "project": "lucky-little-devil",
+  "region": "us-east1",
+  "service": "vynvori-staging-image-processing",
+  "url": "https://vynvori-staging-image-processing-srvptfc7ba-ue.a.run.app",
+  "revision": "vynvori-staging-image-processing-00001-82q",
+  "image": "us-east1-docker.pkg.dev/lucky-little-devil/vynvori-staging-images/image-processing@sha256:73467ae3c71e71e6cfced0f368a6355c6dc4414c78348eaf0c63d4cbf89d502b",
+  "sa": "vynvori-image-worker@lucky-little-devil.iam.gserviceaccount.com",
+  "configurationSha256": "1f261a27b4350320b2a566e77bfcae8999ff411c5849599ecb2a89b6878fd7ed",
+  "resources": {
+    "min": 0,
+    "max": 1,
+    "cpu": 1,
+    "memoryMiB": 256,
+    "concurrency": 4,
+    "timeoutSeconds": 15
+  },
+  "secret": {
+    "name": "vynvori-processing-token",
+    "version": 1,
+    "perSecretRuntimeAccessor": true
+  },
+  "iam": {
+    "publicPrincipals": [],
+    "explicitOperatorInvoker": true,
+    "runtimeProjectRoles": [],
+    "medusaSecretBindings": false
+  },
+  "checks": [
+    {
+      "name": "anonymous-health",
+      "http": 403,
+      "passed": true
+    },
+    {
+      "name": "app-token-without-iam",
+      "http": 401,
+      "passed": true
+    },
+    {
+      "name": "iam-without-app-token",
+      "http": 401,
+      "passed": true
+    },
+    {
+      "name": "forged-app-token",
+      "http": 401,
+      "passed": true
+    },
+    {
+      "name": "authenticated-ready",
+      "http": 200,
+      "passed": true
+    },
+    {
+      "name": "dry-run",
+      "http": 200,
+      "passed": true
+    },
+    {
+      "name": "dry-run-replay",
+      "http": 200,
+      "passed": true
+    },
+    {
+      "name": "unknown-image-url",
+      "http": 400,
+      "passed": true
+    },
+    {
+      "name": "wrong-fixture",
+      "http": 400,
+      "passed": true
+    },
+    {
+      "name": "body-limit",
+      "http": 413,
+      "passed": true
+    },
+    {
+      "name": "content-type",
+      "http": 415,
+      "passed": true
+    }
+  ],
+  "syntheticResult": {
+    "version": 1,
+    "requestId": "12345678-1234-4123-8123-123456789abc",
+    "fixture": "m2-synthetic-v1",
+    "status": "dry_run",
+    "sha256": "838ca4c47c871598a66641e28fb1b6db92a6d31d54915c1e20268c332cd0e523",
+    "printed": false
+  },
+  "expiry": "2026-10-24T23:59:59Z"
+}

@@ -20,7 +20,7 @@ Preserve the external journal and lock after a crash. Establish that the previou
 
 Source rollback is limited to the reviewed R2 files in this change; preserve the other dirty Medusa work. It requires no cloud rollback because bucket configuration was not changed and all four created fixtures are absent. Preserve the original bucket. Do not remove `M2_R2_JURISDICTION=us` while continuing to use that bucket.
 
-Current control-plane authentication cannot read token-management metadata (403), so bucket-only Object Read & Write scope is not independently verified. Founder confirmation is requested; working credentials alone do not prove least privilege. No privileges or new credentials are requested by this implementation.
+Current control-plane authentication cannot read token-management metadata (403), so bucket-only Object Read & Write scope is not independently verified through the API. On 2026-10-18 (Asia/Dhaka), the founder confirmed the existing token is Object Read & Write scoped only to `vynvori-staging-assets` in account `e95858a5212c8d7f848a29e9c8332c43`. This explicit confirmation closes that staging gate; working credentials alone were not treated as proof of least privilege. No privileges or new credentials were requested or changed.
 
 The existing Medusa staging exception seals the prior exact source overlay, including commerce source. The new R2 changes correctly yield `STAGING_SOURCE_CHANGED` from its collector. Do not refresh that seal or redeploy Medusa under the old approval. The running immutable Medusa revision is unchanged. Publication, remote CI and whole-checkout release acceptance are separate pending gates.
 

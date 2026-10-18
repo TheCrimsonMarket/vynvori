@@ -1,0 +1,278 @@
+{
+  "version": 1,
+  "status": "DEPLOYED_VERIFIED",
+  "scope": "M2-synthetic-dry-run-only",
+  "original": {
+    "name": "worker-scan",
+    "image": "sha256:d0406585e499334dcd286a4c5f2d13c5de7b6e96a375fa9ff932d5c0d7b80abf",
+    "total": 262,
+    "severity": {
+      "LOW": 84,
+      "HIGH": 71,
+      "MEDIUM": 102,
+      "CRITICAL": 4,
+      "UNKNOWN": 1
+    },
+    "fixable": 33,
+    "findings": []
+  },
+  "minimal": {
+    "name": "worker-minimal-scan",
+    "image": "sha256:6cde01e15fd2e036cb3151f4ba752f231f896430fd6f163510f04eb2f687d8c8",
+    "total": 31,
+    "severity": {
+      "MEDIUM": 23,
+      "LOW": 8
+    },
+    "fixable": 0,
+    "findings": [
+      {
+        "id": "CVE-2026-102010",
+        "pkg": "gcc-14-base",
+        "installed": "14.2.0-19",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-95619",
+        "pkg": "gcc-14-base",
+        "installed": "14.2.0-19",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-18374",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-19499",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-19542",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-5435",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-6238",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-6368",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-6791",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-77117",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-80489",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-8674",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-86805",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-89092",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-95818",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2010-4756",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "LOW"
+      },
+      {
+        "id": "CVE-2018-20796",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "LOW"
+      },
+      {
+        "id": "CVE-2019-1010022",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "LOW"
+      },
+      {
+        "id": "CVE-2019-1010023",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "LOW"
+      },
+      {
+        "id": "CVE-2019-1010024",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "LOW"
+      },
+      {
+        "id": "CVE-2019-1010025",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "LOW"
+      },
+      {
+        "id": "CVE-2019-9192",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "LOW"
+      },
+      {
+        "id": "CVE-2026-97399",
+        "pkg": "libc6",
+        "installed": "2.41-12+deb13u4",
+        "fixed": null,
+        "severity": "LOW"
+      },
+      {
+        "id": "CVE-2026-102010",
+        "pkg": "libgcc-s1",
+        "installed": "14.2.0-19",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-95619",
+        "pkg": "libgcc-s1",
+        "installed": "14.2.0-19",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-102010",
+        "pkg": "libgomp1",
+        "installed": "14.2.0-19",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-95619",
+        "pkg": "libgomp1",
+        "installed": "14.2.0-19",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-102010",
+        "pkg": "libstdc++6",
+        "installed": "14.2.0-19",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-95619",
+        "pkg": "libstdc++6",
+        "installed": "14.2.0-19",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-27171",
+        "pkg": "zlib1g",
+        "installed": "1:1.3.dfsg+really1.3.1-1+b1",
+        "fixed": null,
+        "severity": "MEDIUM"
+      },
+      {
+        "id": "CVE-2026-85091",
+        "pkg": "zlib1g",
+        "installed": "1:1.3.dfsg+really1.3.1-1+b1",
+        "fixed": null,
+        "severity": "MEDIUM"
+      }
+    ]
+  },
+  "scanDatabase": {
+    "Version": 2,
+    "NextUpdate": "2026-10-19T00:43:37.96251693Z",
+    "UpdatedAt": "2026-10-18T00:43:37.96251718Z",
+    "DownloadedAt": "2026-10-18T04:49:40.830777535Z"
+  },
+  "platform": {
+    "platformManifestDigest": "sha256:73467ae3c71e71e6cfced0f368a6355c6dc4414c78348eaf0c63d4cbf89d502b",
+    "configDigest": "sha256:6cde01e15fd2e036cb3151f4ba752f231f896430fd6f163510f04eb2f687d8c8",
+    "platform": {
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  },
+  "containerSmoke": {
+    "status": "PASS",
+    "anonymousReadinessHttp": 401,
+    "authenticatedDryRunHttp": 200,
+    "printed": false,
+    "containerRemoved": true
+  },
+  "sameExactOsFindingsAsPreviouslyReviewedMedusa": true,
+  "runtimeServiceAccount": "vynvori-image-worker@lucky-little-devil.iam.gserviceaccount.com",
+  "runtimeProjectRoles": [],
+  "proposedService": "vynvori-staging-image-processing",
+  "proposedConfig": "deploy/processing/service.iam-private.proposed.yaml",
+  "pending": [],
+  "noCloudResourcesCreated": false,
+  "deploymentEvidence": "M2-worker-deployed-20261018.json",
+  "founderApproval": "Full reviewed batch including merge after green CI"
+}

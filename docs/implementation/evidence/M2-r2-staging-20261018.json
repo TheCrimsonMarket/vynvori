@@ -92,7 +92,7 @@
     "errorMessage": "Authorization",
     "bytesReturned": false
   },
-  "tokenPolicy": "NOT_INDEPENDENTLY_VERIFIED_CONTROL_TOKEN_CANNOT_READ_TOKEN_METADATA",
+  "tokenPolicy": "FOUNDER_CONFIRMED_OBJECT_READ_WRITE_THIS_BUCKET_ONLY",
   "bucketSettingsChanged": false,
   "newCredentialsCreated": false,
   "originalBucketPreserved": true,
@@ -129,5 +129,25 @@
       "changed": false
     },
     "remoteCI": "NOT_RUN"
+  },
+  "tokenScopeConfirmation": {
+    "confirmedOnLocalDate": "2026-10-18",
+    "timezone": "Asia/Dhaka",
+    "source": "Direct founder reply in this chat",
+    "answer": "Confirmed: Object Read & Write, this bucket only",
+    "account": "e95858a5212c8d7f848a29e9c8332c43",
+    "bucket": "vynvori-staging-assets",
+    "permission": "Object Read & Write",
+    "bucketOnly": true,
+    "independentlyReadThroughAPI": false,
+    "apiLimitation": "Token metadata reads denied with HTTP 403",
+    "credentialsChanged": false
+  },
+  "acceptance": {
+    "boundedSyntheticR2Staging": "COMPLETE",
+    "fullM2": "INCOMPLETE",
+    "sourcePublication": "NOT_RUN",
+    "wholeReleaseAcceptance": "PENDING",
+    "customerArtworkAcceptance": "NOT_PASSED"
   }
 }

@@ -1,0 +1,240 @@
+{
+  "version": 1,
+  "scope": "M2-creative-staging-only",
+  "status": "PASS",
+  "startingCommit": "12a6ab3c07630b0b1613080bfc191f18cf0760aa",
+  "preflight": {
+    "checkedAt": "2026-10-18T04:59:43.457Z",
+    "target": {
+      "project": "shy-water-16757830",
+      "branch": "br-nameless-waterfall-b891fhyx",
+      "host": "ep-patient-dust-b8dmxyrl.c-14.us-east-1.aws.neon.tech",
+      "poolHost": "ep-patient-dust-b8dmxyrl-pooler.c-14.us-east-1.aws.neon.tech",
+      "database": "vynvori_creative_staging",
+      "migrationRole": "vynvori_staging_app",
+      "runtimeRole": "vynvori_creative_runtime_scoped"
+    },
+    "objects": [],
+    "roles": [
+      {
+        "rolname": "vynvori_staging_app",
+        "rolsuper": false,
+        "rolcreatedb": true,
+        "rolcreaterole": true,
+        "rolbypassrls": true
+      }
+    ],
+    "database": {
+      "datname": "vynvori_creative_staging",
+      "owner": "vynvori_staging_app",
+      "datacl": "{=Tc/vynvori_staging_app,vynvori_staging_app=CTc/vynvori_staging_app,neon_superuser=CTc/vynvori_staging_app}"
+    },
+    "tls": {
+      "encrypted": true,
+      "authorized": true,
+      "protocol": "TLSv1.3",
+      "cipher": "TLS_AES_256_GCM_SHA384",
+      "backendTls": {
+        "ssl": false,
+        "version": null,
+        "cipher": null
+      }
+    }
+  },
+  "backupRestore": {
+    "checkedAt": "2026-10-18T05:00:05.924Z",
+    "status": "PASS",
+    "target": {
+      "project": "shy-water-16757830",
+      "branch": "br-nameless-waterfall-b891fhyx",
+      "host": "ep-patient-dust-b8dmxyrl.c-14.us-east-1.aws.neon.tech",
+      "poolHost": "ep-patient-dust-b8dmxyrl-pooler.c-14.us-east-1.aws.neon.tech",
+      "database": "vynvori_creative_staging",
+      "migrationRole": "vynvori_staging_app",
+      "runtimeRole": "vynvori_creative_runtime_scoped"
+    },
+    "backup": {
+      "path": "C:\\Users\\User\\AppData\\Local\\Temp/VYNVORI-M2-close-20261018/creative-pre-migration-attempt3.dump",
+      "sha256": "b603766a5131123e09475095d518f527412bcbdbbb5ac9814f2945acc35d53a4",
+      "bytes": 976,
+      "format": "pg_dump_custom",
+      "tls": "verify-full"
+    },
+    "restore": {
+      "postgres": "18",
+      "status": "PASS",
+      "userObjects": 0
+    },
+    "remoteMutations": false
+  },
+  "migrationLedger": {
+    "version": 1,
+    "target": {
+      "project": "shy-water-16757830",
+      "branch": "br-nameless-waterfall-b891fhyx",
+      "host": "ep-patient-dust-b8dmxyrl.c-14.us-east-1.aws.neon.tech",
+      "poolHost": "ep-patient-dust-b8dmxyrl-pooler.c-14.us-east-1.aws.neon.tech",
+      "database": "vynvori_creative_staging",
+      "migrationRole": "vynvori_staging_app",
+      "runtimeRole": "vynvori_creative_runtime_scoped"
+    },
+    "state": "RUNTIME_CONFIGURED",
+    "attempts": 1,
+    "startedAt": "2026-10-18T05:02:22.746Z",
+    "migrationSha256": "57fc08491edd7bc06546b45803662dbe1d799bb86f4e337817a04206e14084ac",
+    "backupSha256": "b603766a5131123e09475095d518f527412bcbdbbb5ac9814f2945acc35d53a4",
+    "history": [
+      {
+        "id": 1,
+        "hash": "57fc08491edd7bc06546b45803662dbe1d799bb86f4e337817a04206e14084ac",
+        "created_at": "1792021514581"
+      }
+    ],
+    "replayAttempts": 1,
+    "completedAt": "2026-10-18T05:02:32.906Z"
+  },
+  "runtimeVerification": {
+    "checkedAt": "2026-10-18T05:03:32.564Z",
+    "status": "PASS",
+    "target": {
+      "project": "shy-water-16757830",
+      "branch": "br-nameless-waterfall-b891fhyx",
+      "host": "ep-patient-dust-b8dmxyrl.c-14.us-east-1.aws.neon.tech",
+      "poolHost": "ep-patient-dust-b8dmxyrl-pooler.c-14.us-east-1.aws.neon.tech",
+      "database": "vynvori_creative_staging",
+      "migrationRole": "vynvori_staging_app",
+      "runtimeRole": "vynvori_creative_runtime_scoped"
+    },
+    "identity": {
+      "database": "vynvori_creative_staging",
+      "role": "vynvori_creative_runtime_scoped",
+      "project": "shy-water-16757830",
+      "branch": "br-nameless-waterfall-b891fhyx"
+    },
+    "tls": {
+      "encrypted": true,
+      "authorized": true,
+      "protocol": "TLSv1.3"
+    },
+    "flags": {
+      "rolsuper": false,
+      "rolcreatedb": false,
+      "rolcreaterole": false,
+      "rolbypassrls": false,
+      "rolinherit": false,
+      "rolconnlimit": 3
+    },
+    "memberships": [],
+    "permissions": {
+      "database_create": false,
+      "temporary": false,
+      "public_create": false,
+      "probe_select": true,
+      "probe_insert": true,
+      "probe_update": false,
+      "probe_delete": false
+    },
+    "negatives": [
+      {
+        "name": "create-schema",
+        "code": "42501",
+        "passed": true
+      },
+      {
+        "name": "public-ddl",
+        "code": "42501",
+        "passed": true
+      },
+      {
+        "name": "temporary-table",
+        "code": "42501",
+        "passed": true
+      },
+      {
+        "name": "truncate",
+        "code": "42501",
+        "passed": true
+      },
+      {
+        "name": "update",
+        "code": "42501",
+        "passed": true
+      },
+      {
+        "name": "delete",
+        "code": "42501",
+        "passed": true
+      },
+      {
+        "name": "migration-history-read",
+        "code": "42501",
+        "passed": true
+      },
+      {
+        "name": "owner-role-switch",
+        "code": "42501",
+        "passed": true
+      }
+    ],
+    "realTransactionTest": {
+      "passed": 1,
+      "skipped": 0,
+      "covers": [
+        "migration-readiness",
+        "duplicate-23505",
+        "fixture-check-23514",
+        "transaction-rollback"
+      ]
+    },
+    "final": {
+      "history": [
+        {
+          "id": 1,
+          "hash": "57fc08491edd7bc06546b45803662dbe1d799bb86f4e337817a04206e14084ac",
+          "created_at": "1792021514581"
+        }
+      ],
+      "syntheticRows": 0,
+      "relations": [
+        {
+          "nspname": "drizzle",
+          "relname": "__drizzle_migrations",
+          "relkind": "r",
+          "owner": "vynvori_staging_app"
+        },
+        {
+          "nspname": "drizzle",
+          "relname": "__drizzle_migrations_id_seq",
+          "relkind": "S",
+          "owner": "vynvori_staging_app"
+        },
+        {
+          "nspname": "drizzle",
+          "relname": "__drizzle_migrations_pkey",
+          "relkind": "i",
+          "owner": "vynvori_staging_app"
+        },
+        {
+          "nspname": "vynvori_infrastructure",
+          "relname": "synthetic_probes",
+          "relkind": "r",
+          "owner": "vynvori_staging_app"
+        },
+        {
+          "nspname": "vynvori_infrastructure",
+          "relname": "synthetic_probes_pkey",
+          "relkind": "i",
+          "owner": "vynvori_staging_app"
+        }
+      ]
+    }
+  },
+  "credentials": {
+    "migration": "existing vynvori_staging_app direct URL supplied by founder",
+    "runtime": "new restricted identity; pooled URL stored only in ignored .env",
+    "valuesIncluded": false,
+    "rootDatabaseUrlReusedForMigration": false
+  },
+  "productionFlags": "OFF",
+  "remotePublication": "NOT_RUN"
+}
