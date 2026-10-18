@@ -14,7 +14,7 @@ import { collectStagingState, validateStagingAudits, evaluateStaging } from "./s
 export const PR5_IMPLEMENTATION_COMMIT = "dfa716c53adf83c613bb4aca459b1b5580fdcaf5";
 export const PR5_POLICY_DIGEST = "03d4d2291513834c6caab951a7c9506cbec6bc7bedfcea5843f77f1258c017a4";
 export const STAGING_IMPLEMENTATION_COMMIT = "f923f7b26c4fc0684e26cfdf29ebf177d80103f6";
-export const STAGING_POLICY_DIGEST = "92a9bc66eaabc2db931353b3d1056278bb585ccd800d454778653453ba02aa82";
+export const STAGING_POLICY_DIGEST = "abedb2518665b13e53cb9a83c9c6504310ab58266361ceb6f37b7bcc8105c5af";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const policyPath = path.join(root, "security/m2-exception-policy.json");

@@ -1,0 +1,45 @@
+# PROPOSED ONLY. Founder approval required before replacing internal-only ingress.
+# Preserve services/image-processing/cloud-run.yaml as the internal-only template.
+# Exact locally scanned amd64 manifest; registry publication is still pending.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: vynvori-staging-image-processing
+  annotations:
+    run.googleapis.com/ingress: all
+    run.googleapis.com/invoker-iam-disabled: 'false'
+    run.googleapis.com/maxScale: '1'
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: '0'
+        autoscaling.knative.dev/maxScale: '1'
+        run.googleapis.com/cpu-throttling: 'true'
+        run.googleapis.com/startup-cpu-boost: 'false'
+    spec:
+      serviceAccountName: vynvori-image-worker@lucky-little-devil.iam.gserviceaccount.com
+      containerConcurrency: 4
+      timeoutSeconds: 15
+      containers:
+        - image: us-east1-docker.pkg.dev/lucky-little-devil/vynvori-staging-images/image-processing@sha256:73467ae3c71e71e6cfced0f368a6355c6dc4414c78348eaf0c63d4cbf89d502b
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              cpu: '1'
+              memory: 256Mi
+          env:
+            - name: M2_ENV
+              value: staging
+            - name: M2_PROCESSING_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vynvori-processing-token
+                  key: '1'
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 6

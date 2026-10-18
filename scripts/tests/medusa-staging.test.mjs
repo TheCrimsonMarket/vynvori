@@ -8,10 +8,17 @@ import { validateConfiguration, validateRelease, validateIam } from "../medusa-s
 import { STAGING_IMPLEMENTATION_COMMIT, STAGING_POLICY_DIGEST } from "../security/run-audit.mjs";
 import { digest } from "../security/audit-policy.mjs";
 import { auditIdentity } from "../security/pr5-local-policy.mjs";
-import { collectStagingState, evaluateStaging } from "../security/staging-policy.mjs";
+import { collectStagingState, evaluateStaging, stagingLineage } from "../security/staging-policy.mjs";
 const { load } = createRequire(import.meta.url)("js-yaml");
 const template = load(await fs.readFile(new URL("../../deploy/medusa/service.yaml", import.meta.url), "utf8"));
 const now = new Date("2026-10-18T00:00:00Z");
+test("published staging provenance permits descendants only behind exact source approval", () => {
+  const root = fileURLToPath(new URL("../..", import.meta.url));
+  const base = "f923f7b26c4fc0684e26cfdf29ebf177d80103f6";
+  assert.match(stagingLineage(root, base, base), /^[a-f0-9]{40}$/);
+  assert.throws(() => stagingLineage(root, "a".repeat(40), base), /STAGING_BASE_CHANGED/);
+  assert.throws(() => stagingLineage(root, base, "a".repeat(40)), /STAGING_BASE_CHANGED/);
+});
 // Positive fixtures are synthetic test inputs, never written into the bundled policy.
 const approval = { ...await bundledPolicy(), approved: true, approvedBy: "synthetic-reviewer", sourceCommit: "a".repeat(40) };
 const env = { K_SERVICE: target.service, K_CONFIGURATION: target.service, K_REVISION: `${target.service}-synthetic`,

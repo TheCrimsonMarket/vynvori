@@ -19,14 +19,24 @@ export const normalizeStagingSource = (file, text) => {
   return text;
 };
 
+// A reviewed exact file inventory can be committed without predicting the hash
+// of the commit that contains its own approval. Lineage is necessary, never
+// sufficient: the anchored complete source fingerprint still must match below.
+export function stagingLineage(root, implementation, reviewedBase) {
+  const base = "f923f7b26c4fc0684e26cfdf29ebf177d80103f6";
+  check(implementation === base && reviewedBase === base, "STAGING_BASE_CHANGED");
+  const sourceCommit = git(root, ["rev-parse", "HEAD"]);
+  check(/^[a-f0-9]{40}$/.test(sourceCommit) && git(root, ["merge-base", base, sourceCommit]) === base, "STAGING_BASE_CHANGED");
+  return sourceCommit;
+}
+
 export async function collectStagingState(root, implementation, anchor, legacy) {
   check(/^[a-f0-9]{40}$/.test(implementation) && /^[a-f0-9]{64}$/.test(anchor), "STAGING_NOT_ACTIVATED");
   const policy = JSON.parse(await fs.readFile(`${root}/${POLICY}`, "utf8"));
   check(digest(policy) === anchor && policy.implementationCommit === implementation &&
     policy.authority === "VYNVORI founder" && policy.approvedOn === "2026-10-18" &&
     policy.scope === "private-synthetic-staging-only" && policy.expiresAt === "2026-10-24T23:59:59Z", "STAGING_POLICY_CHANGED");
-  check(git(root, ["rev-parse", "HEAD"]) === implementation && implementation === policy.reviewedBase &&
-    policy.reviewedBase === "f923f7b26c4fc0684e26cfdf29ebf177d80103f6", "STAGING_BASE_CHANGED");
+  const sourceCommit = stagingLineage(root, implementation, policy.reviewedBase);
   const state = await snapshot(root, legacy);
   check(digest(state.manifests) === digest(legacy.fingerprint.manifests) &&
     digest(state.edges) === digest(legacy.fingerprint.ancestryEdges) &&
@@ -37,11 +47,11 @@ export async function collectStagingState(root, implementation, anchor, legacy) 
     check(expected && installed.version === expected.version, "STAGING_INSTALLED_VERSION_CHANGED");
     for (const kind of ["dependencies", "optionalDependencies", "peerDependencies"]) check(digest(installed[kind]) === digest(expected[kind] ?? {}), "STAGING_INSTALLED_GRAPH_CHANGED");
   }
-  // No Git mutation is authorized. Seal the exact overlay on verified main,
-  // including this evaluator and all deployment inputs. Only the two literal
-  // anchor selectors and the separately validated runtime approval are normalized.
+  // Seal the exact reviewed tree, including this evaluator and all deployment
+  // inputs. A later commit with changed source still fails. Only the two literal
+  // anchor selectors and separately validated runtime approval are normalized.
   const fingerprints = {};
-  for (const file of [...Object.keys(state.surface), "deploy/medusa/service.yaml", "deploy/medusa/release.example.json"]) {
+  for (const file of [...Object.keys(state.surface), "deploy/medusa/service.yaml", "deploy/medusa/release.example.json", "deploy/processing/service.iam-private.proposed.yaml"]) {
     const actual = await fs.readFile(`${root}/${file}`);
     const text = !actual.includes(0) && Buffer.from(actual.toString("utf8"), "utf8").equals(actual);
     fingerprints[file] = sha256(text ? normalizeStagingSource(file, actual.toString("utf8")) : actual);
@@ -50,7 +60,7 @@ export async function collectStagingState(root, implementation, anchor, legacy) 
   const approval = JSON.parse(await fs.readFile(`${root}/apps/medusa/scripts/remote-staging-policy.json`, "utf8"));
   validateApproval(approval);
   check(approval.sourceCommit === implementation && approval.approvedBy === "VYNVORI founder" && approval.expiresAt === policy.expiresAt, "STAGING_APPROVAL_MISMATCH");
-  return { policy, state, sourceCommit: git(root, ["rev-parse", "HEAD"]), implementation,
+  return { policy, state, sourceCommit, implementation,
     runtime: JSON.parse(await fs.readFile(`${root}/security/fixtures/pr5-reviewed-runtime.json`, "utf8")) };
 }
 
