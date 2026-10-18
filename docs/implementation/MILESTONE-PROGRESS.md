@@ -2,7 +2,9 @@
 
 ## Latest execution — 2026-10-18
 
-Closure follow-up: **all four real staging dependencies PASS**. Creative backup/restore, migration/replay and restricted runtime tests completed. The founder approved the exact source pins, worker ingress/residual-risk scope and publication/merge-after-green-CI batch. Worker revision `vynvori-staging-image-processing-00001-82q` is Ready with all 11 remote checks passed; its image has zero critical/high and 31 medium/low findings. The complete mandatory fresh image/dependency gate and root local verification passed. Git publication/remote CI/conditional merge are pending; full M2 is not yet promoted. [Runtime results](M2-Closure-Result-20261018.md). Existing local commits `12a6ab3`/`a048244` are preserved; the prior no-commit restriction is superseded only for this explicitly approved M2 batch.
+**M2 synthetic infrastructure acceptance PASSED.** All four real staging dependencies are ready; creative backup/restore/migration/restricted-runtime checks and all 11 worker HTTP/auth checks passed. The founder approved the exact source pins, bounded residual risk and publication/merge-after-green-CI batch. [PR #8](https://github.com/TheCrimsonMarket/vynvori/pull/8) implementation `8793776` passed all five check contexts, including the mandatory fresh image/dependency gate. The final documentation-only receipt retains the exact approved executable/configuration overlay and must pass its own checks before conditional merge. Obtain the final head/merge commit from PR #8. [Actual results](M2-Closure-Result-20261018.md), [fresh-session M1b handoff](M2-to-M1b-Handoff-20261018.md). The prior no-commit restriction is superseded only for this approved M2 batch. Live customer/financial/provider/printing/auth gates remain OFF.
+
+### Earlier Medusa-only execution (historical)
 
 **Medusa private synthetic staging is deployed and verified**, revision `vynvori-medusa-staging-00001-qqf`, exact platform digest `sha256:c84b6291314cbfdb14b2193765891cd52ec6046b809d74bc42a1c67887c23f43`. Native schema is 147 public tables / 8 sequences; a deadline interruption was reconciled before one successful native resume. Seven runtime privilege negatives and 12 required deployed HTTP checks passed; synthetic-key cleanup completed through native workflows. [Actual execution report](M2-Deployment-Result-20261018.md). This supersedes the older Medusa absence/unverified observations below; it passes no customer-auth, catalog/merchant, creative Neon, R2, processing-worker or production gate. Full M2 is not complete. Operational flags remain OFF. No Git commit/push or remote CI was performed; local commit was rejected by automatic review under the separate no-commit restriction. Approved exception expires 25 October 05:59:59 Bangladesh time; an already running service must be stopped/revoked then.
 
@@ -18,10 +20,10 @@ PR #6 checks: M2 foundation, container readiness, browser and Vercel SUCCESS; M0
 
 | Milestone | Implementation / evidence | Remaining acceptance |
 |---|---|---|
-| M0 | Merged foundation and approved full-bleed storefront; current local root verification PASS | Overall current CI remains FAILED on security scope |
+| M0 | Merged foundation and approved full-bleed storefront; local and published implementation verification PASS | All implementation check contexts green on PR #8; final documentation-only head must pass before merge |
 | M1a | Source-backed audit and threat model merged in PR #3 | Central issuer/client/product validation, session/revocation remedy and deployed provenance remain BLOCKED; source audit is not working SSO |
-| M2 | Four foundation workstreams below; PRs #4–#6 merged | IN_PROGRESS: remote migration/recovery, private cloud connectivity, security review and release acceptance |
-| M1b | NOT_STARTED | BLOCKED on M2 and source-backed trust/registration requirements in M1a-open-gates; implement safe components only after prerequisites |
+| M2 | All four real staging workstreams PASS; published implementation CI green on PR #8 | PASSED for synthetic infrastructure; final documentation-only CI/conditional merge verified through PR #8. Production acceptance is separate |
+| M1b | NOT_STARTED; fresh-session handoff prepared | M2 prerequisite closed. Resolve source-backed central trust/registration/session/staff requirements in M1a-open-gates before bridge implementation/live auth |
 | M3 | NOT_STARTED in application; approved editor simulation retained | Guest/scene work depends M2; owned persistence depends M1b |
 | M4–M5 | NOT_STARTED | M4 requires M2+M1b+M3; M5 requires M3+M4 |
 | M6a | NOT_STARTED in application; mock design contracts retained | M2+M1b |
@@ -37,7 +39,7 @@ PR #6 checks: M2 foundation, container readiness, browser and Vercel SUCCESS; M0
 |---|---|---|
 | Dedicated Medusa | Pinned 2.21.2 private staging, original revision/image preserved | PASS fresh authenticated 200/anonymous 403, no public IAM; original schema/Admin/permission evidence retained. [Runtime result](M2-Closure-Result-20261018.md) |
 | Neon / Drizzle | Existing creative staging DB migrated; separate direct migration / pooled restricted runtime identities | PASS native PG18 backup/restore, migration/replay, eight actual runtime negatives and real constraints/rollback; zero fixture rows. [Result](M2-Creative-Staging-Result-20261018.md) |
-| R2 | Explicit US endpoint; private immutable synthetic storage and checkpointed recovery | Bounded synthetic staging slice COMPLETE: original US bucket verified private; four live cases cleaned up; 18 local tests passed; founder confirmed Object Read & Write for this bucket only on 2026-10-18. Source publication/whole-release acceptance NOT_RUN. [Executed result](M2-R2-Result-20261018.md) |
+| R2 | Explicit US endpoint; private immutable synthetic storage and checkpointed recovery | COMPLETE: original US bucket private; four cases plus final combined fixture cleaned up; founder-confirmed bucket-only scope. Published with M2 closure. [Result](M2-Closure-Result-20261018.md) |
 | Processing Cloud Run | Minimal pinned synthetic worker deployed under explicit founder approval | PASS Ready revision, exact digest/config/secret/IAM, all 11 remote checks and combined readiness. [Runtime result](M2-Closure-Result-20261018.md) |
 
 ## Current PR-sized batch: read-only commerce catalog evidence

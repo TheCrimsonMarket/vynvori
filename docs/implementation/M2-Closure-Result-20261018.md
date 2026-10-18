@@ -1,6 +1,6 @@
 # M2 closure — runtime evidence, 2026-10-18
 
-**All four real staging dependency checks PASS. Publication/CI acceptance is pending until the approved PR is checked.** This report does not claim a production gate or working SSO.
+**M2 synthetic infrastructure acceptance PASS.** All four real staging dependencies and all GitHub checks on implementation commit `8793776eea736e33758afd5fa0275fdebaa275d6` passed: verify, foundation, container, browser and Vercel. [PR #8](https://github.com/TheCrimsonMarket/vynvori/pull/8) is approved for merge only after its final documentation-only head also passes; query that PR for the final head/merge commit. The approved 133-file executable/configuration overlay is unchanged by the documentation-only receipt. This is not a production gate or working SSO.
 
 | Workstream | Executed result |
 |---|---|
@@ -27,6 +27,6 @@ The founder-approved exact source policy digest is `abedb2518665b13e53cb9a83c9c6
 
 The combined operator run returned four `ready/OK` results. It used the existing Medusa adapter's caller-supplied authenticated fetch transport; the bare default adapter and generic smoke command do not mint Cloud Run IAM tokens. Processing likewise receives a freshly minted token in memory. This is an operator readiness result, not a public health expansion, Vercel-to-private-service deployment or M1b token-lifecycle implementation. No token value is included in evidence or browser bundles.
 
-Current source is local until publication below. Remote CI and merge must be independently verified before full M2 is promoted. Operational flags, customer auth/Store writes, paid AI, payments, print release, exports and gallery publication remain OFF. M1a central issuer/client/product validation, registration/provenance, revocation/session/provisioning and staff-policy gates remain separate M1b prerequisites.
+Published implementation and its remote CI are verified in [the exact-commit receipt](evidence/M2-release-ci-20261018.json). The final documentation-only commit must independently pass before conditional merge; the final head/merge are obtained from PR #8 to avoid a self-referential commit hash. Operational flags, customer auth/Store writes, paid AI, payments, print release, exports and gallery publication remain OFF. M1a central issuer/client/product validation, registration/provenance, revocation/session/provisioning and staff-policy gates remain separate M1b prerequisites. [Fresh-session handoff](M2-to-M1b-Handoff-20261018.md).
 
 [Combined readiness](evidence/M2-combined-staging-readiness-20261018.json), [worker deployment](evidence/M2-worker-deployed-20261018.json), [creative evidence](evidence/M2-creative-staging-20261018.json), [Medusa recheck](evidence/M2-medusa-recheck-20261018.json), [approved release decisions](M2-Closure-Release-Review-20261018.md), [architecture/rollback](ADR-0008-M2-Closure-and-Published-Provenance.md). Full native backup, ledgers, scans and execution artifacts remain under `%TEMP%/VYNVORI-M2-close-20261018`; credentials stay in ignored local configuration and the named Secret Manager version.

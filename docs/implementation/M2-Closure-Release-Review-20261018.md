@@ -1,6 +1,6 @@
 # Final M2 release decision — 2026-10-18
 
-**Founder approved the full reviewed batch, including merge after green CI, on 2026-10-18.** Worker deployment, all 11 remote checks and source-pin activation have now passed. Publication/CI/conditional merge remain pending; full M2 and live M1b readiness are not yet claimed. The scope/conditions below preserve the exact approval record. [Executed runtime result](M2-Closure-Result-20261018.md).
+**Founder approved the full reviewed batch, including merge after green CI, on 2026-10-18.** Worker deployment, all 11 remote checks, source-pin activation and all five published implementation CI contexts passed. The final documentation-only receipt must pass its latest-head CI before conditional merge; live M1b readiness is not claimed. The scope/conditions below preserve the exact approval record. [Executed closure result](M2-Closure-Result-20261018.md).
 
 ## Completed evidence
 

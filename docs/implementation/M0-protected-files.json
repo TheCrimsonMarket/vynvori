@@ -671,10 +671,10 @@
     },
     {
       "path": "docs/technical/20-acceptance-matrix.md",
-      "sha256": "536bcbba9000efb32cc9d48a0fe09e422773222660013535903a20daaae5ad4c",
+      "sha256": "666a57c751392e9fd1c74b29ac2074634a9cec99a47f14715b0290a14f353a92",
       "previousBaselineSha256": "311a115f5fff3f5550f83b8c1bc20113196c813dc31244cd338b127d0545ff57",
-      "gitBlobSha256": "536bcbba9000efb32cc9d48a0fe09e422773222660013535903a20daaae5ad4c",
-      "changeReason": "2026-10-18 founder-authorized M2 execution/status evidence notes only; all ACC requirement rows unchanged, worker/CI/full M2 still pending",
+      "gitBlobSha256": "666a57c751392e9fd1c74b29ac2074634a9cec99a47f14715b0290a14f353a92",
+      "changeReason": "2026-10-18 authorized M2 synthetic infrastructure PASSED status with exact implementation CI receipt; ACC requirement rows remain unchanged; prior hashes preserved",
       "acceptedUpdateHistory": [
         {
           "sha256": "136c0d48a5104e3266aaf7b15c8418dff44f602de44897d2ad47bd199b22cdee",

@@ -1,6 +1,6 @@
 # Creative Neon staging — executed 2026-10-18
 
-**PASS for the bounded creative database slice. Full M2 remains incomplete pending worker deployment and release/CI acceptance.**
+**PASS for the bounded creative database slice.** This result preceded the worker/publication closure; see [the later M2 closure result](M2-Closure-Result-20261018.md) and [fresh-session handoff](M2-to-M1b-Handoff-20261018.md) for current milestone status.
 
 Existing project `shy-water-16757830` (`vynvori-creative`), existing `staging` branch `br-nameless-waterfall-b891fhyx`, database `vynvori_creative_staging`, PostgreSQL 18. The founder supplied the requested existing staging migration connection. The production branch and root `DATABASE_URL` were not used for migration/setup. No new Neon project, branch or database was created.
 

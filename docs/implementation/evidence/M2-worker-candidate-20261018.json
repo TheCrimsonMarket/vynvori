@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "status": "LOCAL_PASS_REMOTE_NOT_DEPLOYED",
+  "status": "DEPLOYED_VERIFIED",
   "scope": "M2-synthetic-dry-run-only",
   "original": {
     "name": "worker-scan",
@@ -271,11 +271,8 @@
   "runtimeProjectRoles": [],
   "proposedService": "vynvori-staging-image-processing",
   "proposedConfig": "deploy/processing/service.iam-private.proposed.yaml",
-  "pending": [
-    "founder approval of IAM-only ingress instead of internal-only template",
-    "worker residual-risk acceptance for 23 medium and 8 low findings",
-    "numeric version 1 app-token secret and per-secret runtime binding",
-    "publication, deployment and remote HTTP/IAM verification"
-  ],
-  "noCloudResourcesCreated": true
+  "pending": [],
+  "noCloudResourcesCreated": false,
+  "deploymentEvidence": "M2-worker-deployed-20261018.json",
+  "founderApproval": "Full reviewed batch including merge after green CI"
 }

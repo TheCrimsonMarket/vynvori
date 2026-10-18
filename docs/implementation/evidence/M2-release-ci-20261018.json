@@ -1,0 +1,58 @@
+{
+  "recordedAt": "2026-10-18T05:39:33.274Z",
+  "status": "PASS_IMPLEMENTATION_COMMIT",
+  "sourceOverlayDigest": "e8b850d0c761bd5caa9c7d4c2d51c4a2c44a41a5e529f2809d7c6416c3ba3054",
+  "headRefOid": "8793776eea736e33758afd5fa0275fdebaa275d6",
+  "state": "OPEN",
+  "statusCheckRollup": [
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-18T05:37:23Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/TheCrimsonMarket/vynvori/actions/runs/39100942548/job/117596904531",
+      "name": "verify",
+      "startedAt": "2026-10-18T05:33:11Z",
+      "status": "COMPLETED",
+      "workflowName": "M0 foundation"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-18T05:35:19Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/TheCrimsonMarket/vynvori/actions/runs/39100942721/job/117596904815",
+      "name": "foundation",
+      "startedAt": "2026-10-18T05:33:11Z",
+      "status": "COMPLETED",
+      "workflowName": "M2 backend foundation"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-18T05:35:25Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/TheCrimsonMarket/vynvori/actions/runs/39100942625/job/117596904709",
+      "name": "local-container",
+      "startedAt": "2026-10-18T05:33:10Z",
+      "status": "COMPLETED",
+      "workflowName": "Medusa container readiness"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-18T05:35:36Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/TheCrimsonMarket/vynvori/actions/runs/39100942548/job/117596904718",
+      "name": "browser",
+      "startedAt": "2026-10-18T05:33:11Z",
+      "status": "COMPLETED",
+      "workflowName": "M0 foundation"
+    },
+    {
+      "__typename": "StatusContext",
+      "context": "Vercel",
+      "startedAt": "2026-10-18T05:27:47Z",
+      "state": "SUCCESS",
+      "targetUrl": "https://vercel.com/omor-shahriars-projects/vynvori-dev/DJFr8BijNKX7iHr26L1JTWqrrgJS"
+    }
+  ],
+  "url": "https://github.com/TheCrimsonMarket/vynvori/pull/8",
+  "note": "This receipt belongs to the exact implementation head above. Documentation-only closure updates require their own latest-head checks before the founder-authorized merge. Query PR #8 for the final head and merge commit; do not substitute this receipt for those checks."
+}
