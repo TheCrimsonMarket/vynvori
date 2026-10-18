@@ -1,0 +1,75 @@
+{
+  "recordedAt": "2026-10-18T00:13:51.555Z",
+  "status": "PASS_PRIVATE_SYNTHETIC_MEDUSA_STAGING",
+  "url": "https://vynvori-medusa-staging-srvptfc7ba-ue.a.run.app",
+  "revision": "vynvori-medusa-staging-00001-qqf",
+  "image": "us-east1-docker.pkg.dev/lucky-little-devil/vynvori-staging-images/medusa@sha256:c84b6291314cbfdb14b2193765891cd52ec6046b809d74bc42a1c67887c23f43",
+  "revisionImageDigest": "us-east1-docker.pkg.dev/lucky-little-devil/vynvori-staging-images/medusa@sha256:c84b6291314cbfdb14b2193765891cd52ec6046b809d74bc42a1c67887c23f43",
+  "sourceCommit": "f923f7b26c4fc0684e26cfdf29ebf177d80103f6",
+  "sourceOverlaySha256": "6f96a4a478eaf6c8645c24ad97f9e913370407957799f52ddb81152fc2970e89",
+  "configurationSha256": "bd8b4e12186ba8785d2ad80ff6073bed9f4158c79067e887fc20c9af7a92c824",
+  "migration": {
+    "status": "COMPLETED",
+    "attempts": 2,
+    "initialFailure": "Fixed ten-minute local supervisor deadline; stopped and reconciled 171 committed records with no active migration sessions",
+    "resume": "One fenced native resume completed module/link/script migration; original ledger retained",
+    "publicTables": 147,
+    "publicSequences": 8
+  },
+  "runtimePermissions": {
+    "status": "PASS",
+    "negativeTests": 7,
+    "writeTables": [
+      "api_key",
+      "auth_identity",
+      "payment_provider",
+      "price_preference",
+      "provider_identity",
+      "publishable_api_key_sales_channel",
+      "sales_channel",
+      "store",
+      "store_currency",
+      "user",
+      "user_preference",
+      "workflow_execution"
+    ],
+    "bookkeepingObjects": 6,
+    "ddlOwnerMembershipAndBookkeepingWrites": false
+  },
+  "http": {
+    "requiredChecks": 12,
+    "allRequiredPassed": true,
+    "authenticatedHealth": 200,
+    "unauthenticated": 403,
+    "nativeAdmin": 200,
+    "runtimeDatabaseReadiness": 200,
+    "customerAuth": 403,
+    "storeMutations": 403,
+    "adminAsCustomer": 401,
+    "initialCleanupDelete": 400,
+    "cleanupRecovery": "Native revoke then delete workflows completed; original failed DELETE preserved",
+    "syntheticKeyRemaining": 0
+  },
+  "secretVersions": {
+    "vynvori-medusa-database-url": "3",
+    "vynvori-medusa-jwt-secret": "1",
+    "vynvori-medusa-cookie-secret": "1"
+  },
+  "migrationSecretVersionOperatorOnly": "2",
+  "migrationSecretMounted": false,
+  "runtimeSecretAccess": "Three explicit runtime secrets; no migration-secret binding or runtime project role",
+  "resources": {
+    "min": 0,
+    "max": 1,
+    "cpu": 1,
+    "memory": "2Gi",
+    "mode": "shared",
+    "redis": false
+  },
+  "operationalFeatures": "OFF",
+  "exceptionExpiresAt": "2026-10-24T23:59:59Z",
+  "expiryEnforcement": "Process admission only; stop/revoke the running service at expiry; no scheduled shutdown created",
+  "gitPublication": "NOT_RUN; automatic review rejected commit under existing separate no-commit restriction",
+  "remoteCI": "NOT_RUN for uncommitted source overlay",
+  "remainingM2": "Creative Neon/Drizzle, R2 and processing worker remote acceptance remain separate and unverified"
+}

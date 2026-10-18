@@ -1,9 +1,9 @@
 {
   "id": "m2-private-synthetic-staging-v1",
   "scope": "private-synthetic-staging-only",
-  "approved": false,
-  "approvedBy": null,
-  "sourceCommit": null,
+  "approved": true,
+  "approvedBy": "VYNVORI founder",
+  "sourceCommit": "f923f7b26c4fc0684e26cfdf29ebf177d80103f6",
   "notBefore": "2026-10-17T00:00:00Z",
   "expiresAt": "2026-10-24T23:59:59Z"
 }

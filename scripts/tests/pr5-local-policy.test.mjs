@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { digest } from "../security/audit-policy.mjs";
 import { evaluateLocal, collectLocalState, verifyCleanCheckout, REVIEWED_HEAD, POLICY_PATH } from "../security/pr5-local-policy.mjs";
-import { PR5_IMPLEMENTATION_COMMIT, PR5_POLICY_DIGEST } from "../security/run-audit.mjs";
+import { PR5_IMPLEMENTATION_COMMIT, PR5_POLICY_DIGEST, STAGING_IMPLEMENTATION_COMMIT } from "../security/run-audit.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const audits = JSON.parse(await fs.readFile(new URL("../../security/fixtures/pr5-reviewed-audits.json", import.meta.url), "utf8"));
@@ -49,7 +49,9 @@ test("exact frozen local input is accepted, raw audit failures and remote prohib
   assert.equal(result.remoteExecutionApproved, false);
 });
 test("actual committed activation is sealed, or the unactivated implementation fails closed", async () => {
-  if (!active) {
+  if (STAGING_IMPLEMENTATION_COMMIT !== "UNACTIVATED") {
+    await assert.rejects(collectLocalState(root, PR5_IMPLEMENTATION_COMMIT, PR5_POLICY_DIGEST, policy, legacy), /UNAUTHORIZED_ACTIVATION_DELTA/);
+  } else if (!active) {
     await assert.rejects(collectLocalState(root, PR5_IMPLEMENTATION_COMMIT, PR5_POLICY_DIGEST, fixturePolicy, legacy), /LOCAL_POLICY_NOT_ACTIVATED/);
   } else {
     const actual = await collectLocalState(root, PR5_IMPLEMENTATION_COMMIT, PR5_POLICY_DIGEST, policy, legacy);

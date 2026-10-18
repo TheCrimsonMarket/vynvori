@@ -22,7 +22,8 @@ test("storage mock: private immutable keys, fixture validation and integrity", a
   const send = async (command: { constructor: { name: string }; input: Record<string, unknown> }) => {
     calls.push({ name: command.constructor.name, input: command.input });
     if (command.constructor.name === "PutObjectCommand") metadata = command.input.Metadata as Record<string, string>;
-    if (command.constructor.name === "GetObjectCommand") return { ContentType: "image/png", ContentLength: syntheticPng().length, Metadata: metadata, Body: { transformToByteArray: async () => syntheticPng() } };
+    if (command.constructor.name === "GetObjectCommand") return { ContentType: "image/png", ContentLength: syntheticPng().length, Metadata: metadata, Body: { async *[Symbol.asyncIterator]() { yield syntheticPng(); } } };
+    if (command.constructor.name === "HeadObjectCommand") return { ContentType: "image/png", ContentLength: syntheticPng().length, Metadata: metadata };
     return {};
   };
   const adapter = storageAdapter({ M2_ENV: "local", M2_R2_ACCOUNT_ID: "0".repeat(32), M2_R2_BUCKET: "vynvori-staging-synthetic" }, { send } as unknown as Pick<S3Client, "send">);
@@ -37,7 +38,8 @@ test("storage mock: private immutable keys, fixture validation and integrity", a
   assert.equal(calls[0]?.input.ACL, undefined);
   assert.deepEqual(Buffer.from(await adapter.read(id)), syntheticPng());
   metadata.sha256 = "bad";
-  await assert.rejects(adapter.read(id), /integrity/);
+  await assert.rejects(adapter.read(id), /Invalid synthetic object/);
+  metadata.sha256 = object.sha256;
   await adapter.remove(id);
   assert.equal(calls.at(-1)?.name, "DeleteObjectCommand");
   assert.throws(() => storageAdapter({ M2_ENV: "staging", M2_R2_ACCOUNT_ID: "0".repeat(32), M2_R2_BUCKET: "production" }));

@@ -2,8 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import { target, bundledPolicy, validateApproval, validateRemoteContext, verifyMetadata, authorizeExecution } from "../../apps/medusa/scripts/remote-staging.mjs";
 import { validateConfiguration, validateRelease, validateIam } from "../medusa-staging-release.mjs";
+import { STAGING_IMPLEMENTATION_COMMIT, STAGING_POLICY_DIGEST } from "../security/run-audit.mjs";
+import { digest } from "../security/audit-policy.mjs";
+import { auditIdentity } from "../security/pr5-local-policy.mjs";
+import { collectStagingState, evaluateStaging } from "../security/staging-policy.mjs";
 const { load } = createRequire(import.meta.url)("js-yaml");
 const template = load(await fs.readFile(new URL("../../deploy/medusa/service.yaml", import.meta.url), "utf8"));
 const now = new Date("2026-10-18T00:00:00Z");
@@ -22,10 +27,41 @@ let version = 0;
 yaml = yaml.replaceAll("REPLACE_NUMERIC_SECRET_VERSION", () => String(++version));
 const service = JSON.parse(yaml);
 const policies = [{ bindings: [] }, { bindings: [{ role: "roles/run.invoker", members: ["user:synthetic@example.invalid"] }] }];
-const awaitPolicy = await bundledPolicy();
+const actualPolicy = await bundledPolicy();
+const awaitPolicy = { ...actualPolicy, approved: false, approvedBy: null, sourceCommit: null };
+
+test("private staging exception pins full audits, image findings, runtime, freshness and expiry", async () => {
+  const audits = JSON.parse(await fs.readFile(new URL("../../security/fixtures/pr5-reviewed-audits.json", import.meta.url), "utf8"));
+  const runtime = JSON.parse(await fs.readFile(new URL("../../security/fixtures/pr5-reviewed-runtime.json", import.meta.url), "utf8"));
+  const policy = { scope: "private-synthetic-staging-only", expiresAt: "2026-10-24T23:59:59Z", sourceFingerprints: {},
+    auditIdentities: { production: digest(auditIdentity(audits.rawProduction)), all: digest(auditIdentity(audits.rawAll)) }, scanIdentity: digest(runtime.scan) };
+  const input = { policy, runtime, production: { exitCode: 1, stdout: JSON.stringify(audits.rawProduction) },
+    all: { exitCode: 1, stdout: JSON.stringify(audits.rawAll) }, env: { PR5_SECURITY_SCOPE: "local-synthetic-only" }, now,
+    image: { ...structuredClone(runtime), localEngineVerified: true, database: { UpdatedAt: "2026-10-17T18:00:00Z", NextUpdate: "2026-10-18T18:00:00Z" } } };
+  assert.equal(evaluateStaging(input).accepted, true);
+  for (const change of [i => { i.production.exitCode = 0; }, i => { i.all.executionError = true; },
+    i => { i.production.stdout = "{}"; }, i => { i.env.K_SERVICE = target.service; },
+    i => { i.image.scan.pop(); }, i => { i.image.scan[0].findings.push({ VulnerabilityID: "NEW" }); },
+    i => { i.image.inventory.uid = 0; }, i => { i.image.baseLayers.push("new"); },
+    i => { i.image.database.NextUpdate = "2026-10-17T00:00:00Z"; },
+    i => { i.image.database.UpdatedAt = "2026-10-19T00:00:00Z"; },
+    i => { i.now = new Date(policy.expiresAt); }, i => { i.policy.expiresAt = "2027-01-01T00:00:00Z"; }]) {
+    const changed = structuredClone(input); change(changed); assert.equal(evaluateStaging(changed).accepted, false);
+  }
+});
 test("bundled policy rejects remote execution before metadata/network or Medusa spawn", async () => {
   assert.throws(() => validateApproval(awaitPolicy), /REMOTE_APPROVAL_REQUIRED/);
-  await assert.rejects(authorizeExecution(env, "serve"), /REMOTE_APPROVAL_REQUIRED/);
+  assert.throws(() => validateApproval(awaitPolicy), /REMOTE_APPROVAL_REQUIRED/);
+});
+test("bundled activation matches the sealed implementation while an unapproved policy still fails", () => {
+  if (STAGING_IMPLEMENTATION_COMMIT === "UNACTIVATED") assert.throws(() => validateApproval(actualPolicy), /REMOTE_APPROVAL_REQUIRED/);
+  else { validateApproval(actualPolicy); assert.equal(actualPolicy.sourceCommit, STAGING_IMPLEMENTATION_COMMIT); }
+});
+test("actual staging source overlay and policy anchor are verified, or remain unactivated", async () => {
+  const legacy = JSON.parse(await fs.readFile(new URL("../../security/m2-exception-policy.json", import.meta.url), "utf8"));
+  const root = fileURLToPath(new URL("../..", import.meta.url));
+  if (STAGING_IMPLEMENTATION_COMMIT === "UNACTIVATED") await assert.rejects(collectStagingState(root, STAGING_IMPLEMENTATION_COMMIT, STAGING_POLICY_DIGEST, legacy), /STAGING_NOT_ACTIVATED/);
+  else { const result = await collectStagingState(root, STAGING_IMPLEMENTATION_COMMIT, STAGING_POLICY_DIGEST, legacy); assert.equal(result.policy.implementationCommit, STAGING_IMPLEMENTATION_COMMIT); }
 });
 test("reviewed remote fixture accepts only the exact service context and bounded window", () => {
   validateRemoteContext(env, "serve", approval, now);

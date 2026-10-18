@@ -8,10 +8,13 @@ import { promisify } from "node:util";
 import { evaluate, snapshot, digest, sha256, validatePolicy } from "./audit-policy.mjs";
 import { collectLocalState, evaluateLocal, validateLocalInputs, contextAllowed, POLICY_PATH } from "./pr5-local-policy.mjs";
 import { verifyLocalImage } from "./pr5-runtime-check.mjs";
+import { collectStagingState, validateStagingAudits, evaluateStaging } from "./staging-policy.mjs";
 
 // Rendered only in the separately committed activation step; never by this runner.
 export const PR5_IMPLEMENTATION_COMMIT = "dfa716c53adf83c613bb4aca459b1b5580fdcaf5";
 export const PR5_POLICY_DIGEST = "03d4d2291513834c6caab951a7c9506cbec6bc7bedfcea5843f77f1258c017a4";
+export const STAGING_IMPLEMENTATION_COMMIT = "f923f7b26c4fc0684e26cfdf29ebf177d80103f6";
+export const STAGING_POLICY_DIGEST = "92a9bc66eaabc2db931353b3d1056278bb585ccd800d454778653453ba02aa82";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const policyPath = path.join(root, "security/m2-exception-policy.json");
@@ -86,7 +89,13 @@ async function main() {
     state = await snapshot(root, policy);
     result ??= evaluate({ ...audit, policy, state, now: new Date(), env: process.env });
     historicalResult = result;
-    if (!result.accepted) {
+    if (!result.accepted && STAGING_IMPLEMENTATION_COMMIT !== "UNACTIVATED") {
+      const staged = await collectStagingState(root, STAGING_IMPLEMENTATION_COMMIT, STAGING_POLICY_DIGEST, policy);
+      const input = { ...staged, production: audit, all: allAudit, env: process.env };
+      validateStagingAudits(input);
+      image = await verifyLocalImage(root, evidence, staged.runtime);
+      result = evaluateStaging({ ...input, image });
+    } else if (!result.accepted) {
       // No supplied snapshot, image/report override, automatic policy rewrite or
       // historical-state substitution is accepted by the production command.
       localPolicy = JSON.parse(await fs.readFile(path.join(root, POLICY_PATH), "utf8"));

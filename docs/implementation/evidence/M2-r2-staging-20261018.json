@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "checkedAt": "2026-10-18T00:49:03.277Z",
+  "baseCommit": "f923f7b26c4fc0684e26cfdf29ebf177d80103f6",
+  "scope": "private-synthetic-R2-only",
+  "proof": {
+    "checkedAt": "2026-10-18T00:49:01.922Z",
+    "account": "e95858a5212c8d7f848a29e9c8332c43",
+    "bucket": "vynvori-staging-assets",
+    "jurisdiction": "us",
+    "endpoint": "https://e95858a5212c8d7f848a29e9c8332c43.us.r2.cloudflarestorage.com",
+    "bucketCreatedAt": "2026-10-15T05:06:15.263Z",
+    "location": "WNAM",
+    "bucketId": "9bed88391a124b84b474af423c4f572e",
+    "publicDevelopmentEnabled": false,
+    "customDomains": [],
+    "lifecycleRules": [
+      {
+        "id": "Default Multipart Abort Rule",
+        "enabled": true,
+        "conditions": {},
+        "abortMultipartUploadsTransition": {
+          "condition": {
+            "type": "Age",
+            "maxAge": 604800
+          }
+        }
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "round-trip",
+      "runId": "78c60c9e-5f09-44e9-85ac-c3e581df3880",
+      "key": "private/staging/synthetic/v1/78c60c9e-5f09-44e9-85ac-c3e581df3880/e25ee002218606bc42b55e38c01ece666dec1518c891550398483cb8aecc199e.png",
+      "sha256": "e25ee002218606bc42b55e38c01ece666dec1518c891550398483cb8aecc199e",
+      "finalObjectState": "absent",
+      "journalPhase": "COMPLETE",
+      "putAttempts": 1,
+      "deleteAttempts": 1,
+      "verified": true,
+      "injectedResponseLoss": false,
+      "injectionKind": null
+    },
+    {
+      "name": "lost-put-ack",
+      "runId": "4a994fea-b40e-4b57-9027-feb7b04e7d9f",
+      "key": "private/staging/synthetic/v1/4a994fea-b40e-4b57-9027-feb7b04e7d9f/e25ee002218606bc42b55e38c01ece666dec1518c891550398483cb8aecc199e.png",
+      "sha256": "e25ee002218606bc42b55e38c01ece666dec1518c891550398483cb8aecc199e",
+      "finalObjectState": "absent",
+      "journalPhase": "COMPLETE",
+      "putAttempts": 1,
+      "deleteAttempts": 1,
+      "verified": true,
+      "injectedResponseLoss": true,
+      "injectionKind": "LOCAL_EXCEPTION_AFTER_REAL_PROVIDER_SUCCESS"
+    },
+    {
+      "name": "lost-delete-ack",
+      "runId": "33ff99b7-ea12-44b6-b0fe-8d1de069f7f5",
+      "key": "private/staging/synthetic/v1/33ff99b7-ea12-44b6-b0fe-8d1de069f7f5/e25ee002218606bc42b55e38c01ece666dec1518c891550398483cb8aecc199e.png",
+      "sha256": "e25ee002218606bc42b55e38c01ece666dec1518c891550398483cb8aecc199e",
+      "finalObjectState": "absent",
+      "journalPhase": "COMPLETE",
+      "putAttempts": 1,
+      "deleteAttempts": 1,
+      "verified": true,
+      "injectedResponseLoss": true,
+      "injectionKind": "LOCAL_EXCEPTION_AFTER_REAL_PROVIDER_SUCCESS"
+    },
+    {
+      "name": "immutable-collision",
+      "runId": "dc17ec9a-3a2f-4c3d-b357-f314c2ae58ca",
+      "key": "private/staging/synthetic/v1/dc17ec9a-3a2f-4c3d-b357-f314c2ae58ca/e25ee002218606bc42b55e38c01ece666dec1518c891550398483cb8aecc199e.png",
+      "sha256": "e25ee002218606bc42b55e38c01ece666dec1518c891550398483cb8aecc199e",
+      "finalObjectState": "absent",
+      "journalPhase": "NEW",
+      "putAttempts": 2,
+      "deleteAttempts": 1,
+      "verified": true,
+      "injectedResponseLoss": false,
+      "injectionKind": null
+    }
+  ],
+  "conditionalNoOverwrite": {
+    "http": 412,
+    "existingPreserved": true
+  },
+  "anonymous": {
+    "http": 400,
+    "errorCode": "InvalidArgument",
+    "errorMessage": "Authorization",
+    "bytesReturned": false
+  },
+  "tokenPolicy": "NOT_INDEPENDENTLY_VERIFIED_CONTROL_TOKEN_CANNOT_READ_TOKEN_METADATA",
+  "bucketSettingsChanged": false,
+  "newCredentialsCreated": false,
+  "originalBucketPreserved": true,
+  "originalBucketCreatedAt": "2026-10-15T05:06:15.263Z",
+  "removedMistakenDuplicate": {
+    "jurisdiction": "default",
+    "bucketId": "256b39e2887b464c83260cfba1eae548",
+    "bucketName": "vynvori-staging-assets",
+    "originalUSBucketUnaffected": true
+  },
+  "publication": "NOT_RUN",
+  "localSourceSha256": {
+    "packages/commerce/src/storage.ts": "23c0fca9aedce74f3fb40ba6d301ff7edff4cf9947a1e29589a34ce227f1b9a4",
+    "packages/commerce/src/synthetic-storage-probe.ts": "9f5bea57b4c12b82efe1ae240b86aaa44db80679b29e2a88b545fcf2d9419f36",
+    "packages/commerce/tests/adapters.test.ts": "879248ade64d5e39065723788301b37cb3f12dca38f5885ccd9d52fc9a29733a",
+    "packages/commerce/tests/storage-recovery.test.ts": "2c2928cb44bdf3d5815646de579f178b5b8fb260e10ffbafb1cf7c0dc4e0a119",
+    "scripts/r2-operator.ts": "47ed8c129aa48d7f59943abe7a616da57dc91784e83db31b9cb684a80333d9a2",
+    "scripts/r2-staging.mjs": "c336e8a71687138c29ae96bc7cc1fce023222ac96663f553001bc5501c14b8c1",
+    "scripts/staging-smoke.ts": "dc5ac69ae3349dfe0eb0d92870d555964163b328e5dc55f5d05105bde08b6911",
+    ".env.example": "38818299c581481b5b39d202bb716f03c0c46005310ef1a520a17490ae11b6cc"
+  },
+  "localChecks": {
+    "commerceTypecheck": "PASS",
+    "commerceTests": {
+      "passed": 18,
+      "failed": 0
+    },
+    "rootLint": "PASS",
+    "knownSecretSmoke": "PASS",
+    "exactR2CredentialLeakScan": "PASS",
+    "medusaSourceSeal": {
+      "accepted": false,
+      "code": "STAGING_SOURCE_CHANGED",
+      "changed": false
+    },
+    "remoteCI": "NOT_RUN"
+  }
+}
