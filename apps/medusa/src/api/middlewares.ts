@@ -8,8 +8,13 @@ export function foundationBoundary(req: MedusaRequest, res: MedusaResponse, next
   catch { res.status(400).json({ code: "INVALID_PATH" }); return; }
   const enrolled = req.scope?.hasRegistration("vynvoriTcmBridge") === true;
   const privateProvision = req.method === "POST" && ["/auth/customer/tcm/provision", "/auth/customer/tcm/exchange", "/auth/customer/tcm/owned"].includes(req.originalUrl) && enrolled;
+  const stockCustomer = ["/store/customers", "/store/orders", "/store/carts"].some(prefix => path.startsWith(prefix));
+  if (stockCustomer && ["GET", "HEAD"].includes(req.method)) {
+    // Preserve M2's unauthorized response while keeping cached customer/admin tokens outside the private bridge.
+    res.status(401).json({ code: "UNAUTHORIZED" }); return;
+  }
   if ((path.startsWith("/auth/customer") && !privateProvision) ||
-      (["/store/customers", "/store/orders", "/store/carts"].some(prefix => path.startsWith(prefix))) ||
+      stockCustomer ||
       (path.startsWith("/store") && !["GET", "HEAD", "OPTIONS"].includes(req.method))) {
     res.status(403).json({ code: "M2_OPERATION_DISABLED" });
     return;

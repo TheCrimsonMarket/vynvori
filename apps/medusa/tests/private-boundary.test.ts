@@ -7,7 +7,7 @@ test("stock private customer resources stay closed both before enrollment and du
     let next = false, status = 0;
     foundationBoundary({ originalUrl: path, method: "GET", scope: { hasRegistration: () => enrolled } } as unknown as MedusaRequest,
       { status(code: number) { status = code; return this; }, json() {} } as unknown as MedusaResponse, () => { next = true; });
-    assert.equal(status, 403); assert.equal(next, false);
+    assert.equal(status, 401); assert.equal(next, false);
   }
   let catalogAllowed = false;
   foundationBoundary({ originalUrl: "/store/products", method: "GET" } as MedusaRequest, {} as MedusaResponse, () => { catalogAllowed = true; });
