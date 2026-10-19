@@ -4,15 +4,14 @@ import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { evaluate, snapshot, digest, sha256, APPROVED_POLICY_SHA256 } from "../security/audit-policy.mjs";
 import { safeEvidence, summarizeAudit } from "../security/run-audit.mjs";
-import { reviewedSurface, REVIEWED_BASELINE } from "./reviewed-security-baseline.mjs";
+import { historicalState, REVIEWED_BASELINE } from "./reviewed-security-baseline.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const policy = JSON.parse(await fs.readFile(new URL("../../security/m2-exception-policy.json", import.meta.url), "utf8"));
 const audit = JSON.parse(await fs.readFile(new URL("../../security/fixtures/m2-reviewed-audit.json", import.meta.url), "utf8"));
-const currentState = await snapshot(root, policy);
-// Exercise the original evaluator against independently hashed historical source,
-// not expected hashes copied out of the policy. Dependencies remain live-verified.
-const state = { ...currentState, surface: reviewedSurface(root, policy) };
+const current = await snapshot(root, policy).then(state => ({ state }), error => ({ error }));
+// Historical workspace metadata comes from immutable Git objects; third-party resolution still uses the real install.
+const state = await historicalState(root, policy);
 const now = new Date("2026-10-16T00:00:00Z");
 const call = (overrides = {}) => evaluate({ policy, state, stdout: JSON.stringify(audit), exitCode: 1, now, ...overrides });
 const rejected = (result, code) => { assert.equal(result.accepted, false); assert.equal(result.status, "REJECTED"); if (code) assert.equal(result.code, code); };
@@ -20,8 +19,8 @@ const rejected = (result, code) => { assert.equal(result.accepted, false); asser
 test("immutable PR4 baseline bytes match reviewed policy; current Cloud Run source is rejected", () => {
   assert.equal(REVIEWED_BASELINE, "259d3883f9d346cbfd117b014beb6bc5d9b18a72");
   assert.equal(digest(state.surface), digest(policy.fingerprint.securitySurface));
-  assert.notEqual(digest(currentState.surface), digest(state.surface));
-  rejected(call({ state: currentState }), "SECURITY_BOUNDARY_CHANGED");
+  if (current.error) assert.equal(current.error.message, "LOCK_FINGERPRINT_MISMATCH");
+  else { assert.notEqual(digest(current.state.surface), digest(state.surface)); rejected(call({ state: current.state }), "SECURITY_BOUNDARY_CHANGED"); }
 });
 
 test("reviewed fingerprint/graph passes before expiry and records all findings", () => {

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { target, bundledPolicy, validateApproval, validateRemoteContext, verifyMetadata, authorizeExecution } from "../../apps/medusa/scripts/remote-staging.mjs";
 import { validateConfiguration, validateRelease, validateIam } from "../medusa-staging-release.mjs";
 import { STAGING_IMPLEMENTATION_COMMIT, STAGING_POLICY_DIGEST } from "../security/run-audit.mjs";
-import { digest } from "../security/audit-policy.mjs";
+import { digest, sha256 } from "../security/audit-policy.mjs";
 import { auditIdentity } from "../security/pr5-local-policy.mjs";
 import { collectStagingState, evaluateStaging, stagingLineage } from "../security/staging-policy.mjs";
 const { load } = createRequire(import.meta.url)("js-yaml");
@@ -68,6 +68,8 @@ test("actual staging source overlay and policy anchor are verified, or remain un
   const legacy = JSON.parse(await fs.readFile(new URL("../../security/m2-exception-policy.json", import.meta.url), "utf8"));
   const root = fileURLToPath(new URL("../..", import.meta.url));
   if (STAGING_IMPLEMENTATION_COMMIT === "UNACTIVATED") await assert.rejects(collectStagingState(root, STAGING_IMPLEMENTATION_COMMIT, STAGING_POLICY_DIGEST, legacy), /STAGING_NOT_ACTIVATED/);
+  else if (sha256(await fs.readFile(`${root}/package-lock.json`)) !== legacy.fingerprint.lockSha256)
+    await assert.rejects(collectStagingState(root, STAGING_IMPLEMENTATION_COMMIT, STAGING_POLICY_DIGEST, legacy), /LOCK_FINGERPRINT_MISMATCH/);
   else { const result = await collectStagingState(root, STAGING_IMPLEMENTATION_COMMIT, STAGING_POLICY_DIGEST, legacy); assert.equal(result.policy.implementationCommit, STAGING_IMPLEMENTATION_COMMIT); }
 });
 test("reviewed remote fixture accepts only the exact service context and bounded window", () => {

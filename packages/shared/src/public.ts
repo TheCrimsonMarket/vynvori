@@ -16,5 +16,5 @@ export const featureDefaults = Object.freeze({
 } as const);
 
 export type Feature = keyof typeof featureDefaults;
-export type FeatureFlags = Readonly<Record<Feature, false>>;
+export type FeatureFlags = Readonly<Omit<Record<Feature, false>, "identity.central_sso"> & { "identity.central_sso": boolean }>;
 export const publicConfig = Object.freeze({ release: "M0 preview", features: featureDefaults });

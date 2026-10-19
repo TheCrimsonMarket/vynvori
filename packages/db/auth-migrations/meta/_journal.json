@@ -1,0 +1,10 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    { "idx": 0, "version": "7", "when": 1792368000000, "tag": "0001_identity_state", "breakpoints": false },
+    { "idx": 1, "version": "7", "when": 1792368000001, "tag": "0002_commerce_mappings", "breakpoints": false },
+    { "idx": 2, "version": "7", "when": 1792368000002, "tag": "0003_customer_credentials", "breakpoints": false },
+    { "idx": 3, "version": "7", "when": 1792368000003, "tag": "0004_revocation_reconciliation", "breakpoints": false }
+  ]
+}
