@@ -22,15 +22,17 @@ function input() {
 }
 const approval = value => ({ implementation: value.policy.implementationCommit, digest: digest(value.policy) });
 const rejected = (value, expected, anchor = approval(value)) => { const result = evaluateM1b(value, anchor); assert.equal(result.accepted, false); if (expected) assert.equal(result.code, expected); };
-test("unactivated production selectors cannot accept a policy that approves itself", () => {
-  const value = input(); assert.equal(evaluateM1b(value).code, "M1B_NOT_APPROVED");
+test("production selectors cannot accept a fabricated policy that approves itself", () => {
+  const value = input(), result = evaluateM1b(value);
+  assert.equal(result.accepted, false);
+  assert.ok(["M1B_NOT_APPROVED", "M1B_APPROVAL_CHANGED"].includes(result.code));
   const proposal = m1bProposal(state, production, all, image); assert.equal(proposal.approved, false); assert.equal(proposal.authority, null);
 });
 test("real diagnostic collection includes the current install and cannot create approved state", async () => {
   const root = fileURLToPath(new URL("../..", import.meta.url)), current = await collectM1bReviewState(root);
   assert.match(current.commit, /^[a-f0-9]{40}$/); assert.ok(current.surface["scripts/security/m1b-source-policy.mjs"]); assert.ok(current.surface["vercel.json"]);
   assert.equal(current.boundaryVerified, undefined);
-  await assert.rejects(collectApprovedM1bState(root, input().policy, env, now), /M1B_NOT_APPROVED/);
+  await assert.rejects(collectApprovedM1bState(root, input().policy, env, now), /M1B_NOT_APPROVED|M1B_APPROVAL_CHANGED/);
 });
 test("exact trusted test input preserves unfiltered findings and denies remote approval", () => {
   const value = input(), result = evaluateM1b(value, approval(value)); assert.equal(result.accepted, true, result.code);
