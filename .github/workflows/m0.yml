@@ -47,6 +47,7 @@ jobs:
         if: always()
         env:
           PR5_SECURITY_SCOPE: local-synthetic-only
+          M1B_SECURITY_SCOPE: m1b-github-ci-source-only
           SECURITY_AUDIT_EVIDENCE_DIR: ${{ runner.temp }}/m2-security-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()

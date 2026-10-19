@@ -41,7 +41,8 @@
     "smoke:m2-security": "node scripts/m2-security.mjs",
     "test:lifecycle": "node --test scripts/tests/process-lifecycle.test.mjs scripts/tests/dependency-compat.test.mjs",
     "security:audit": "node scripts/security/run-audit.mjs",
-    "test:security-policy": "node --test scripts/tests/security-policy.test.mjs"
+    "security:review:m1b": "node scripts/security/m1b-collect-review.mjs",
+    "test:security-policy": "node --test scripts/tests/security-policy.test.mjs scripts/tests/m1b-source-policy.test.mjs"
   },
   "devDependencies": {
     "eslint": "9.39.5",
