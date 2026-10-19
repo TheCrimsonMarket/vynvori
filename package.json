@@ -20,7 +20,7 @@
     "typecheck": "npm run typecheck --workspace @vynvori/shared && npm run typecheck --workspace @vynvori/web && npm run typecheck --workspace @vynvori/design-reference && npm run typecheck:m2",
     "test": "npm run test:m0 && npm run test:reference && npm run test:m2 && npm run test:security-policy && npm run test:staging",
     "test:staging": "node --test scripts/tests/medusa-staging.test.mjs scripts/tests/medusa-runtime-grants.test.mjs scripts/tests/medusa-catalog.test.mjs",
-    "test:m0": "node --conditions=react-server --import tsx --test packages/shared/tests/config.test.ts apps/web/tests/health.test.ts",
+    "test:m0": "node --conditions=react-server --import tsx --test packages/shared/tests/config.test.ts apps/web/tests/*.test.ts scripts/tests/security-smoke.test.mjs",
     "test:reference": "npm run test --workspace @vynvori/design-reference && npm run test:legacy --workspace @vynvori/design-reference",
     "test:browser:web": "node scripts/browser-web.mjs",
     "test:deployment": "node scripts/deployment-check.mjs",

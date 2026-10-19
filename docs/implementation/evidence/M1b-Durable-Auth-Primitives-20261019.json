@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-19",
+  "status": "PASS_LOCAL_PRIMITIVES_ONLY",
+  "startingHead": "262489d8a5c367e579839806d7e8554a394dcd2a",
+  "files": {
+    "packages/commerce/src/auth-vault.ts": "e27af654fec568a9f506c4c51bd0d28cc2f77115f0aafa243424f011e6d48848",
+    "packages/commerce/src/login-transactions.ts": "6f4eb263101ef4e8f46c3b4764752c94d5dacd84cf818a651b2fbeda932170fa",
+    "packages/commerce/tests/auth-vault.test.ts": "43e32a25880cec6f0ec01129daf3d55d680898f38fc3267346160b7e45ceeb37",
+    "packages/commerce/tests/login-transactions.test.ts": "9b750b292dad60c1520c2f02c6bbeeb306fd238ab345e36c1d4087c7bcae8de3",
+    "packages/db/src/auth-state.ts": "57d37d646470d97076c4cf46fbb77209f1024fe4e672e8f87e1ae2f253fa25dc",
+    "packages/db/auth-migrations/0001_identity_state.sql": "d546d9d7321efa70012e49717dbf93ebf55ccb7e4699cac4fb81b0e2f67c06d8",
+    "packages/db/tests/auth-state.test.ts": "6b8b030e2a92a7675ce1fc10552bbdf7a8a23ee56e454e409dbe17dce1c9e94d",
+    "scripts/test-m1b-identity-state.mjs": "6a11f5ae91b3fe03d7c994a9c7a12da54846ace904b02fb6f8e382b89581eb6a"
+  },
+  "commerceTests": {
+    "pass": 48,
+    "command": "node --conditions=react-server --import tsx --test --test-reporter=dot packages/commerce/tests/*.test.ts",
+    "fail": 0
+  },
+  "postgres": {
+    "image": "postgres:16-alpine",
+    "command": "node scripts/test-m1b-identity-state.mjs",
+    "scenariosPassed": 9,
+    "containerCleanup": "REMOVED_VERIFIED_TEST_LABEL",
+    "connection": "DISPOSABLE_LOOPBACK_ONLY",
+    "nodeTestEntriesPassed": 10,
+    "imageId": "sha256:97ff59a4e30e08d1c11bdcd9455e7832368c0572b576c9092cde2df4ae5552a3",
+    "version": "16.12",
+    "skipped": 0,
+    "failed": 0,
+    "runtimeRole": "NON_SUPERUSER_SELECT_INSERT_UPDATE_NO_DDL_OR_DELETE"
+  },
+  "checks": {
+    "affectedLint": "PASS",
+    "commerceTypecheck": "PASS",
+    "whitespace": "PASS",
+    "dbTypecheck": "PASS"
+  },
+  "firstPostgresAttempt": "NOT_RUN_CACHED_17_6_IMAGE_ABSENT; switched to already cached16image",
+  "liveDatabaseMutation": false,
+  "deployment": false,
+  "registration": false,
+  "productionActivation": false,
+  "limitations": [
+    "Migration is proposed and outside current automatic journal",
+    "No cookie/route/Medusa provider activation",
+    "Full central exchange/refresh/revoke orchestration incomplete",
+    "No Neon18 staging acceptance",
+    "No full browser login or M1b acceptance"
+  ]
+}

@@ -1,0 +1,1131 @@
+{
+  "date": "2026-10-19",
+  "status": "PASS_FRESH_INSTALL_AND_CHECKS_AUDITS_REQUIRE_REVIEW",
+  "node": "v22.23.3",
+  "lockSha256": "bc79ed00e929d52709f0024562a0496f222e792cd17c46e12cb10b050bc817a6",
+  "workspace": "C:\\Users\\User\\AppData\\Local\\Temp\\VYNVORI-M1b-fresh-Y4olr3\\workspace",
+  "output": "C:\\Users\\User\\AppData\\Local\\Temp\\VYNVORI-M1b-fresh-Y4olr3",
+  "resumedVerifiedInstall": true,
+  "registry": "https://registry.npmjs.org/",
+  "userNpmCredentials": "NOT_LOADED_EMPTY_CONFIG",
+  "liveConfigurationCopied": false,
+  "approvalSealChanged": false,
+  "deployment": false,
+  "npm": "10.9.9",
+  "npmCi": "PASS_NORMAL_LIFECYCLE",
+  "identityTests": "PASS_SHARED_COMMERCE_WEB_MEDUSA",
+  "lint": "PASS",
+  "typecheck": "PASS",
+  "production-audit": {
+    "exitCode": 1,
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 3,
+      "high": 76,
+      "critical": 0,
+      "total": 79
+    },
+    "highCritical": [
+      {
+        "name": "@medusajs/admin-bundler",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/analytics",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/analytics-local",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/analytics-posthog",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/api-key",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/auth",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/auth-emailpass",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/auth-github",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/auth-google",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/auth-oidc",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/cache-inmemory",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/cache-redis",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/caching",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/caching-redis",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/cart",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/cli",
+        "severity": "high",
+        "isDirect": true,
+        "fixAvailable": {
+          "name": "@medusajs/cli",
+          "version": "2.10.3",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/core-flows",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/currency",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/customer",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/deps",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/cli",
+          "version": "2.10.3",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/draft-order",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/event-bus-local",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/event-bus-redis",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/file",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/file-local",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/file-s3",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/framework",
+        "severity": "high",
+        "isDirect": true,
+        "fixAvailable": {
+          "name": "@medusajs/framework",
+          "version": "2.10.3",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/fulfillment",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/fulfillment-manual",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/index",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/inventory",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/link-modules",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/locking",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/locking-postgres",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/locking-redis",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/medusa",
+        "severity": "high",
+        "isDirect": true,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/modules-sdk",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/notification",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/notification-local",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/notification-sendgrid",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/orchestration",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/order",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/payment",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/payment-stripe",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/pricing",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/product",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/promotion",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/query",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/rbac",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/region",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/sales-channel",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/search",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/search-postgres",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/settings",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/stock-location",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/store",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/tax",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/translation",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/user",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/utils",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/workflow-engine-inmemory",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/workflow-engine-redis",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/workflows-sdk",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@mikro-orm/cli",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@mikro-orm/core",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@mikro-orm/knex",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@mikro-orm/migrations",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@mikro-orm/postgresql",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "awilix",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "braces",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "chokidar",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "fast-glob",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "globby",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "micromatch",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "tailwindcss",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "umzug",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      }
+    ],
+    "rawEvidence": "M1b-Npm-Production-Audit-20261019.json",
+    "rawSha256": "22f034168e9bd7abc1b781d255edf3be77708d876aeebc9c251f26d7d11b885e"
+  },
+  "all-audit": {
+    "exitCode": 1,
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 7,
+      "high": 78,
+      "critical": 0,
+      "total": 85
+    },
+    "highCritical": [
+      {
+        "name": "@medusajs/admin-bundler",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/analytics",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/analytics-local",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/analytics-posthog",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/api-key",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/auth",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/auth-emailpass",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/auth-github",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/auth-google",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/auth-oidc",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/cache-inmemory",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/cache-redis",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/caching",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/caching-redis",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/cart",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/cli",
+        "severity": "high",
+        "isDirect": true,
+        "fixAvailable": {
+          "name": "@medusajs/cli",
+          "version": "2.10.3",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/core-flows",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/currency",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/customer",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/deps",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/cli",
+          "version": "2.10.3",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/draft-order",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/event-bus-local",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/event-bus-redis",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/file",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/file-local",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/file-s3",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/framework",
+        "severity": "high",
+        "isDirect": true,
+        "fixAvailable": {
+          "name": "@medusajs/framework",
+          "version": "2.10.3",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/fulfillment",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/fulfillment-manual",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/index",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/inventory",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/link-modules",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/locking",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/locking-postgres",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/locking-redis",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/medusa",
+        "severity": "high",
+        "isDirect": true,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/modules-sdk",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/notification",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/notification-local",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/notification-sendgrid",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/orchestration",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/order",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/payment",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/payment-stripe",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/pricing",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/product",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/promotion",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/query",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/rbac",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/region",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/sales-channel",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/search",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/search-postgres",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/settings",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/stock-location",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/store",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/tax",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/translation",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@medusajs/user",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/utils",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/workflow-engine-inmemory",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/workflow-engine-redis",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@medusajs/workflows-sdk",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@mikro-orm/cli",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@mikro-orm/core",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@mikro-orm/knex",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@mikro-orm/migrations",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@mikro-orm/postgresql",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "@next/eslint-plugin-next",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "eslint-config-next",
+          "version": "14.2.35",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "awilix",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "braces",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "chokidar",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "eslint-config-next",
+        "severity": "high",
+        "isDirect": true,
+        "fixAvailable": {
+          "name": "eslint-config-next",
+          "version": "14.2.35",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "fast-glob",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "eslint-config-next",
+          "version": "14.2.35",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "globby",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      },
+      {
+        "name": "micromatch",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "tailwindcss",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": {
+          "name": "@medusajs/medusa",
+          "version": "1.20.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "umzug",
+        "severity": "high",
+        "isDirect": false,
+        "fixAvailable": true
+      }
+    ],
+    "rawEvidence": "M1b-Npm-All-Audit-20261019.json",
+    "rawSha256": "7a71eb0a65b3d46b75cee5cb2365bf9f7f98a31d74444561abed30591341ab19"
+  },
+  "manifests": {
+    "package.json": "09d8c8708a8b9099c5c64f005cc85ed95a8f8e7a330e624d5d0456b615fde2d5",
+    "package-lock.json": "bc79ed00e929d52709f0024562a0496f222e792cd17c46e12cb10b050bc817a6",
+    "design/reference/package.json": "c7145deaecb3b06cbe423a7d5bbdc150845d5893d789ef97285d868c31ad7280",
+    "apps/web/package.json": "f3bbb021416eda366a9397c3fa6ad30a1bd3059e87af9435c49f9e5cc80d21b9",
+    "packages/shared/package.json": "ef3625d12a2c40395b93054a7c6b3c15e5855e3b7c125a5b5f116e6b200b12ea",
+    "apps/medusa/package.json": "4046ec09277ddbccb59ae2c72bf84fed25f1952a6ad8d162473e60c0a47ea9be",
+    "packages/db/package.json": "017fe4f650c026ae7ebfaef16997499dcdedc72eaf87000115a477a92d904ce3",
+    "packages/commerce/package.json": "abbfbe81b5512e204aab263f20381c06a81368ad989fa77eb238ac619049914c",
+    "services/image-processing/package.json": "819512cc3f616af2d6df1a88f3741ac8d97dd32e3e9b5bb311821ea7adb08d7b"
+  },
+  "unitPass": 117,
+  "unitFail": 0,
+  "fullCi": "NOT_GREEN_EXISTING_M2_FINGERPRINT_GATE_UNCHANGED"
+}

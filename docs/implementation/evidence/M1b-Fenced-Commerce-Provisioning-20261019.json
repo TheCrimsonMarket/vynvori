@@ -1,0 +1,78 @@
+{
+  "date": "2026-10-19",
+  "status": "PASS_LOCAL_FENCED_NATIVE_PROVISIONING",
+  "files": {
+    "packages/db/auth-migrations/0002_commerce_mappings.sql": "5c2ee871466d4ea49841098284af043345500de89db1457c371c54e2c351593b",
+    "packages/db/src/commerce-mappings.ts": "da73cfba3b16b077e6d1e9b3c0af580c795d4045afbbe995fa0487a86166eb08",
+    "packages/db/tests/auth-state.test.ts": "8448a568877af4e736a7f2078307616d3ed079dc61a319d8f69d30826422aeff",
+    "packages/commerce/src/commerce-identity.ts": "ab94ba5200ddfdb6e082bb3a73654e3289492fa68d8bcd0f21be58f0fa3bdbac",
+    "packages/commerce/src/auth-sessions.ts": "fc663bf14434d4cfc33d6c2bc428cd502f58409ba1011863ca88aeba16259b0c",
+    "packages/commerce/src/auth-vault.ts": "d85b4ba93f9e87fe700e412ad89528b4706a6d952a7d03127d872164473a0a6b",
+    "packages/commerce/src/central-identity-core.ts": "c5874f69ca35ff5d18f0e5ceb4add959ed677b4a364b16efd8c0bd2837781dfd",
+    "apps/medusa/src/auth/central-identity.ts": "c5874f69ca35ff5d18f0e5ceb4add959ed677b4a364b16efd8c0bd2837781dfd",
+    "apps/medusa/src/modules/tcm-auth/service.ts": "a4cd8a69371667ff39b1dc3df5be1972956a634448bf7cdba25bafd566724106",
+    "apps/medusa/src/workflows/central-customer.ts": "c43c94f61faf7354d69a16a34d1f155c989574431e97471595906388faa7c085",
+    "apps/medusa/src/workflows/steps/central-customer.ts": "281753a16e8f08da6f175ba74a0ccd9e5702bcb9c5dff83ffe63099b7464ba5e",
+    "apps/medusa/tests/central-customer.test.ts": "8f2bcc6c4b5dfa8f59446d35799d4263da330acc14681d77e53f8a0fa0ae79c5",
+    "apps/medusa/scripts/m1b-native-probe.cjs": "140b566088f093ef2008e9954f18edf7898522eb7d6596a8a9f62998cdb67df0",
+    "scripts/test-m1b-native-medusa.mjs": "72b21ca5ce1e278e3fff08195e546e61c21fae74bcde490a24362dd8323e0aac",
+    "scripts/test-m1b-identity-state.mjs": "a28a72fd90a8ed7b4abbc3895e2f385de089efa5007102675179d1319a648790"
+  },
+  "combinedCommerceMedusaTests": {
+    "fail": 0,
+    "nativeWorkflowServiceFixtureTests": 6,
+    "pass": 75
+  },
+  "creativePostgres": {
+    "version": "16.12",
+    "skipped": 0,
+    "scope": "DISPOSABLE_LOOPBACK_ONLY",
+    "containerCleanup": "REMOVED",
+    "scenariosPass": 19,
+    "nodeEntriesPass": 20,
+    "fail": 0
+  },
+  "nativeMedusa": {
+    "status": "PASS_NATIVE_MODULES_AND_WORKFLOWS",
+    "authIdentityRace": "ONE_NATIVE_IDENTITY",
+    "firstCustomer": "ONE_NATIVE_CUSTOMER",
+    "emailCollision": "DENIED_NO_LINK",
+    "contactChange": "SAME_CUSTOMER",
+    "orphanRecovery": "SAME_CUSTOMER_NO_CREATE",
+    "unresolvedReconcile": "NO_CREATE",
+    "providerRegistration": false,
+    "publicServer": false,
+    "nativeUniqueIndexes": "VERIFIED_PHYSICAL_POSTGRES",
+    "database": "DISPOSABLE_LOOPBACK_ONLY",
+    "postgres": "16.12",
+    "output": "C:\\Users\\User\\AppData\\Local\\Temp\\VYNVORI-M1b-20261019\\medusa-source-build-b56f651b-69cd-4043-b36b-cd90087152fc",
+    "deployment": false,
+    "liveRegistration": false
+  },
+  "checks": {
+    "physicalNativeUniqueIndexes": "PASS_LOCAL_POSTGRES_ONLY",
+    "affectedLint": "PASS",
+    "commerceTypecheck": "PASS",
+    "dbTypecheck": "PASS",
+    "whitespace": "PASS",
+    "medusaTypecheck": "PASS",
+    "actualMedusaCompiler": "PASS"
+  },
+  "failuresCorrected": [
+    "First native harness stopped before migration during disposable DB readiness; no application evidence inferred",
+    "Next native harness migrated but exec fixture lacked expected default export; corrected to installed loader contract",
+    "Current native run passes all module/workflow scenarios and exact-label cleanup"
+  ],
+  "runtimeEnrollment": false,
+  "liveDatabaseMutation": false,
+  "registration": false,
+  "deployment": false,
+  "remaining": [
+    "Private HTTP transport and actor-bound customer bearer custody",
+    "Web cookie/CSRF/routes/UX integration",
+    "Pending central revoke reconciliation worker",
+    "Formal live migration/checksum/grant review and Neon18 tests",
+    "Approved staging registration/deployment and actual acceptance",
+    "Required CI/security review and source publication"
+  ]
+}

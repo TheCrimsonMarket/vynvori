@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-19",
+  "status": "PASS_LOCAL_IDENTITY_MIGRATION_AND_RESTORE",
+  "head": "262489d8a5c367e579839806d7e8554a394dcd2a",
+  "files": {
+    "packages/db/src/identity-migrations.ts": "0e6c93bb2da58e04dee9853ffff8670eebcef84639bb1fad981e4c0092bba702",
+    "packages/db/src/migrate-identity.ts": "8e70c4ab3bd1fb2f07d4dd15c99c137a9ef942878966be54b93014a96528d78f",
+    "packages/db/auth-migrations/plan.json": "7ba33e9d1f6e962e1d2ca6e807cd403f647c11692787f34f2451505d9a7c98bb",
+    "packages/db/auth-migrations/meta/_journal.json": "ba181e1463b0deff7f88c63f2af47c44d6778e54734cd08329a57b4f50e76aab",
+    "packages/db/auth-migrations/.gitattributes": "76a2d43a3c277c6848bb6e66c78e873143d78af18dd89d1026f495b9c6faa243",
+    "packages/db/tests/identity-migrations.test.ts": "c5ecd97fd1929c444f9f0d4fbb32775a3dcc518eabcdf7b62f48d670eedb06cb",
+    "scripts/test-m1b-identity-state.mjs": "b2ae65e7cdd13cd51541032235a79beb05c0defc244abf0cdc235fa51dc2de34",
+    "docs/implementation/artifacts/M1b-Identity-Runtime-Grants-Proposal-20261019.sql": "018533a5466b81d29a8eb554dee03bf85c3967dc96c90b711351867be6abe8d7"
+  },
+  "command": "node scripts/test-m1b-identity-state.mjs --postgres18",
+  "postgres": "18.6",
+  "imageId": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "tests": {
+    "skip": 0,
+    "planGuardChecks": 2,
+    "nodeEntriesPass": 45,
+    "migrationAndGrantScenarios": 8,
+    "fail": 0,
+    "parentEntries": 2,
+    "identityScenarios": 33
+  },
+  "planSha256": "7ba33e9d1f6e962e1d2ca6e807cd403f647c11692787f34f2451505d9a7c98bb",
+  "backupRestore": {
+    "scope": "DISPOSABLE_SYNTHETIC_DATABASES_ONLY",
+    "schemaSha256": "84365464e0f0ee620658adb3defb6c26d2a21dcb4616aca99734d23b28cd6d8b",
+    "pending": 0,
+    "method": "native pg_dump -Fc and pg_restore --exit-on-error",
+    "backupPath": "C:\\Users\\User\\AppData\\Local\\Temp\\VYNVORI-M1b-migration-backup-Wz1NpT\\synthetic-migration.dump",
+    "sourceAndRestoreDigests": "EXACT_MATCH",
+    "backupSha256": "1102a8b7e132dce0780d6232d7ef3ead69635bb6c365c5174328a3fe2d9c9bef",
+    "appliedHistoryRows": 4,
+    "backupBytes": 22061
+  },
+  "rollback": "ALL_DOMAIN_AND_JOURNAL_DDL_ROLLS_BACK_ON_MID_MIGRATION_FAILURE",
+  "lostCommit": "OUTCOME_UNKNOWN_NO_AUTOMATIC_RETRY",
+  "drift": "HISTORY_HASH_AND_PHYSICAL_SCHEMA_REJECTED",
+  "runtime": "NO_DDL_DELETE_TRUNCATE_TEMP_OR_MIGRATION_HISTORY",
+  "existingM2MigrationCommandAndJournal": "UNCHANGED_GIT_DIFF_EXIT_0",
+  "lint": "PASS_ROOT",
+  "typecheck": "PASS_DB",
+  "cleanup": "LABELED_CONTAINER_AND_ITS_ANONYMOUS_VOLUMES_REMOVED",
+  "liveBackup": "NOT_RUN",
+  "liveMigration": false,
+  "liveGrants": false,
+  "registration": false,
+  "deployment": false,
+  "fullM1b": "IN_PROGRESS"
+}
