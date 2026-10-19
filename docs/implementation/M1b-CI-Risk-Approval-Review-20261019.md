@@ -32,3 +32,13 @@ After approval, copy the exact unapproved proposal into `security/m1b-source-ci-
 Local evaluation with hypothetical approval metadata was performed only in memory to check the evidence fits the proposed bounds; the actual unactivated evaluator still returns `M1B_NOT_APPROVED`. No active approval file was written.
 
 The separate protected-document receipt correction passed `verify:reference`: all 202 protected files and nine app asset/font/license copies match. M1b remains IN_PROGRESS pending CI approval and actual separately authorized staging acceptance.
+
+## Owner decision and test-only amendment
+
+The owner approved the original CI-only exception on 2026-10-19. Activation then exposed two test assertions that specifically expected inactive selectors. With active selectors, the fabricated test policy is still rejected, with `M1B_APPROVAL_CHANGED` rather than `M1B_NOT_APPROVED`. No acceptance rule failed. The activation was withdrawn before publication; selectors remain inactive and no active policy file exists.
+
+Source follow-up `a87250e2ff7f8f1666070bf0634b28621d4390a6` changes only those denial assertions and their test title inside the sealed source surface. Both legitimate rejection codes are accepted; the evaluator must still return `accepted: false`. All 34 policy tests pass. Runtime/evaluator/workflow/lockfile/dependency changes: **none**. Between the original implementation and this commit, the only other changes are the protected-document receipt and this review document, outside the sealed source surface.
+
+Amendment requested: bind the same approved risk bounds, findings and expiry to implementation `a87250e2ff7f8f1666070bf0634b28621d4390a6`, updating only the recorded test-file hash from `9810c67f79fc8538bbd8006f09e6dfc6a1ef837d7d4324a865b6612a64785f54` to `13479d397cbae17903da1b310a35cd8a6f5ae38a8172ccafdaa58bec261df84c`. Canonical amended unapproved proposal digest: `a98f21589d3fb07d9de9a9d53e6099b94976f25e2d4af081636ee708f94b5711`. The original CI artifact supplies unchanged audit/runtime evidence; the amended candidate is not represented as a newly collected artifact. A fresh accepting CI run must still verify its own source, installed dependencies, audits and image.
+
+This amendment is **pending explicit owner approval** because the original decision named the exact earlier source receipt. No risk scope expansion, expiry extension or operational authority is requested.
