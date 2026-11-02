@@ -36,7 +36,7 @@ async function api(path: string, method: string, body?: unknown, raw?: { bytes: 
   return { ok: response.ok, status: response.status, data };
 }
 
-export function Editor({ compositionId: initialId }: Readonly<{ compositionId?: string }>) {
+export function Editor({ compositionId: initialId, artworkUpload }: Readonly<{ compositionId?: string; artworkUpload: boolean }>) {
   const [history, setHistory] = useState(() => startHistory(EMPTY_SYNTHETIC_SCENE()));
   const [assets, setAssets] = useState<ReadonlyMap<string, EditorAsset>>(new Map());
   const [zoneId, setZoneId] = useState("front"), [selected, setSelected] = useState<string | null>(null), [aspectLock, setAspectLock] = useState(true);
@@ -197,7 +197,7 @@ export function Editor({ compositionId: initialId }: Readonly<{ compositionId?: 
     <section className="atelier ed" aria-label="Garment composition editor">
       <p className="eyebrow">THE INDEPENDENT EDITOR / YOUR ORIGINAL ART</p>
       <h1>{initialId ? "YOUR COMPOSITION." : "YOUR ART. YOUR CANVAS."}</h1>
-      <p className="notice" role="note">PREVIEW ONLY. This editor uses a synthetic coordinate frame ({zone.widthMm} × {zone.heightMm} mm), not a manufacturer print area. Nothing here is approved for printing, priced, or ordered. No AI credits or account are needed to edit.</p>
+      <p className="notice" role="note">PREVIEW ONLY. This editor uses a synthetic coordinate frame ({zone.widthMm} × {zone.heightMm} mm), not a manufacturer print area. Nothing here is approved for printing, priced, or ordered. No AI credits required. No account is needed to edit.</p>
       <p className="ed-status" role="status" aria-live="polite">{message || (server.owner === "guest" ? "Guest draft — expires in 24 hours unless you sign in." : "")}</p>
       <div className="ed-grid">
         <div className="ed-stage">
@@ -227,7 +227,9 @@ export function Editor({ compositionId: initialId }: Readonly<{ compositionId?: 
         </div>
         <div className="ed-panel">
           <div className="ed-row">
-            <label className="button button-primary ed-file"><input type="file" accept={ACCEPT} multiple disabled={busy} onChange={e => { void addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} /><span>Upload artwork</span></label>
+            {artworkUpload
+              ? <label className="button button-primary ed-file"><input type="file" accept={ACCEPT} multiple disabled={busy} onChange={e => { void addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} /><span>Upload artwork</span></label>
+              : <Button disabled aria-describedby="ed-upload-off">Upload artwork — unavailable</Button>}
             <Button variant="outline" onClick={() => { const r = addTextLayer(scene, zoneId); edit(r.scene); setSelected(r.layerId); }}>Add text</Button>
           </div>
           <div className="ed-row">
@@ -273,6 +275,7 @@ export function Editor({ compositionId: initialId }: Readonly<{ compositionId?: 
             <Button variant="outline" onClick={() => void freeze()} disabled={busy || server.autosave === "unavailable" || server.autosave === "conflict"}>Freeze version</Button>
             {server.owner === "guest" && <Button variant="outline" onClick={() => void claim()} disabled={busy}>Keep in my account</Button>}
           </div>
+          {!artworkUpload && <p className="notice" id="ed-upload-off">Artwork upload is not enabled in this preview. You can still add text; nothing is uploaded or stored.</p>}
           {server.autosave === "unavailable" && <p className="notice">Saving is not enabled in this preview. Edits and previews work, but they are not stored.</p>}
           {server.autosave === "conflict" && <p className="notice" role="alert">This draft changed in another tab or device. <button className="ed-link" onClick={() => location.reload()}>Reload</button> to continue.</p>}
           {server.versions.length > 0 && (

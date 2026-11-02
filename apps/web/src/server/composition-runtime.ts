@@ -19,6 +19,15 @@ export function compositionSettings(env: Env): CompositionSettings {
   return Object.freeze({ enabled: true, appOrigin: identity.appOrigin, uploads: env.M3_COMPOSITION_UPLOADS === "true" });
 }
 
+/**
+ * What the editor UI may offer. Derived from the SAME settings the API routes gate on, never from a separate client default:
+ * with any flag OFF (the default) artwork upload is unavailable, and an invalid private configuration also fails closed.
+ */
+export function editorCapabilities(env: Env): Readonly<{ artworkUpload: boolean }> {
+  try { const settings = compositionSettings(env); return Object.freeze({ artworkUpload: settings.enabled && settings.uploads }); }
+  catch { return Object.freeze({ artworkUpload: false }); }
+}
+
 export function createCompositionRuntime(env: Env) {
   const settings = compositionSettings(env);
   const config = { enabled: settings.enabled, appOrigin: settings.enabled ? settings.appOrigin : "", guestTtlSeconds: defaultCompositionConfig.guestTtlMs / 1000, maxJsonBytes: 256 * 1024, maxUploadBytes: defaultCompositionConfig.imageLimits.maxBytes };
