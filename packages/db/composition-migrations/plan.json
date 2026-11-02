@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "purpose": "vynvori-composition-scene",
+  "requires": ["vynvori_identity"],
+  "journalSchema": "vynvori_composition_migrations",
+  "migrations": [
+    { "file": "0001_composition_scene.sql", "sha256": "394bbbdbc7d5128ba5bb3a3bd68ab179b42a42f65365092230cae01a8fc5bf4a" }
+  ]
+}

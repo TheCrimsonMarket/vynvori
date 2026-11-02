@@ -7,7 +7,7 @@ import { privateMedusaSettings } from "./medusa-settings";
 
 export function createIdentityRuntime(env: Readonly<Record<string, string | undefined>>) {
   const settings = identitySettings(env);
-  if (!settings.enabled) return { enabled: false as const, http: authHttpHandlers({ enabled: false, appOrigin: "" }), reconcileRevocations: undefined, close: async () => {} };
+  if (!settings.enabled) return { enabled: false as const, http: authHttpHandlers({ enabled: false, appOrigin: "" }), reconcileRevocations: undefined, sessions: undefined, pool: undefined, close: async () => {} };
   const vault = credentialVault(settings.currentKeyId, settings.keys);
   const authority = centralIdentityClient(settings);
   const medusa = privateMedusaSettings(env, settings);
@@ -19,7 +19,8 @@ export function createIdentityRuntime(env: Readonly<Record<string, string | unde
   const sessions = authSessionService(settings, store, authority, transactions, vault, Date.now, commerce, privateClient);
   // Explicit trusted server call only. No HTTP route, startup batch or scheduler enrollment.
   const revocations = revocationReconciler(settings, store, authority, vault);
-  return { enabled: true as const, http: authHttpHandlers(settings, sessions, transactions), reconcileRevocations: revocations.run, close: connection.close };
+  // `sessions` (verify/claimGuest) and the pool are shared with the M3 composition runtime; neither is exposed over HTTP here.
+  return { enabled: true as const, http: authHttpHandlers(settings, sessions, transactions), reconcileRevocations: revocations.run, sessions, pool: connection.pool, close: connection.close };
 }
 let current: ReturnType<typeof createIdentityRuntime> | undefined;
 export function getIdentityRuntime() { return current ??= createIdentityRuntime(process.env); }
