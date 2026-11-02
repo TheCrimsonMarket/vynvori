@@ -1,6 +1,10 @@
 # VYNVORI execution progress
 
-## ⚠ CI is red repo-wide — two founder-approved windows have expired (flagged 2026-11-02)
+## ✅ W0 complete — CI green on `main` (2026-11-02)
+
+[PR #18](https://github.com/TheCrimsonMarket/vynvori/pull/18) (`3760de6`) restored a fully green CI. It retired the expired approvals (ADR-0019), patched Next.js (critical RCE) and the high advisories, replaced the whole-tree seal with a dated waiver expiring 2026-12-17 (ADR-0020), re-anchored the acceptance-matrix hash, and fixed the smoke and deployment checks. Multi-session work is now coordinated through the [orchestration registry](ORCHESTRATION-REGISTRY.md). Next: W1 (M7 core ledger + M3 local closure), awaiting founder authorization. The section below is retained as history.
+
+## ⚠ (Resolved) CI is red repo-wide — two founder-approved windows have expired (flagged 2026-11-02)
 
 **Update 2026-11-02 — both expired approvals retired ([ADR-0019](ADR-0019-Retire-Expired-Staging-and-M1b-CI-Approvals.md)).** Founder confirmed the Cloud Run staging service is deleted and chose to retire, not renew, the M1b source-CI exception. Staging and M1b selectors are `"UNACTIVATED"` and the staging policy file is back to its unapproved form. `npm test`, lint and typecheck pass. `security:audit` **remains red**, now with `LOCK_FINGERPRINT_MISMATCH` from the base M2 exception (lockfile changed after the seal, PRs #10/#11/#15); the unfiltered production audit reports 76 entries (1 critical, 16 high). The M2 exception and PR5 policies expire 2026-11-15. Founder decisions recorded the same day: no milestone code merges until `security:audit` is green (docs/blueprints exempt); next is one orchestrator-run dependency PR that remediates advisories and replaces the byte-for-byte seal; then Wave 1 = M7 core ledger + M3 local closure, at most two workers; M4 and M6a wait for M1b PASSED. The text below is the original diagnosis.
 
