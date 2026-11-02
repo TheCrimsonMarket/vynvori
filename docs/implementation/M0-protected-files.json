@@ -671,10 +671,10 @@
     },
     {
       "path": "docs/technical/20-acceptance-matrix.md",
-      "sha256": "eca5b98f54cbe4e08baa34d73c93cc4b2bc1be3af8e12471e92fb212a83e51fe",
-      "previousBaselineSha256": "d028007080ff78b7aee631db17b41c4c5f932acaed415fc24735d73916c61717",
-      "gitBlobSha256": "7987eea04357f23349663cd1e99a3de2b74095ffe535fdc6bdac9619a373e843",
-      "changeReason": "2026-10-19 owner-authorized M1b source-only draft: local-evidence IN_PROGRESS annotations only; complete original matrix body and requirement rows verified unchanged; no acceptance gate promoted",
+      "sha256": "97df256d71b5ced67332ca85256e8e029dd8b7b38d2b9b6fdf47c73f6eafc781",
+      "previousBaselineSha256": "eca5b98f54cbe4e08baa34d73c93cc4b2bc1be3af8e12471e92fb212a83e51fe",
+      "gitBlobSha256": "0c385ec50bad868bcd2a1417a1949c765df6bb56547d9127b90023cde1f6967c",
+      "changeReason": "2026-11-02 founder-authorized re-anchor of merged PR #15 (7e78aec): ACC-04..ACC-07 status cells NOT_STARTED -> IN_PROGRESS with local-evidence notes only; IDs, areas and requirement text verified unchanged; no acceptance gate promoted",
       "acceptedUpdateHistory": [
         {
           "sha256": "136c0d48a5104e3266aaf7b15c8418dff44f602de44897d2ad47bd199b22cdee",
@@ -685,6 +685,11 @@
           "sha256": "d028007080ff78b7aee631db17b41c4c5f932acaed415fc24735d73916c61717",
           "gitBlobSha256": "666a57c751392e9fd1c74b29ac2074634a9cec99a47f14715b0290a14f353a92",
           "changeReason": "2026-10-18 authorized M2 synthetic infrastructure PASSED status with exact implementation CI receipt; ACC requirement rows remain unchanged; prior hashes preserved"
+        },
+        {
+          "sha256": "eca5b98f54cbe4e08baa34d73c93cc4b2bc1be3af8e12471e92fb212a83e51fe",
+          "gitBlobSha256": "7987eea04357f23349663cd1e99a3de2b74095ffe535fdc6bdac9619a373e843",
+          "changeReason": "2026-10-19 owner-authorized M1b source-only draft: local-evidence IN_PROGRESS annotations only; complete original matrix body and requirement rows verified unchanged; no acceptance gate promoted"
         }
       ],
       "checkoutHashEncoding": "sha256 is exact CRLF Git checkout bytes; gitBlobSha256 is exact LF Git blob bytes; no arbitrary normalization"
