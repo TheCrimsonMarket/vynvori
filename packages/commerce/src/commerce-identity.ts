@@ -57,7 +57,7 @@ export function commerceIdentityCoordinator(input: Readonly<{ enabled: boolean; 
       if (!stored || typeof stored !== "object") throw new CommerceIdentityError("conflict");
       const request = stored as Record<string, unknown>;
       if (request.issuer !== value.contact.issuer || request.subject !== value.contact.subject || typeof request.email !== "string") throw new CommerceIdentityError("conflict");
-      const result = await native.ensure({ mode, projectId: row.projectId, operationId: row.operationId, identity: value.contact, originalEmail: request.email, accessToken: value.accessToken });
+      const result = await native.ensure({ mode, projectId: row.projectId, operationId: row.operationId, identity: value.contact, originalEmail: value.contact.emailVerified ? request.email : "", accessToken: value.accessToken });
       if (result.projectId !== row.projectId || result.operationId !== row.operationId || result.entityId !== row.entityId) throw new CommerceIdentityError("conflict");
       if (result.state !== "ready") { await journal.markUncertain(row.operationId); return { state: "reconcile_required" }; }
       if (![result.authIdentityId, result.customerId].every(id => typeof id === "string" && /^[A-Za-z0-9_-]{1,256}$/.test(id))) throw new CommerceIdentityError("conflict");
@@ -86,7 +86,8 @@ export function commerceIdentityCoordinator(input: Readonly<{ enabled: boolean; 
       validate(value);
       const operationId = randomUUID();
       const row = await journal.reserve({ userId: value.session.userId, projectId: config.projectId, entityId: centralEntityId(value.contact.issuer, value.contact.subject), operationId,
-        requestCipher: vault.seal(JSON.stringify({ issuer: value.contact.issuer, subject: value.contact.subject, email: value.contact.email }), binding(operationId)) });
+        requestCipher: vault.seal(JSON.stringify({ issuer: value.contact.issuer, subject: value.contact.subject, // Only a centrally verified email may become the Medusa contact email; "" means none.
+        email: value.contact.emailVerified ? value.contact.email : "" }), binding(operationId)) });
       rowMatches(row, value);
       if (row.state === "ready") return ready(row);
       if (row.state === "conflict") return { state: "conflict" };

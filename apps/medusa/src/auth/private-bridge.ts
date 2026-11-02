@@ -4,7 +4,7 @@ import { getAuthContextFromJwtToken } from "@medusajs/framework/http";
 import type { IAuthModuleService, ICustomerModuleService, ILockingModule, IWorkflowEngineService, IOrderModuleService, ICartModuleService, MedusaContainer, ConfigModule } from "@medusajs/framework/types";
 import { centralIdentityClient, centralEntityId } from "./central-identity";
 import { centralCustomerWorkflow } from "../workflows/central-customer";
-import { inspectCentralCustomer, type CentralCustomerInput } from "../workflows/steps/central-customer";
+import { inspectCentralCustomer, verifiedContactEmail, type CentralCustomerInput } from "../workflows/steps/central-customer";
 import type { BridgeSettings } from "./bridge-settings";
 import { assertCentralAuthIdentity } from "../modules/tcm-auth/service";
 
@@ -76,7 +76,8 @@ export function privateMedusaBridge(settings: Extract<BridgeSettings, { enabled:
     async provision(headers: Headers, body: ProvisionBody) {
       const token = credential(headers, body);
       const identity = await authority.verifyContact(token);
-      if (body.mode === "create" && body.originalEmail !== identity.email) throw new PrivateBridgeError(409, "BRIDGE_CONTACT_REQUIRED");
+      // Independent of the web tier: an unverified central email can never become the customer contact email ("" = none).
+      if (body.mode === "create" && body.originalEmail !== verifiedContactEmail(identity)) throw new PrivateBridgeError(409, "BRIDGE_CONTACT_REQUIRED");
       const authenticated = await auth.authenticate("tcm", { headers: { authorization: headers.authorization! } });
       if (!authenticated.success || !authenticated.authIdentity || authenticated.mfaChallenge) throw new PrivateBridgeError(401, "BRIDGE_REAUTH_REQUIRED");
       const input: CentralCustomerInput = { ...body, authIdentityId: authenticated.authIdentity.id, issuer: identity.issuer, subject: identity.subject, projectId: settings.projectId };

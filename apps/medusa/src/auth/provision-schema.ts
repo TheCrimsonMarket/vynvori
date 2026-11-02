@@ -2,7 +2,8 @@ import { z } from "@medusajs/framework/zod";
 export const ProvisionSchema = z.object({
   mode: z.enum(["create", "reconcile"]),
   operationId: z.string().uuid(),
-  originalEmail: z.string().max(254).regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/).refine(value => !/[\x00-\x1f\x7f]/.test(value)),
+  // "" is the explicit wire form of "no verified contact email"; the key itself stays required.
+  originalEmail: z.union([z.literal(""), z.string().max(254).regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/).refine(value => !/[\x00-\x1f\x7f]/.test(value))]),
 }).strict();
 const actorFields = { authIdentityId: z.string().regex(/^[A-Za-z0-9_-]{1,256}$/), customerId: z.string().regex(/^[A-Za-z0-9_-]{1,256}$/) };
 export const ExchangeSchema = z.object(actorFields).strict();

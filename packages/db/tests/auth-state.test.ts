@@ -34,7 +34,7 @@ test("durable identity state in disposable loopback PostgreSQL", { skip: !connec
     const config = { enabled: true, deployment: "staging", issuer, clientId, audience: "urn:vynvori:staging", appOrigin: "https://app.example.invalid" };
     const vault = credentialVault("synthetic", { synthetic: new Uint8Array(32).fill(17) });
     let access = "synthetic-access-0", refresh = "synthetic-refresh-0", revision = 0, expiration = Math.floor(time / 1000) + 300;
-    const control = { exchangeCalls: 0, refreshCalls: 0, revokeCalls: 0, identityReads: 0, revoked: false, failRefresh: false, failRevoke: false, missingContact: false, contactEmail: "synthetic@example.invalid", onRefresh: async () => {} };
+    const control = { exchangeCalls: 0, refreshCalls: 0, revokeCalls: 0, identityReads: 0, revoked: false, failRefresh: false, failRevoke: false, missingContact: false, contactEmail: "synthetic@example.invalid", emailVerified: false, onRefresh: async () => {} };
     const transport: typeof fetch = async (url, init) => {
       const operation = String(url).split("/").at(-1);
       if (operation === "introspect") control.identityReads++;
@@ -58,7 +58,7 @@ test("durable identity state in disposable loopback PostgreSQL", { skip: !connec
       if (control.revoked || form.get("token") !== access) return operation === "introspect" ? Response.json({ active: false }) : Response.json({}, { status: 401 });
       if (operation === "profile" && control.missingContact) return Response.json({ error: "contact_required" }, { status: 409 });
       const bound = { iss: issuer, sub: subject, client_id: clientId, aud: "urn:vynvori:staging" };
-      return Response.json(operation === "profile" ? { ...bound, email: control.contactEmail, email_verified: false } : { ...bound, active: true, exp: expiration, verified_at: Math.floor(time / 1000) });
+      return Response.json(operation === "profile" ? { ...bound, email: control.contactEmail, email_verified: control.emailVerified } : { ...bound, active: true, exp: expiration, verified_at: Math.floor(time / 1000) });
     };
     const authority = centralIdentityClient({ ...config, apiBase: issuer + "/mana", clientSecret: "synthetic-private-only", audience: "urn:vynvori:staging", callback }, transport, () => time);
     const transactions = loginTransactions(config, store, vault, () => time);
@@ -240,12 +240,50 @@ test("durable identity state in disposable loopback PostgreSQL", { skip: !connec
         reconciles++; assert.equal(input.originalEmail, "synthetic@example.invalid");
         return { state: "ready", projectId: input.projectId, operationId: input.operationId, entityId: centralEntityId(input.identity.issuer, input.identity.subject), authIdentityId: "authid_mapping_recovered", customerId: "cus_mapping_recovered" };
       } };
-      const f = composed({}, native), login = await f.login();
+      const f = composed({}, native); f.control.emailVerified = true; const login = await f.login();
       assert.equal((await f.service.ensureCommerce(login.cookieSecret)).state, "reconcile_required");
       assert.equal((await f.service.ensureCommerce(login.cookieSecret)).state, "reconcile_required");
       f.control.contactEmail = "changed@example.invalid";
       assert.equal((await f.service.reconcileCommerce(login.cookieSecret)).state, "ready");
       assert.equal(creates, 1); assert.equal(reconciles, 1);
+    });
+    await t.test("an unverified central email never reaches Medusa, yet login and commerce mapping still succeed", async () => {
+      const sent: string[] = [];
+      const native: NativeCustomerProvisioner = { async ensure(input) {
+        sent.push(input.originalEmail);
+        return { state: "ready", projectId: input.projectId, operationId: input.operationId, entityId: centralEntityId(input.identity.issuer, input.identity.subject), authIdentityId: "authid_unverified_contact", customerId: "cus_unverified_contact" };
+      } };
+      const f = composed({}, native); f.control.emailVerified = false; const login = await f.login();
+      assert.equal((await f.service.contact(login.cookieSecret)).emailVerified, false);
+      const outcome = await f.service.ensureCommerce(login.cookieSecret);
+      assert.equal(outcome.state, "ready"); assert.deepEqual(sent, [""]);
+      const current = await f.service.verify(login.cookieSecret);
+      assert.equal((await commerceMappingStore(pool).get(current.userId, "synthetic-medusa-project"))?.state, "ready");
+    });
+    await t.test("a verified central email is the only email forwarded, and survives uncertain-create reconciliation", async () => {
+      const sent: string[] = [];
+      const native: NativeCustomerProvisioner = { async ensure(input) {
+        sent.push(input.originalEmail);
+        if (input.mode === "create") throw new Error("synthetic-response-lost-after-native-create");
+        return { state: "ready", projectId: input.projectId, operationId: input.operationId, entityId: centralEntityId(input.identity.issuer, input.identity.subject), authIdentityId: "authid_verified_contact", customerId: "cus_verified_contact" };
+      } };
+      const f = composed({}, native); f.control.emailVerified = true; const login = await f.login();
+      assert.equal((await f.service.ensureCommerce(login.cookieSecret)).state, "reconcile_required");
+      assert.equal((await f.service.reconcileCommerce(login.cookieSecret)).state, "ready");
+      assert.deepEqual(sent, ["synthetic@example.invalid", "synthetic@example.invalid"]);
+    });
+    await t.test("verification revoked after reservation stops the stored email from being forwarded", async () => {
+      const sent: string[] = [];
+      const native: NativeCustomerProvisioner = { async ensure(input) {
+        sent.push(input.originalEmail);
+        if (input.mode === "create") throw new Error("synthetic-response-lost-after-native-create");
+        return { state: "ready", projectId: input.projectId, operationId: input.operationId, entityId: centralEntityId(input.identity.issuer, input.identity.subject), authIdentityId: "authid_revoked_verification", customerId: "cus_revoked_verification" };
+      } };
+      const f = composed({}, native); f.control.emailVerified = true; const login = await f.login();
+      assert.equal((await f.service.ensureCommerce(login.cookieSecret)).state, "reconcile_required");
+      f.control.emailVerified = false;
+      assert.equal((await f.service.reconcileCommerce(login.cookieSecret)).state, "ready");
+      assert.deepEqual(sent, ["synthetic@example.invalid", ""]);
     });
     await t.test("native result for another operation cannot establish a mapping", async () => {
       const native: NativeCustomerProvisioner = { async ensure(input) {
