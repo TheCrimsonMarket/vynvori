@@ -1,0 +1,884 @@
+{
+  "date": "2026-10-19",
+  "status": "PROPOSED_SOURCE_ONLY_PUBLICATION_REQUIRES_OWNER_APPROVAL",
+  "base": "262489d8a5c367e579839806d7e8554a394dcd2a",
+  "branch": "codex/m1b-central-identity",
+  "target": "main",
+  "draft": true,
+  "digestConvention": "SHA256 of sorted path+sha256 JSON; text LF-normalized, binary unchanged",
+  "sourceDigest": "8f7755edf2edceab6a84fe676cbeb18c5a1c9005f589ad929a4935f9082af175",
+  "fileCount": 123,
+  "files": [
+    {
+      "path": ".vercelignore",
+      "status": "modified",
+      "bytes": 679,
+      "sha256": "14fe1eebc10e73ddf68646f0da08074d073407ce16333dd9ae5d3d2fd809499b",
+      "rawSha256": "ce8318699fd69c2e905a43cdde3bc13c67722530a540b841d140d6e7f47b83c3"
+    },
+    {
+      "path": "apps/medusa/Dockerfile",
+      "status": "modified",
+      "bytes": 2117,
+      "sha256": "689ae5b4db9f1e0418be286d478171d438c702cd5bc888396a6f0bb1209aa356",
+      "rawSha256": "689ae5b4db9f1e0418be286d478171d438c702cd5bc888396a6f0bb1209aa356"
+    },
+    {
+      "path": "apps/medusa/medusa-config.ts",
+      "status": "modified",
+      "bytes": 1118,
+      "sha256": "997d4b7f05d1d592ea57e910a1b6895ee7d20bc88bd733d5f82a04c7d54a5cc1",
+      "rawSha256": "997d4b7f05d1d592ea57e910a1b6895ee7d20bc88bd733d5f82a04c7d54a5cc1"
+    },
+    {
+      "path": "apps/medusa/scripts/build.mjs",
+      "status": "modified",
+      "bytes": 1091,
+      "sha256": "a76a0d20acf6ec40d2b65e83489963c1b3a73aa00784df6916f41d54d014cf29",
+      "rawSha256": "a76a0d20acf6ec40d2b65e83489963c1b3a73aa00784df6916f41d54d014cf29"
+    },
+    {
+      "path": "apps/medusa/scripts/check-auth-source.mjs",
+      "status": "new",
+      "bytes": 779,
+      "sha256": "f0d14758775b19536f727fce09709c90824fae58315c0af1651826aa8770ad08",
+      "rawSha256": "f0d14758775b19536f727fce09709c90824fae58315c0af1651826aa8770ad08"
+    },
+    {
+      "path": "apps/medusa/scripts/m1b-native-probe.cjs",
+      "status": "new",
+      "bytes": 18039,
+      "sha256": "87126dc2c02f15032daced73be46253bb7427afb2c736269bc1242405aae498f",
+      "rawSha256": "87126dc2c02f15032daced73be46253bb7427afb2c736269bc1242405aae498f"
+    },
+    {
+      "path": "apps/medusa/src/api/auth/customer/tcm/exchange/route.ts",
+      "status": "new",
+      "bytes": 1577,
+      "sha256": "9863ca4470466448426c612fc07b5f06634c629ff3aecb3dba42379d3f5725b3",
+      "rawSha256": "9863ca4470466448426c612fc07b5f06634c629ff3aecb3dba42379d3f5725b3"
+    },
+    {
+      "path": "apps/medusa/src/api/auth/customer/tcm/owned/route.ts",
+      "status": "new",
+      "bytes": 1622,
+      "sha256": "bbc9002b1ce0b752634081d6e299968ff8a2510c2e344b4605f76cd43366efa3",
+      "rawSha256": "bbc9002b1ce0b752634081d6e299968ff8a2510c2e344b4605f76cd43366efa3"
+    },
+    {
+      "path": "apps/medusa/src/api/auth/customer/tcm/provision/route.ts",
+      "status": "new",
+      "bytes": 1613,
+      "sha256": "a84e6400eec7852e430155ff44381a20b8324eed4eebe9e6e4bc9bd0d78a2d76",
+      "rawSha256": "a84e6400eec7852e430155ff44381a20b8324eed4eebe9e6e4bc9bd0d78a2d76"
+    },
+    {
+      "path": "apps/medusa/src/api/middlewares.ts",
+      "status": "modified",
+      "bytes": 1873,
+      "sha256": "cb40393dfc17cb8558b7c9b5c9a4ffe5d72e6dbc085fd4e301a362cb981686e8",
+      "rawSha256": "cb40393dfc17cb8558b7c9b5c9a4ffe5d72e6dbc085fd4e301a362cb981686e8"
+    },
+    {
+      "path": "apps/medusa/src/auth/bridge-settings.ts",
+      "status": "new",
+      "bytes": 2467,
+      "sha256": "3002c6fd9d1bbb76f6786e5281c187ad942cee868f7dfe07d49b9f6282ebeca2",
+      "rawSha256": "3002c6fd9d1bbb76f6786e5281c187ad942cee868f7dfe07d49b9f6282ebeca2"
+    },
+    {
+      "path": "apps/medusa/src/auth/central-identity.ts",
+      "status": "new",
+      "bytes": 8900,
+      "sha256": "c5874f69ca35ff5d18f0e5ceb4add959ed677b4a364b16efd8c0bd2837781dfd",
+      "rawSha256": "c5874f69ca35ff5d18f0e5ceb4add959ed677b4a364b16efd8c0bd2837781dfd"
+    },
+    {
+      "path": "apps/medusa/src/auth/medusa-proof.ts",
+      "status": "new",
+      "bytes": 2601,
+      "sha256": "35a442d86e00ba256cc42e2d2b0a0d9269177deedb8de96c0435b71e9f6d91b9",
+      "rawSha256": "35a442d86e00ba256cc42e2d2b0a0d9269177deedb8de96c0435b71e9f6d91b9"
+    },
+    {
+      "path": "apps/medusa/src/auth/private-bridge.ts",
+      "status": "new",
+      "bytes": 11025,
+      "sha256": "7e52a6c5385c989db47be50e3687b3d14cebdaebcca89721917087854209e5e5",
+      "rawSha256": "7e52a6c5385c989db47be50e3687b3d14cebdaebcca89721917087854209e5e5"
+    },
+    {
+      "path": "apps/medusa/src/auth/provision-schema.ts",
+      "status": "new",
+      "bytes": 844,
+      "sha256": "2ebe33c631b98f89288150d0d97aa5a9e48e50572b4d7ef0f4a5fc0caf9eff74",
+      "rawSha256": "2ebe33c631b98f89288150d0d97aa5a9e48e50572b4d7ef0f4a5fc0caf9eff74"
+    },
+    {
+      "path": "apps/medusa/src/loaders/private-bridge.ts",
+      "status": "new",
+      "bytes": 496,
+      "sha256": "050dabfd71b135b2eed05c0eabbb1ad29b244ce5c33ce8bd869fd678bc973c9f",
+      "rawSha256": "050dabfd71b135b2eed05c0eabbb1ad29b244ce5c33ce8bd869fd678bc973c9f"
+    },
+    {
+      "path": "apps/medusa/src/modules/tcm-auth/index.ts",
+      "status": "new",
+      "bytes": 268,
+      "sha256": "31a3cfcb5524f8465089864063b53534816abbb234be50b5df9e9ddeb9aa6332",
+      "rawSha256": "31a3cfcb5524f8465089864063b53534816abbb234be50b5df9e9ddeb9aa6332"
+    },
+    {
+      "path": "apps/medusa/src/modules/tcm-auth/service.ts",
+      "status": "new",
+      "bytes": 4172,
+      "sha256": "a4cd8a69371667ff39b1dc3df5be1972956a634448bf7cdba25bafd566724106",
+      "rawSha256": "a4cd8a69371667ff39b1dc3df5be1972956a634448bf7cdba25bafd566724106"
+    },
+    {
+      "path": "apps/medusa/src/workflows/central-customer.ts",
+      "status": "new",
+      "bytes": 2086,
+      "sha256": "7f36b933dd9ebce57b3578fa68754de9115b77dec15936077d21ed72766da3ed",
+      "rawSha256": "7f36b933dd9ebce57b3578fa68754de9115b77dec15936077d21ed72766da3ed"
+    },
+    {
+      "path": "apps/medusa/src/workflows/steps/central-customer.ts",
+      "status": "new",
+      "bytes": 4757,
+      "sha256": "281753a16e8f08da6f175ba74a0ccd9e5702bcb9c5dff83ffe63099b7464ba5e",
+      "rawSha256": "281753a16e8f08da6f175ba74a0ccd9e5702bcb9c5dff83ffe63099b7464ba5e"
+    },
+    {
+      "path": "apps/medusa/tests/bridge-settings.test.ts",
+      "status": "new",
+      "bytes": 1284,
+      "sha256": "3d62852979bd4cc83ca65f3d69bfbd52fcde3397826030f64b625e82215cd99a",
+      "rawSha256": "3d62852979bd4cc83ca65f3d69bfbd52fcde3397826030f64b625e82215cd99a"
+    },
+    {
+      "path": "apps/medusa/tests/central-customer.test.ts",
+      "status": "new",
+      "bytes": 5570,
+      "sha256": "8f2bcc6c4b5dfa8f59446d35799d4263da330acc14681d77e53f8a0fa0ae79c5",
+      "rawSha256": "8f2bcc6c4b5dfa8f59446d35799d4263da330acc14681d77e53f8a0fa0ae79c5"
+    },
+    {
+      "path": "apps/medusa/tests/private-boundary.test.ts",
+      "status": "new",
+      "bytes": 1064,
+      "sha256": "7a4f080e80b58f66375e53b017d247f15fb4768330bcf55644d598bfa07a1aae",
+      "rawSha256": "7a4f080e80b58f66375e53b017d247f15fb4768330bcf55644d598bfa07a1aae"
+    },
+    {
+      "path": "apps/medusa/tests/tcm-auth.test.ts",
+      "status": "new",
+      "bytes": 5868,
+      "sha256": "e3a18feb6bb31d4b7d98ae9eca9a4d048e2180a41e7a9a62fe48a05eff74bffe",
+      "rawSha256": "e3a18feb6bb31d4b7d98ae9eca9a4d048e2180a41e7a9a62fe48a05eff74bffe"
+    },
+    {
+      "path": "apps/web/next.config.mjs",
+      "status": "modified",
+      "bytes": 1453,
+      "sha256": "fafdf9982996a4d07ece0a4da27facb5c8564bcff69dc27c3134f39ad09057c0",
+      "rawSha256": "12e41703443fe305dbed853f929cd75692a7bbd35a195715c6287c15711f12ba"
+    },
+    {
+      "path": "apps/web/package.json",
+      "status": "modified",
+      "bytes": 745,
+      "sha256": "6a647f83bcec06aa9ccc114df8cf53c674b04c43e79f4540ee2f9dcde8691ae8",
+      "rawSha256": "f3bbb021416eda366a9397c3fa6ad30a1bd3059e87af9435c49f9e5cc80d21b9"
+    },
+    {
+      "path": "apps/web/src/app/account/page.tsx",
+      "status": "modified",
+      "bytes": 687,
+      "sha256": "69cc8e595491a783c4ef635c32c1ed6afb9fc7967dc33ff56ce0e97069fdfaeb",
+      "rawSha256": "21ee39dafb5152213d96745b985d4de49f13d8bfc5bd6f0c182099cbe207a3e8"
+    },
+    {
+      "path": "apps/web/src/app/api/account/cart/route.ts",
+      "status": "new",
+      "bytes": 253,
+      "sha256": "37b3c153774da72ab74b4e4d9a632e07793dc6ecf022d4e5e24e7a226fe14402",
+      "rawSha256": "a0a0cc3dd0192ffc14280aa43a2db13de52d4576f58389bb75fe518aced1acc6"
+    },
+    {
+      "path": "apps/web/src/app/api/account/orders/route.ts",
+      "status": "new",
+      "bytes": 255,
+      "sha256": "b95c6cce8301e7b381e29b716ba3aaf782dba60782b412384b1bccd57f6fde6d",
+      "rawSha256": "a79d71ffe2c5d33cb2e4190d3f5374f380e87e5caeaab56de011d02977ffea1b"
+    },
+    {
+      "path": "apps/web/src/app/api/account/profile/route.ts",
+      "status": "new",
+      "bytes": 256,
+      "sha256": "4495df9cdc06b2d64ebbc5d12df474763e74d546cb59e8f39133abf594f7cc2a",
+      "rawSha256": "8bb7c890160261d99b13609274193e9afd47f08b42dd89e59f4b9ba152ea9fa0"
+    },
+    {
+      "path": "apps/web/src/app/api/auth/commerce/route.ts",
+      "status": "new",
+      "bytes": 258,
+      "sha256": "9f2b3a7c6c42cb20124ed3f230c77d29cf7c84629891fdb4dae02d54bc5d488e",
+      "rawSha256": "15f1b7683e34357d64b6ac4e34d91ac7ce8041a146687b6b7f2f06d59ed5d968"
+    },
+    {
+      "path": "apps/web/src/app/api/auth/csrf/route.ts",
+      "status": "new",
+      "bytes": 253,
+      "sha256": "d7921c796255a884e2361cf68a3b0e41cfb9c93f14b81aaa10ff858e7a9a5634",
+      "rawSha256": "2e7105ffb6eb941844e81b940ac6e427cc4b55ef58037881e0cbe7243b15daf5"
+    },
+    {
+      "path": "apps/web/src/app/api/auth/guest/claim/route.ts",
+      "status": "new",
+      "bytes": 260,
+      "sha256": "14569d0cf9baec91809b776c05fe4ba6d5de7581675f2d0a0c90b5ef972cd855",
+      "rawSha256": "6f6cd1fe263bb0c8e218b51e36e8cace26ca8e8ff956fbd05a4da71e3da2a811"
+    },
+    {
+      "path": "apps/web/src/app/api/auth/logout/route.ts",
+      "status": "new",
+      "bytes": 256,
+      "sha256": "86aae6297ad526d36a045672189fbfa35090e39d075b0f674f36928225ef7f80",
+      "rawSha256": "71f3f837f47d85b94909a0d709fcc4bbb745f8d5291a085e2fa25ecf41edf843"
+    },
+    {
+      "path": "apps/web/src/app/api/auth/session/route.ts",
+      "status": "new",
+      "bytes": 256,
+      "sha256": "53dba386366ae1ff524dfbf939ee7acaee80a59612009cfcf045f2c076d66380",
+      "rawSha256": "cbc51d7c3df7351529e900eac73ff94b326a7a71c5e402e2f83245f25494951e"
+    },
+    {
+      "path": "apps/web/src/app/api/auth/tcm/refresh/route.ts",
+      "status": "new",
+      "bytes": 257,
+      "sha256": "8350a07a9cf10fe4d68ab155e76a69324d1e1deddb7a00078e1251480dfde404",
+      "rawSha256": "fa07a3dc447664dd3c332a4a826b76c663a4113b7d26bee11607fbbcfbac9d16"
+    },
+    {
+      "path": "apps/web/src/app/api/auth/tcm/start/route.ts",
+      "status": "new",
+      "bytes": 255,
+      "sha256": "099c26b1cf7e1b449e070445d0e7a450a312c9a44e5345bdd7465c6476002545",
+      "rawSha256": "061be75f861386a0c15a84e1682ea330d6dbb0b4904e3ad6a8883dc7f72ce2a8"
+    },
+    {
+      "path": "apps/web/src/app/auth/tcm/callback/route.ts",
+      "status": "new",
+      "bytes": 257,
+      "sha256": "72303a74ed84682ea907622e4e5619e3e69d05521e774c1631a6575575e9202e",
+      "rawSha256": "bef733f31018436f8ccfd6955f3e1e93d67c95cbef902f1e298fc578e3f8b3ce"
+    },
+    {
+      "path": "apps/web/src/components/account-details.tsx",
+      "status": "new",
+      "bytes": 5803,
+      "sha256": "9216be2c97777a7fda98d35c8cb9d98df7c2bbcce608bea2efc66cd3a3e657be",
+      "rawSha256": "9216be2c97777a7fda98d35c8cb9d98df7c2bbcce608bea2efc66cd3a3e657be"
+    },
+    {
+      "path": "apps/web/src/components/auth-panel.tsx",
+      "status": "new",
+      "bytes": 5436,
+      "sha256": "c26137b20349a92b02fa5dd63236ceb24b847ee875d8a6c019c102279c493684",
+      "rawSha256": "c26137b20349a92b02fa5dd63236ceb24b847ee875d8a6c019c102279c493684"
+    },
+    {
+      "path": "apps/web/src/instrumentation.ts",
+      "status": "modified",
+      "bytes": 459,
+      "sha256": "89eef3853d1465e44f102100c36f345aa3e2288da592896088bf6883a0528bb7",
+      "rawSha256": "c8192540c1c8a662199bc2a2bb0ace84f2ae0bb6c5463aabd531efbe20312a7e"
+    },
+    {
+      "path": "apps/web/src/server/auth-runtime.ts",
+      "status": "new",
+      "bytes": 2866,
+      "sha256": "b973619f70e1947756627a4db5338e3bf33001079135ed174200a8f6f4a09a5a",
+      "rawSha256": "b973619f70e1947756627a4db5338e3bf33001079135ed174200a8f6f4a09a5a"
+    },
+    {
+      "path": "apps/web/src/server/identity-settings.ts",
+      "status": "new",
+      "bytes": 2832,
+      "sha256": "bb45b26c2734540fa17d481a6e06aa78095483bb38f67f96038eff1039b51c18",
+      "rawSha256": "bb45b26c2734540fa17d481a6e06aa78095483bb38f67f96038eff1039b51c18"
+    },
+    {
+      "path": "apps/web/src/server/medusa-settings.ts",
+      "status": "new",
+      "bytes": 2988,
+      "sha256": "58b3baa25323cbadd73b9d1178d913128f558736dcd16832f6dd8655d95a5ef7",
+      "rawSha256": "58b3baa25323cbadd73b9d1178d913128f558736dcd16832f6dd8655d95a5ef7"
+    },
+    {
+      "path": "apps/web/tests/identity-settings.test.ts",
+      "status": "new",
+      "bytes": 2745,
+      "sha256": "4a8080ddc339347509b86b524f2b148e9ef6eb725364f9146581d0b2ceebf9bb",
+      "rawSha256": "4a8080ddc339347509b86b524f2b148e9ef6eb725364f9146581d0b2ceebf9bb"
+    },
+    {
+      "path": "apps/web/tests/medusa-settings.test.ts",
+      "status": "new",
+      "bytes": 2328,
+      "sha256": "604aa33d8d2191c6c3c0da3d9ac7fe9f4969bead7808242e373ab6e6d562ba33",
+      "rawSha256": "604aa33d8d2191c6c3c0da3d9ac7fe9f4969bead7808242e373ab6e6d562ba33"
+    },
+    {
+      "path": "docs/implementation/ADR-0010-M1b-Durable-Authentication-State.md",
+      "status": "new",
+      "bytes": 7743,
+      "sha256": "2de25c2a0f11d37a1d9ae1a4e5282802e931b4e7713ed02b4cd9c2692a4b711a",
+      "rawSha256": "2de25c2a0f11d37a1d9ae1a4e5282802e931b4e7713ed02b4cd9c2692a4b711a"
+    },
+    {
+      "path": "docs/implementation/ADR-0011-M1b-Fenced-Commerce-Provisioning.md",
+      "status": "new",
+      "bytes": 5262,
+      "sha256": "4c4d7510a00710c42497f9acc38a49a08d1e9aa1d65328a6179d2008565cf9e0",
+      "rawSha256": "4c4d7510a00710c42497f9acc38a49a08d1e9aa1d65328a6179d2008565cf9e0"
+    },
+    {
+      "path": "docs/implementation/ADR-0012-M1b-Web-Session-Boundary.md",
+      "status": "new",
+      "bytes": 6180,
+      "sha256": "727c1530aa7c6bf91cad18b19fe2e33c99941b9938e329753b5d69ec181a3315",
+      "rawSha256": "727c1530aa7c6bf91cad18b19fe2e33c99941b9938e329753b5d69ec181a3315"
+    },
+    {
+      "path": "docs/implementation/ADR-0013-M1b-Private-Medusa-Provisioning-Transport.md",
+      "status": "new",
+      "bytes": 6187,
+      "sha256": "efcca5383ce8d9b1a19ed5fb51684324fac9ea96800d1370e67cf94a2577938b",
+      "rawSha256": "efcca5383ce8d9b1a19ed5fb51684324fac9ea96800d1370e67cf94a2577938b"
+    },
+    {
+      "path": "docs/implementation/ADR-0014-M1b-Customer-Credentials-and-Owned-Reads.md",
+      "status": "new",
+      "bytes": 4935,
+      "sha256": "8b801aafcc573c25d24ddc9e88a1cafd02be0cfd42f40728e12a6379caf3f72c",
+      "rawSha256": "8b801aafcc573c25d24ddc9e88a1cafd02be0cfd42f40728e12a6379caf3f72c"
+    },
+    {
+      "path": "docs/implementation/ADR-0015-M1b-Bounded-Revocation-Reconciliation.md",
+      "status": "new",
+      "bytes": 5007,
+      "sha256": "a2f9ec4534a86387c62188293fa9a7c13c2e56fc267672609d260f3863b61048",
+      "rawSha256": "a2f9ec4534a86387c62188293fa9a7c13c2e56fc267672609d260f3863b61048"
+    },
+    {
+      "path": "docs/implementation/M1b-Local-Validation-Review-20261019.md",
+      "status": "new",
+      "bytes": 7011,
+      "sha256": "fb3e082f13a20423a6f37638191df9edd45f0203f5b60b65835b375072f1a179",
+      "rawSha256": "fb3e082f13a20423a6f37638191df9edd45f0203f5b60b65835b375072f1a179"
+    },
+    {
+      "path": "docs/implementation/M1b-Security-Source-Review-20261019.md",
+      "status": "new",
+      "bytes": 4794,
+      "sha256": "d9871b132465a3f1caef19851a657ec16a39864a3c6b2fdcd2c1165881abaa3d",
+      "rawSha256": "d9871b132465a3f1caef19851a657ec16a39864a3c6b2fdcd2c1165881abaa3d"
+    },
+    {
+      "path": "docs/implementation/M1b-Vynvori-Bridge-Execution-20261019.md",
+      "status": "new",
+      "bytes": 16979,
+      "sha256": "8ffe22e4e5791f8357754cec7a8a50e9cb1c41b906e8ecce16f2600d526a8ef1",
+      "rawSha256": "54ef9554a2152b6a8230f1346b7fc46dfa0a6e2da7502a90825a20bb027d0cb9"
+    },
+    {
+      "path": "docs/implementation/artifacts/M1b-Identity-Runtime-Grants-Proposal-20261019.sql",
+      "status": "new",
+      "bytes": 1881,
+      "sha256": "018533a5466b81d29a8eb554dee03bf85c3967dc96c90b711351867be6abe8d7",
+      "rawSha256": "018533a5466b81d29a8eb554dee03bf85c3967dc96c90b711351867be6abe8d7"
+    },
+    {
+      "path": "docs/implementation/evidence/M1b-Composed-Sessions-20261019.json",
+      "status": "new",
+      "bytes": 2668,
+      "sha256": "549d6052b6b1f132e4d6ccab23c1d3521805794212580b8538969e9d30e2e0a2",
+      "rawSha256": "e618cdf805402e8500173294040f503e8625463e3daa10a399fa2d9a0aaaf49a"
+    },
+    {
+      "path": "docs/implementation/evidence/M1b-Connected-Browser-Stack-20261019.json",
+      "status": "new",
+      "bytes": 4596,
+      "sha256": "f0c904a099032cf2e3eeb83eda2da8de1ba145c6fbfeaffcd4e1f2a4098a0c5b",
+      "rawSha256": "09ae50eed3c3e81ff3b64551e103a058d1388f85e80d77a664c1328109eb0804"
+    },
+    {
+      "path": "docs/implementation/evidence/M1b-Connected-Revoked-Account-Mobile-20261019.png",
+      "status": "new",
+      "bytes": 10341,
+      "sha256": "d04a58ad178014455bb55fe7de8993f3e722f2a9b3b5fecd47e39f7d88f1e456",
+      "rawSha256": "d04a58ad178014455bb55fe7de8993f3e722f2a9b3b5fecd47e39f7d88f1e456"
+    },
+    {
+      "path": "docs/implementation/evidence/M1b-Customer-Owned-Reads-20261019.json",
+      "status": "new",
+      "bytes": 6338,
+      "sha256": "a9578dd28ab3c782fa68a94ca264c7ffad8b37402d32dc455036bb559c44f7fd",
+      "rawSha256": "d5c06a2bef9801d05b0ef1f0bf0b451c931b35fc0ddcb11fa192b3af817bc8b3"
+    },
+    {
+      "path": "docs/implementation/evidence/M1b-Deployment-Readiness-20261019.json",
+      "status": "new",
+      "bytes": 2153,
+      "sha256": "373844d8e845ace2c4ccc0894a4efde6cda5820b2d381767360ae32cf85a0006",
+      "rawSha256": "f6816fffb9051de6abda4dd820a46ed018cc07f265d93cf1f81cafe9fca8c97d"
+    },
+    {
+      "path": "docs/implementation/evidence/M1b-Durable-Auth-Primitives-20261019.json",
+      "status": "new",
+      "bytes": 2439,
+      "sha256": "38f7752331782ab875da099da813c049c0e3d12402b53063539e7e854b2471b9",
+      "rawSha256": "23516bee25b599eaea9adf0163c4062a1d162bcb4d1b9da26ae4d0a37def06a9"
+    },
+    {
+      "path": "docs/implementation/evidence/M1b-Fenced-Commerce-Provisioning-20261019.json",
+      "status": "new",
+      "bytes": 4086,
+      "sha256": "ec4b5e7293efbeddb7ec98b9752bc6d5f011fac2bcb009d6df123a0e8f57db8e",
+      "rawSha256": "5058507ca4b00d9ea3e95924a419638d971d4f47c8c571be816929d4a324daeb"
+    },
+    {
+      "path": "docs/implementation/evidence/M1b-Fresh-Dependencies-20261019.json",
+      "status": "new",
+      "bytes": 29039,
+      "sha256": "10ec8bcd811213b98ad424805919aa4666cbc8825cd5772776b5ffdd0d75eabd",
+      "rawSha256": "b0a55ae3a0b09bb74ada7a2a064589e8f396ef3db7e3d474e33c153fecc9caec"
+    },
+    {
+      "path": "docs/implementation/evidence/M1b-Identity-Migrations-20261019.json",
+      "status": "new",
+      "bytes": 2783,
+      "sha256": "22d2dfb700155a22f52a19856d2416467d33265520c45485a90003472c7ac0f4",
+      "rawSha256": "b9a875ad826e493f177c3f5df3dd0711a3d4a75c558726c1d10a528444feff68"
+    },
+    {
+      "path": "docs/implementation/evidence/M1b-Native-Medusa-Provider-20261019.json",
+      "status": "new",
+      "bytes": 2628,
+      "sha256": "57f01c58df0b3b3c3644b0c66e934faeed35f53c3347c7e5a2ad05e1b7063fc0",
+      "rawSha256": "0f959ee651f8180a97257896d1ca049fa8a196b71b0603d3580f5f094527bda7"
+    },
+    {
+      "path": "docs/implementation/evidence/M1b-Npm-All-Audit-20261019.json",
+      "status": "new",
+      "bytes": 37433,
+      "sha256": "7a71eb0a65b3d46b75cee5cb2365bf9f7f98a31d74444561abed30591341ab19",
+      "rawSha256": "7a71eb0a65b3d46b75cee5cb2365bf9f7f98a31d74444561abed30591341ab19"
+    },
+    {
+      "path": "docs/implementation/evidence/M1b-Npm-Production-Audit-20261019.json",
+      "status": "new",
+      "bytes": 34163,
+      "sha256": "22f034168e9bd7abc1b781d255edf3be77708d876aeebc9c251f26d7d11b885e",
+      "rawSha256": "22f034168e9bd7abc1b781d255edf3be77708d876aeebc9c251f26d7d11b885e"
+    },
+    {
+      "path": "docs/implementation/evidence/M1b-Private-Medusa-Transport-20261019.json",
+      "status": "new",
+      "bytes": 6814,
+      "sha256": "f99bffb53fcacbf8a1b3b6c4293f6751f2dddf201038bfa9ec833737b5a98913",
+      "rawSha256": "4f53e35fe8b12a22f1af9cfa7017a536c6bbb8bc75b66fe112f1340f016c50e6"
+    },
+    {
+      "path": "docs/implementation/evidence/M1b-Revocation-Reconciliation-20261019.json",
+      "status": "new",
+      "bytes": 3238,
+      "sha256": "bf6555c90b4d40e44862374fa72ee75ec458d62177fdbd88848f690693a2e82f",
+      "rawSha256": "e7a8dc1a9a0530ce160100a313e85bfcb2b74bc5c2cf2233d166d5e1a9ce759f"
+    },
+    {
+      "path": "docs/implementation/evidence/M1b-Web-Session-Boundary-20261019.json",
+      "status": "new",
+      "bytes": 5947,
+      "sha256": "d7383cedec36ef38e84c4fc6275b2ac47d3f1095b32c987b41cd06f95fccc927",
+      "rawSha256": "9754b0745b4b3843d0347bf295d1db85d6e25382a11bace424fc44945a068abb"
+    },
+    {
+      "path": "docs/technical/20-acceptance-matrix.md",
+      "status": "modified",
+      "bytes": 13446,
+      "sha256": "7987eea04357f23349663cd1e99a3de2b74095ffe535fdc6bdac9619a373e843",
+      "rawSha256": "eca5b98f54cbe4e08baa34d73c93cc4b2bc1be3af8e12471e92fb212a83e51fe"
+    },
+    {
+      "path": "package-lock.json",
+      "status": "modified",
+      "bytes": 770985,
+      "sha256": "9a164a05b4620dedd7df8eebc71d50c397e5a886b56e2f898708aa535c9ba2b7",
+      "rawSha256": "eb171c98f73d28c81e1e51816bb69376887f8be194ab945a27d6a34bb7df944d"
+    },
+    {
+      "path": "package.json",
+      "status": "modified",
+      "bytes": 3857,
+      "sha256": "617b34c9d534433183fbb66b92f97e7991d9e2c7f468363cd3dae33ba0f24bbd",
+      "rawSha256": "617b34c9d534433183fbb66b92f97e7991d9e2c7f468363cd3dae33ba0f24bbd"
+    },
+    {
+      "path": "packages/commerce/package.json",
+      "status": "modified",
+      "bytes": 527,
+      "sha256": "6888130e4075ab0655b0974e37ee1d00d73af9ad6e5919d86fd9fb93620d8890",
+      "rawSha256": "abbfbe81b5512e204aab263f20381c06a81368ad989fa77eb238ac619049914c"
+    },
+    {
+      "path": "packages/commerce/src/auth-http.ts",
+      "status": "new",
+      "bytes": 12713,
+      "sha256": "29f3e99a043dafbaed806f82459e9bddc8c63e8493ad5416f2ee3d2da2e18de7",
+      "rawSha256": "29f3e99a043dafbaed806f82459e9bddc8c63e8493ad5416f2ee3d2da2e18de7"
+    },
+    {
+      "path": "packages/commerce/src/auth-sessions.ts",
+      "status": "new",
+      "bytes": 16124,
+      "sha256": "db2e2f87a8b419f15774cc92121c2d8960ed9d26b9244f3ea1f76eda1d2f1e8b",
+      "rawSha256": "db2e2f87a8b419f15774cc92121c2d8960ed9d26b9244f3ea1f76eda1d2f1e8b"
+    },
+    {
+      "path": "packages/commerce/src/auth-vault.ts",
+      "status": "new",
+      "bytes": 3536,
+      "sha256": "d85b4ba93f9e87fe700e412ad89528b4706a6d952a7d03127d872164473a0a6b",
+      "rawSha256": "d85b4ba93f9e87fe700e412ad89528b4706a6d952a7d03127d872164473a0a6b"
+    },
+    {
+      "path": "packages/commerce/src/central-identity-core.ts",
+      "status": "new",
+      "bytes": 8900,
+      "sha256": "c5874f69ca35ff5d18f0e5ceb4add959ed677b4a364b16efd8c0bd2837781dfd",
+      "rawSha256": "c5874f69ca35ff5d18f0e5ceb4add959ed677b4a364b16efd8c0bd2837781dfd"
+    },
+    {
+      "path": "packages/commerce/src/central-identity.ts",
+      "status": "new",
+      "bytes": 65,
+      "sha256": "5e20c68d70ccd53f7c3974e54c1b7b9b41784ae3bb78773196c302d0a7e8893e",
+      "rawSha256": "7742621262f5fdaf76949ed69dee661c74b40feca38ed66d1ec44061678dde17"
+    },
+    {
+      "path": "packages/commerce/src/commerce-identity.ts",
+      "status": "new",
+      "bytes": 8162,
+      "sha256": "22fcf866062da572e109177b60d3f42174f8d9186a578f55a963f60f4bb09fdb",
+      "rawSha256": "22fcf866062da572e109177b60d3f42174f8d9186a578f55a963f60f4bb09fdb"
+    },
+    {
+      "path": "packages/commerce/src/customer-access.ts",
+      "status": "new",
+      "bytes": 1498,
+      "sha256": "c0302173ce9726d48e56ff55c3f69fc18c9d9b32bc8f3c3688ffcffba02fe5e7",
+      "rawSha256": "c0302173ce9726d48e56ff55c3f69fc18c9d9b32bc8f3c3688ffcffba02fe5e7"
+    },
+    {
+      "path": "packages/commerce/src/identity.ts",
+      "status": "new",
+      "bytes": 339,
+      "sha256": "752812a690376dcf59a78c8559fb92f724f83192ac63cea1f285c983eb9156e2",
+      "rawSha256": "752812a690376dcf59a78c8559fb92f724f83192ac63cea1f285c983eb9156e2"
+    },
+    {
+      "path": "packages/commerce/src/login-transactions.ts",
+      "status": "new",
+      "bytes": 3931,
+      "sha256": "dff2c974308d532fab65165622e4eca751fe13b9a499dae1f5cd7f9151e1b749",
+      "rawSha256": "dff2c974308d532fab65165622e4eca751fe13b9a499dae1f5cd7f9151e1b749"
+    },
+    {
+      "path": "packages/commerce/src/medusa-private.ts",
+      "status": "new",
+      "bytes": 11255,
+      "sha256": "bb6210339d2a027f8b2846000576ea4bc99a2dd27dd4e56625f66b430ff25ea6",
+      "rawSha256": "bb6210339d2a027f8b2846000576ea4bc99a2dd27dd4e56625f66b430ff25ea6"
+    },
+    {
+      "path": "packages/commerce/src/medusa-proof-core.ts",
+      "status": "new",
+      "bytes": 2601,
+      "sha256": "35a442d86e00ba256cc42e2d2b0a0d9269177deedb8de96c0435b71e9f6d91b9",
+      "rawSha256": "35a442d86e00ba256cc42e2d2b0a0d9269177deedb8de96c0435b71e9f6d91b9"
+    },
+    {
+      "path": "packages/commerce/src/revocation-reconciliation.ts",
+      "status": "new",
+      "bytes": 3764,
+      "sha256": "d3313720d6130f3ca256e0696e3ac5b069f00dcdcc21dd349d96100c7c0c2b23",
+      "rawSha256": "d3313720d6130f3ca256e0696e3ac5b069f00dcdcc21dd349d96100c7c0c2b23"
+    },
+    {
+      "path": "packages/commerce/tests/auth-http.test.ts",
+      "status": "new",
+      "bytes": 10609,
+      "sha256": "5429987e53a9e4cb3f748621ac8054d39da17f7310c04e95696714e9391757e6",
+      "rawSha256": "5429987e53a9e4cb3f748621ac8054d39da17f7310c04e95696714e9391757e6"
+    },
+    {
+      "path": "packages/commerce/tests/auth-vault.test.ts",
+      "status": "new",
+      "bytes": 2699,
+      "sha256": "43e32a25880cec6f0ec01129daf3d55d680898f38fc3267346160b7e45ceeb37",
+      "rawSha256": "43e32a25880cec6f0ec01129daf3d55d680898f38fc3267346160b7e45ceeb37"
+    },
+    {
+      "path": "packages/commerce/tests/central-identity.test.ts",
+      "status": "new",
+      "bytes": 7992,
+      "sha256": "a2b9b0b0ef993dcb859b74780879d3fa68bf5ce10145e2ab37afe735ad5f9959",
+      "rawSha256": "a2b9b0b0ef993dcb859b74780879d3fa68bf5ce10145e2ab37afe735ad5f9959"
+    },
+    {
+      "path": "packages/commerce/tests/login-transactions.test.ts",
+      "status": "new",
+      "bytes": 3470,
+      "sha256": "9b750b292dad60c1520c2f02c6bbeeb306fd238ab345e36c1d4087c7bcae8de3",
+      "rawSha256": "9b750b292dad60c1520c2f02c6bbeeb306fd238ab345e36c1d4087c7bcae8de3"
+    },
+    {
+      "path": "packages/commerce/tests/medusa-private.test.ts",
+      "status": "new",
+      "bytes": 9364,
+      "sha256": "4bb6c0a134108cc2cb4457194bf3c1a5ce3926989d8c7608b0c4b5697d9941d2",
+      "rawSha256": "4bb6c0a134108cc2cb4457194bf3c1a5ce3926989d8c7608b0c4b5697d9941d2"
+    },
+    {
+      "path": "packages/commerce/tests/revocation-reconciliation.test.ts",
+      "status": "new",
+      "bytes": 4011,
+      "sha256": "afaf989cf13a903e34e4b716c192f993507a7c322e29cb3f92cee1a3feb853b0",
+      "rawSha256": "afaf989cf13a903e34e4b716c192f993507a7c322e29cb3f92cee1a3feb853b0"
+    },
+    {
+      "path": "packages/db/auth-migrations/.gitattributes",
+      "status": "new",
+      "bytes": 37,
+      "sha256": "76a2d43a3c277c6848bb6e66c78e873143d78af18dd89d1026f495b9c6faa243",
+      "rawSha256": "76a2d43a3c277c6848bb6e66c78e873143d78af18dd89d1026f495b9c6faa243"
+    },
+    {
+      "path": "packages/db/auth-migrations/0001_identity_state.sql",
+      "status": "new",
+      "bytes": 2241,
+      "sha256": "84ae0f55201f44dd134750e718eeaf146289fcccbb5fa1f77da8a477ee3aedd4",
+      "rawSha256": "84ae0f55201f44dd134750e718eeaf146289fcccbb5fa1f77da8a477ee3aedd4"
+    },
+    {
+      "path": "packages/db/auth-migrations/0002_commerce_mappings.sql",
+      "status": "new",
+      "bytes": 993,
+      "sha256": "5c2ee871466d4ea49841098284af043345500de89db1457c371c54e2c351593b",
+      "rawSha256": "5c2ee871466d4ea49841098284af043345500de89db1457c371c54e2c351593b"
+    },
+    {
+      "path": "packages/db/auth-migrations/0003_customer_credentials.sql",
+      "status": "new",
+      "bytes": 816,
+      "sha256": "2e23bb5aecf384766582feaeb6f6d5e318aa4f8d0e6d07e3c50d112fb04b2fa8",
+      "rawSha256": "2e23bb5aecf384766582feaeb6f6d5e318aa4f8d0e6d07e3c50d112fb04b2fa8"
+    },
+    {
+      "path": "packages/db/auth-migrations/0004_revocation_reconciliation.sql",
+      "status": "new",
+      "bytes": 927,
+      "sha256": "a07d1852a2de24b6315ebcf6f4ae092c3d9585cdc5d2da324430649f74ef9766",
+      "rawSha256": "a07d1852a2de24b6315ebcf6f4ae092c3d9585cdc5d2da324430649f74ef9766"
+    },
+    {
+      "path": "packages/db/auth-migrations/meta/_journal.json",
+      "status": "new",
+      "bytes": 523,
+      "sha256": "ba181e1463b0deff7f88c63f2af47c44d6778e54734cd08329a57b4f50e76aab",
+      "rawSha256": "ba181e1463b0deff7f88c63f2af47c44d6778e54734cd08329a57b4f50e76aab"
+    },
+    {
+      "path": "packages/db/auth-migrations/plan.json",
+      "status": "new",
+      "bytes": 889,
+      "sha256": "7ba33e9d1f6e962e1d2ca6e807cd403f647c11692787f34f2451505d9a7c98bb",
+      "rawSha256": "7ba33e9d1f6e962e1d2ca6e807cd403f647c11692787f34f2451505d9a7c98bb"
+    },
+    {
+      "path": "packages/db/package.json",
+      "status": "modified",
+      "bytes": 613,
+      "sha256": "23238008d24691dc9fe533d147b19d080d44454df966746bb72db934eadcb0ba",
+      "rawSha256": "017fe4f650c026ae7ebfaef16997499dcdedc72eaf87000115a477a92d904ce3"
+    },
+    {
+      "path": "packages/db/src/auth-state.ts",
+      "status": "new",
+      "bytes": 15122,
+      "sha256": "271ad50c280cfb0f21da97f27b264d0021d9de55f1887058e88415f4da6b5fd6",
+      "rawSha256": "271ad50c280cfb0f21da97f27b264d0021d9de55f1887058e88415f4da6b5fd6"
+    },
+    {
+      "path": "packages/db/src/commerce-mappings.ts",
+      "status": "new",
+      "bytes": 3702,
+      "sha256": "e5da431f01e883de556d58fd0cd3b241f8e1d615fc448db8be969e189840a0c5",
+      "rawSha256": "e5da431f01e883de556d58fd0cd3b241f8e1d615fc448db8be969e189840a0c5"
+    },
+    {
+      "path": "packages/db/src/identity-migrations.ts",
+      "status": "new",
+      "bytes": 10309,
+      "sha256": "0e6c93bb2da58e04dee9853ffff8670eebcef84639bb1fad981e4c0092bba702",
+      "rawSha256": "0e6c93bb2da58e04dee9853ffff8670eebcef84639bb1fad981e4c0092bba702"
+    },
+    {
+      "path": "packages/db/src/identity.ts",
+      "status": "new",
+      "bytes": 876,
+      "sha256": "4c0f52ec111becb3f27a11bf8179ca7cad50de0ae83edde3b4a2681f0bd2ae06",
+      "rawSha256": "4c0f52ec111becb3f27a11bf8179ca7cad50de0ae83edde3b4a2681f0bd2ae06"
+    },
+    {
+      "path": "packages/db/src/migrate-identity.ts",
+      "status": "new",
+      "bytes": 1486,
+      "sha256": "8e70c4ab3bd1fb2f07d4dd15c99c137a9ef942878966be54b93014a96528d78f",
+      "rawSha256": "8e70c4ab3bd1fb2f07d4dd15c99c137a9ef942878966be54b93014a96528d78f"
+    },
+    {
+      "path": "packages/db/tests/auth-state.test.ts",
+      "status": "new",
+      "bytes": 37633,
+      "sha256": "94eaeadc417eec8e964baf5e4a6333a781d52badede20b1f349b6bd15b7af012",
+      "rawSha256": "94eaeadc417eec8e964baf5e4a6333a781d52badede20b1f349b6bd15b7af012"
+    },
+    {
+      "path": "packages/db/tests/identity-migrations.test.ts",
+      "status": "new",
+      "bytes": 7154,
+      "sha256": "c5ecd97fd1929c444f9f0d4fbb32775a3dcc518eabcdf7b62f48d670eedb06cb",
+      "rawSha256": "c5ecd97fd1929c444f9f0d4fbb32775a3dcc518eabcdf7b62f48d670eedb06cb"
+    },
+    {
+      "path": "packages/shared/src/public.ts",
+      "status": "modified",
+      "bytes": 870,
+      "sha256": "cd99dfabf07a09e2dac3a72fa7a39e156f20b58319ca5fd58af1b1ddcd4234af",
+      "rawSha256": "5c5ff8c8544016a911955d82468583e091cd5d8af27418f8d27f5004d59718c6"
+    },
+    {
+      "path": "packages/shared/src/server.ts",
+      "status": "modified",
+      "bytes": 3794,
+      "sha256": "7f0a36c755c785cfda95793f77579e34b1c28fb3957ccb628f03a99a643db53e",
+      "rawSha256": "ef184c2a06fb3264897e4a7357c7ea1246995000d1fb4c1408c48cebfacebe1a"
+    },
+    {
+      "path": "packages/shared/tests/config.test.ts",
+      "status": "modified",
+      "bytes": 4635,
+      "sha256": "7d1b0f99a6bfb4b9368ce27471cce20aac5492dedca140dca4343f2147ab1b8d",
+      "rawSha256": "4a0b5a5e07bb80ad0f1c99a37f225ba6cdbbc1cc45c86e6db9cec9746c55b6c5"
+    },
+    {
+      "path": "scripts/deployment-check.mjs",
+      "status": "modified",
+      "bytes": 6488,
+      "sha256": "988ffa7ca4e2e368eca3a574675f6c1bfbf1cfed70255cf66d3bdb8198cd6298",
+      "rawSha256": "0c8988a3a317969e5d1502a1746e419217c973af78a2885f85bec3f7f66c291e"
+    },
+    {
+      "path": "scripts/m1b-browser-stack-fixture.mjs",
+      "status": "new",
+      "bytes": 20542,
+      "sha256": "a33ffa37ef5611343c12f623eea9eb272a28e3e10448ee94256bb1db1b2c14bb",
+      "rawSha256": "a33ffa37ef5611343c12f623eea9eb272a28e3e10448ee94256bb1db1b2c14bb"
+    },
+    {
+      "path": "scripts/prepare-m1b-source-review.mjs",
+      "status": "new",
+      "bytes": 6106,
+      "sha256": "e2b6be795c9c4eacaf7d4539d92e832d1d61d6b43baf2523c8d1ccfd661a5fe9",
+      "rawSha256": "e2b6be795c9c4eacaf7d4539d92e832d1d61d6b43baf2523c8d1ccfd661a5fe9"
+    },
+    {
+      "path": "scripts/security-smoke.mjs",
+      "status": "modified",
+      "bytes": 2435,
+      "sha256": "f5865026c30174cc6ddcae57de188c361ff86383006d5897313dfb7c3b73355d",
+      "rawSha256": "48684499754edc2e23d44b9e54c45179d365a917a7981d12367b73e581dbf888"
+    },
+    {
+      "path": "scripts/test-m1b-account-ui.mjs",
+      "status": "new",
+      "bytes": 8075,
+      "sha256": "e347f1daaf0f6520fe1226512e6a1dd28bbdcbb44634420ed72323b9ce2acee4",
+      "rawSha256": "e347f1daaf0f6520fe1226512e6a1dd28bbdcbb44634420ed72323b9ce2acee4"
+    },
+    {
+      "path": "scripts/test-m1b-fresh-dependencies.mjs",
+      "status": "new",
+      "bytes": 6778,
+      "sha256": "e138f1c9f537dcd77d70d45694dde58de58c64729b5456fcaa1dbba22ca2a1c0",
+      "rawSha256": "e138f1c9f537dcd77d70d45694dde58de58c64729b5456fcaa1dbba22ca2a1c0"
+    },
+    {
+      "path": "scripts/test-m1b-identity-state.mjs",
+      "status": "new",
+      "bytes": 7431,
+      "sha256": "b2ae65e7cdd13cd51541032235a79beb05c0defc244abf0cdc235fa51dc2de34",
+      "rawSha256": "b2ae65e7cdd13cd51541032235a79beb05c0defc244abf0cdc235fa51dc2de34"
+    },
+    {
+      "path": "scripts/test-m1b-medusa-build.mjs",
+      "status": "new",
+      "bytes": 4368,
+      "sha256": "7b9a96cf3b7e56505c4b9345bad52de7dc9c8da9b9ad52f773cce7c4f11e7510",
+      "rawSha256": "7b9a96cf3b7e56505c4b9345bad52de7dc9c8da9b9ad52f773cce7c4f11e7510"
+    },
+    {
+      "path": "scripts/test-m1b-native-medusa.mjs",
+      "status": "new",
+      "bytes": 8760,
+      "sha256": "cfa5f8cc5cc177cdadcac44318299be2dd5e33e36909a562bd8efa6d27ece161",
+      "rawSha256": "cfa5f8cc5cc177cdadcac44318299be2dd5e33e36909a562bd8efa6d27ece161"
+    },
+    {
+      "path": "scripts/test-m1b-web.mjs",
+      "status": "new",
+      "bytes": 4040,
+      "sha256": "f2e01534b064f37196099a8c43051c97210d5dda3162308c28a3ca6d4dcbe92f",
+      "rawSha256": "f2e01534b064f37196099a8c43051c97210d5dda3162308c28a3ca6d4dcbe92f"
+    },
+    {
+      "path": "scripts/tests/security-smoke.test.mjs",
+      "status": "new",
+      "bytes": 1208,
+      "sha256": "99f20c958d7f04ef32e71c17d7b1f7bad199654d93a9f90418f1c7f6fc01f7c7",
+      "rawSha256": "99f20c958d7f04ef32e71c17d7b1f7bad199654d93a9f90418f1c7f6fc01f7c7"
+    },
+    {
+      "path": "scripts/web.mjs",
+      "status": "modified",
+      "bytes": 3552,
+      "sha256": "bda8c60e7155e14d384315ae300d52ce2e8c36e5e01712a75d15e6b7b21f12e0",
+      "rawSha256": "1f42f530c1f46a41877524616534fa02107aa3f5f9e7373f54ff615003b7c275"
+    }
+  ],
+  "excluded": [
+    "docs/implementation/MILESTONE-PROGRESS.md",
+    "unselected central/legacy inventory/proposal artifacts",
+    "ignored outputs/private build logs/.env/backups",
+    "this local allowlist/dossier"
+  ],
+  "policyActivation": false,
+  "merge": false,
+  "registration": false,
+  "deployment": false
+}

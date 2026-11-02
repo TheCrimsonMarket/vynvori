@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-18",
+  "scope": "OWNER_SUPPLIED_CORE_DEVELOPMENT_METADATA",
+  "container": "service-ui-diablo",
+  "namespaceContext": "dev-raum-au requested; owner supplied selected Pod YAML; not independently queried",
+  "image": "cr.raum.au/core.ui:015.375.000.000",
+  "imageID": "cr.raum.au/core.ui@sha256:4c9c6e031d86a061fe29bb9655a6f88b5f761a80987a71842073449dcde53e44",
+  "ready": true,
+  "restartCount": 0,
+  "startedAt": "2026-10-17T22:00:46Z",
+  "liveRemoteTag": {
+    "ref": "refs/tags/V015.375.000.000",
+    "commit": "cb7668f4e770bc7b6a916b141e0766f2f4fbd011",
+    "verification": "Read-only git ls-remote",
+    "matchesCoreCurrentTargetTests": true
+  },
+  "buildUrl": "NOT_SUPPLIED",
+  "independentBuildToImageAttestation": "NOT_VERIFIED",
+  "rollbackExecution": "NOT_RUN",
+  "operationalMutation": "NONE"
+}

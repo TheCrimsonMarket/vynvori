@@ -1,0 +1,13 @@
+diff --git a/Dockerfile b/Dockerfile
+index 95f3dc64..43003dce 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -23,8 +23,6 @@ COPY . /usr/src/app
+ RUN echo "Build NODE_ENV is: $NODE_ENV"
+ 
+ RUN if [ -f ".env.${NODE_ENV}" ]; then \
+-      echo "Contents of .env.${NODE_ENV}:"; \
+-      cat ".env.${NODE_ENV}"; \
+       cp .env.${NODE_ENV} .env; \
+       rm -f .env.*; \
+     else \

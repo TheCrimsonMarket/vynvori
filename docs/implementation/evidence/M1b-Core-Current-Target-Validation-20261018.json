@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-18",
+  "scope": "DISPOSABLE_LOCAL_CURRENT_TARGET_COMPARISON_NOT_REMOTE_MERGE",
+  "target": "cb7668f4e770bc7b6a916b141e0766f2f4fbd011",
+  "reviewedCommit": "0f875346466f9257ffa1fc7624ed76aba94fd1c3",
+  "tree": "C:\\Users\\User\\AppData\\Local\\Temp\\VYNVORI-M1b-20261018\\core-current-target-cb7668f4",
+  "dependencySource": "Owner-fresh Core candidate node_modules via task-local junction; manifests and lock byte-identical; no install",
+  "baseline": {
+    "suitesPassed": 27,
+    "suitesFailed": 2,
+    "testsPassed": 165,
+    "testsFailed": 22
+  },
+  "candidate": {
+    "suitesPassed": 28,
+    "suitesFailed": 2,
+    "testsPassed": 184,
+    "testsFailed": 22
+  },
+  "allTargetBaselineAssertionsPreserved": true,
+  "failedSuiteIdentityDelta": [],
+  "failedAssertionIdentityDelta": [],
+  "newPassingAssertions": 19,
+  "reviewedThreeSourceFilesExact": true,
+  "remoteBranchMutation": false,
+  "merge": false,
+  "deployment": false,
+  "rawEvidenceHashes": {
+    "core-current-target-baseline.json": "22acf7a3c92f8239b6a7075d7a3c8e37b26498922549aff04932d04179dddb3a",
+    "core-current-target-candidate.json": "93dcce12a8ea3c7e729e4408c3822c7f4d1e4f13f81d278259b7d72836478dcc"
+  },
+  "dockerLogPatch": {
+    "path": "../artifacts/M1b-Core-Build-Log-Sanitization-20261018.patch",
+    "sha256": "4908bbc271016e796ce5a7e5efd1ddc3d4247d88377d7a0b3657b371ed594945",
+    "change": "Dockerfile only: remove env-file heading and cat (2 deletions); preserve environment copy/loading/runtime image behavior",
+    "preparedAfterSourceTestRun": true,
+    "reversePatchCheck": "PASS",
+    "publication": "OWNER_APPROVED_COMMITTED_PUSHED_TO_DRAFT_138",
+    "imageBuild": "NOT_RUN",
+    "commit": "422095fc4c798d0c748d0de9ffc49b515d5d9c82"
+  },
+  "deployedRuntime": {
+    "dockerfilesNode": "20.17.0",
+    "localTestNode": "v22.23.3",
+    "exactRuntimeImageValidation": "NOT_RUN_REQUIRED_BEFORE_DEPLOYMENT"
+  },
+  "m1b": "NOT_COMPLETE"
+}
