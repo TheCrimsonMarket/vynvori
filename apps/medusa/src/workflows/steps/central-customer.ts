@@ -8,6 +8,10 @@ export type CentralCustomerInput = Readonly<{ mode: "create" | "reconcile"; auth
 type Services = { auth: Pick<IAuthModuleService, "retrieveAuthIdentity">; customers: Pick<ICustomerModuleService, "retrieveCustomer" | "listCustomers"> };
 export type CustomerInspection = Readonly<{ existingCustomerId: string | null; needsLink: boolean; canCreate: boolean }>;
 const conflict = () => new MedusaError(MedusaError.Types.DUPLICATE_ERROR, "Commerce identity conflict");
+/** The only contact email Medusa may store: a centrally verified one. "" is the wire form of "none". */
+export function verifiedContactEmail(contact: Readonly<{ email: string; emailVerified: boolean }>): string {
+  return contact.emailVerified ? contact.email : "";
+}
 export function customerIdentityMetadata(input: CentralCustomerInput): Record<string, string> {
   return { vynvori_identity_v1: centralEntityId(input.issuer, input.subject), vynvori_project_id: input.projectId,
     vynvori_auth_identity_id: input.authIdentityId, vynvori_operation_id: input.operationId };
@@ -20,7 +24,7 @@ function validate(input: CentralCustomerInput) {
   try { const url = new URL(input.issuer); validIssuer = url.protocol === "https:" && url.origin === input.issuer; } catch { /* sanitized below */ }
   if (!validIssuer || !input.subject || input.subject.length > 4096 || !input.projectId || input.projectId.length > 256 ||
       !/^[A-Za-z0-9_-]{1,256}$/.test(input.authIdentityId) || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(input.operationId) ||
-      !["create", "reconcile"].includes(input.mode) || input.originalEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.originalEmail) || /[\x00-\x1f\x7f]/.test(input.originalEmail)) throw conflict();
+      !["create", "reconcile"].includes(input.mode) || input.originalEmail.length > 254 || (input.originalEmail !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.originalEmail)) || /[\x00-\x1f\x7f]/.test(input.originalEmail)) throw conflict();
 }
 export async function inspectCentralCustomer(input: CentralCustomerInput, services: Services): Promise<CustomerInspection> {
   validate(input);
@@ -34,7 +38,9 @@ export async function inspectCentralCustomer(input: CentralCustomerInput, servic
     return { existingCustomerId: customer.id, needsLink: false, canCreate: false };
   }
   // Email only narrows the native read. All identity+operation metadata must match before orphan repair.
-  const candidates = await services.customers.listCustomers({ email: input.originalEmail }, { take: 100 });
+  // No verified contact email: nothing to narrow by and nothing that can collide. A committed-but-unlinked
+  // orphan is then unprovable, so reconciliation stays pending (never creates) for operator review.
+  const candidates = input.originalEmail === "" ? [] : await services.customers.listCustomers({ email: input.originalEmail }, { take: 100 });
   if (candidates.length >= 100) throw conflict();
   const own = candidates.filter(customer => belongs(customer, input) && customer.has_account);
   if (own.length > 1) throw conflict();
