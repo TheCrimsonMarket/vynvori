@@ -1,0 +1,316 @@
+{
+  "date": "2026-10-18",
+  "timezone": "Asia/Dhaka",
+  "verificationRevision": "v9",
+  "scope": "LOCAL_PORTAL_AUTHORITY_ONLY_NOT_M1B_ACCEPTANCE",
+  "releaseSource": "e54028d0a3a9fa22fdac2acca1f84744df115225",
+  "releaseTag": "V005.3258.000.000",
+  "localBranch": "codex/m1b-portal-strict-identity",
+  "worktree": "C:\\Users\\User\\AppData\\Local\\Temp\\VYNVORI-M1b-20261018\\portal-release-e54028d0",
+  "candidateFiles": [
+    {
+      "path": "src/__tests__/oauth-legacy-compatibility.test.js",
+      "sha256": "462f71a155a38d2260d6c9f5f98cbe8e77e0cebd1157675e64a7e05b86d09b16"
+    },
+    {
+      "path": "src/__tests__/oauth-strict-access-verifier.test.js",
+      "sha256": "452c15a4a3390d0515505a74b0828e18e8c54b3831f6d842dcff6e7b990b8475"
+    },
+    {
+      "path": "src/__tests__/oauth-strict-authority.test.js",
+      "sha256": "131ea774eb3434f07c53fdaf55d1f8bde51992d6c2634bf3d02d767cb500759e"
+    },
+    {
+      "path": "src/__tests__/oauth-strict-authorization-guard.test.js",
+      "sha256": "7dd9199f622075cded6f205cf62b2b4a3227cbdde1b0df4115005533e935b24d"
+    },
+    {
+      "path": "src/__tests__/oauth-strict-bootstrap.test.js",
+      "sha256": "6d99f7f1af94b011f2e91af4f38912a6f148c5c1adda51a2c9d0a4a39d92c5e9"
+    },
+    {
+      "path": "src/__tests__/oauth-strict-code-context.test.js",
+      "sha256": "c17655392980b8be473b26353e4459d86c82a6732ae72c0142097fffb2699180"
+    },
+    {
+      "path": "src/__tests__/oauth-strict-code-schema.test.js",
+      "sha256": "802bec1cd2af912b521f01e9f7f392f874f6967dc9db41a77c539be4a75d0345"
+    },
+    {
+      "path": "src/__tests__/oauth-strict-core-contract.test.js",
+      "sha256": "85d9aff6ebf30919de7908f1576f4b3374078aca01896b072c7e291cd60995f6"
+    },
+    {
+      "path": "src/__tests__/oauth-strict-family-store.test.js",
+      "sha256": "d7e3a4598b57787a6132894eac1065374cd70afddf1861e14f2acf5ff00a3bb0"
+    },
+    {
+      "path": "src/__tests__/oauth-strict-route-registration.test.js",
+      "sha256": "a4894322907eaefd77ff97e0be28d813b782f6e142e53963b1e5d7c14f8b8c9c"
+    },
+    {
+      "path": "src/__tests__/oauth-strict-routes.test.js",
+      "sha256": "b7cd3d553cb485f8644e6d757a2715738eef8bb6a6d59954a34115ef091f8f93"
+    },
+    {
+      "path": "src/__tests__/oauth-strict-runtime.test.js",
+      "sha256": "473380a7b1216562f79df01afca8177f5d1bbb47d7c49844cbe1cb60b2386270"
+    },
+    {
+      "path": "src/controllers/oauthController.js",
+      "sha256": "a9917297a063ca4bf07cb334b37949ab7ece5ddb733ee8a07ca3aa83a5dcb8a2"
+    },
+    {
+      "path": "src/models/oauthAuthorizationCodeModel.js",
+      "sha256": "6734037b4ca7669fca8780c3cb06e741abe9f7146451c7684b45c1cbd9d3a702"
+    },
+    {
+      "path": "src/routes/oauthRoutes.js",
+      "sha256": "27f669a1ea138f78aca3e95b6700086706453fac23a0122afd22f527c89d174b"
+    },
+    {
+      "path": "src/routes/oauthStrictRoutes.js",
+      "sha256": "43fc4006b4e2f78fd6f708ca11126f03d4dd818384534e0e5440bada7b2b7c05"
+    },
+    {
+      "path": "src/service/appService.ts",
+      "sha256": "cf6f29b4f7bedac600d60dae99427b7f7389c0df9a4e2d99fc3cdee92f98301c"
+    },
+    {
+      "path": "src/service/oauthService.js",
+      "sha256": "33edef6a7edf74fe1c842c74cd38fc8ced2fd68f30143371a72471ab37e940e3"
+    },
+    {
+      "path": "src/service/oauthStrictAccessVerifier.js",
+      "sha256": "aee82a90448a2506bf834da3c3216191bf3ed79cb3fc2318d49bf599da53f672"
+    },
+    {
+      "path": "src/service/oauthStrictAuthority.js",
+      "sha256": "359a6494f7412fe53b391d3b26008b59d3b6afd8050c541017f2409f6b6737fd"
+    },
+    {
+      "path": "src/service/oauthStrictAuthorizationGuard.js",
+      "sha256": "f048711f1f70d515e69d0eb046861893a9205426a4dc84fb21206db60e13d835"
+    },
+    {
+      "path": "src/service/oauthStrictBootstrap.js",
+      "sha256": "9b07a7508275f494b01dc7dd7f8c515de78c6578ed69a9a662cd458aa6f6ac7e"
+    },
+    {
+      "path": "src/service/oauthStrictFamilyStore.js",
+      "sha256": "8d95f3160760f4b624f9f946699c8d46fb270f8a959c186444ef9255518d6c48"
+    },
+    {
+      "path": "src/service/oauthStrictRuntime.js",
+      "sha256": "ffeface52d4db3b1affd411e434125b4775ade596977772cce0b5c6308352fd4"
+    }
+  ],
+  "baseline": {
+    "suitesPassed": 102,
+    "suitesFailed": 30,
+    "testsPassed": 587,
+    "testsFailed": 19
+  },
+  "candidate": {
+    "suitesPassed": 114,
+    "suitesFailed": 30,
+    "testsPassed": 748,
+    "testsFailed": 19
+  },
+  "failureSuiteDelta": [],
+  "failureTestDelta": [],
+  "removedOrChangedBaselineAssertions": [],
+  "newPassingAssertions": 161,
+  "oauth": {
+    "suites": 24,
+    "passedTests": 281,
+    "failedTests": 0
+  },
+  "mongo": {
+    "version": "7.0.14",
+    "mode": "disposable local; cached binary; downloads disabled",
+    "testsEnabled": true
+  },
+  "coreBaseline": {
+    "source": "2c7f0113dd0c2b1566ad88f69fb9a7cc675387fc",
+    "suitesPassed": 4,
+    "suitesFailed": 0,
+    "testsPassed": 36,
+    "testsFailed": 0,
+    "sourceChanged": false
+  },
+  "approvedStagingPolicy": {
+    "accessTokenSeconds": 300,
+    "familySeconds": 28800,
+    "appSessionAbsoluteSeconds": 28800,
+    "appIdleSeconds": 1800,
+    "loginTransactionSeconds": 600,
+    "authorizationCache": "NONE",
+    "maxRotations": 96,
+    "activation": "NOT_AUTHORIZED"
+  },
+  "pending": [
+    "Existing source review APPROVED; baseline failures and full legacy consumer coverage remain open",
+    "Portal deployment build-to-digest attestation",
+    "Registration/domain/storage/secret/deployment approval and execution",
+    "Deployed strict verification and full consumer compatibility evidence",
+    "VYNVORI bridge, sessions, mappings, guest ownership and staging acceptance"
+  ],
+  "liveMutation": false,
+  "registration": "BLOCKED",
+  "deployment": "BLOCKED",
+  "m1b": "IN_PROGRESS_NOT_COMPLETE",
+  "manifestFiles": [
+    {
+      "path": "package.json",
+      "sha256": "57ccdc073fe17c25708b376847663d8c6df3d5967766b79b1d4894b9166c7954"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "09471b095f13c826c9e8cfa4eedcab09386bc521d3bde5f96e8f2c8e908d2c3e"
+    }
+  ],
+  "coreCandidateReceipt": "M1b-Core-Proxy-Candidate-20261018.json",
+  "sourcePairTests": {
+    "coreNewPassingCases": 19,
+    "jointCasesPassed": 3,
+    "metadataOnlyIndexGate": "Missing/sparse/partial code uniqueness rejected; no repair",
+    "legacyAutoIndexFreshInitialization": "FAIL_KNOWN_PREEXISTING_INDEX_DEFINITIONS; not repaired by candidate"
+  },
+  "reviewArtifact": {
+    "path": "../artifacts/M1b-Portal-Candidate-v9-20261018.patch",
+    "sha256": "8b876d909d7c204ddf096a0c8ee3b1354d5fbd5b4352fee0b913eef4646ea9b2",
+    "reverseCheck": "PASS",
+    "stagedContents": 0
+  },
+  "ownerInstallPreparation": {
+    "script": "../artifacts/M1b-Fresh-Dependencies-20261018.ps1",
+    "preview": "PASS_READ_ONLY",
+    "junctionEntryDeletionProof": "PASS_DISPOSABLE_FIXTURE_TARGET_PRESERVED",
+    "executeMode": "PASS_OWNER_EXECUTED_NPM_CI",
+    "originalDependencyDirectories": "UNTOUCHED",
+    "localFileDependencyLinks": "NONE_IN_LOCKS",
+    "validation": "PASS_SOURCE_AND_LOCK_HASHES_BEFORE_CONTACT_EXTENSION"
+  },
+  "freshValidationReceipt": "M1b-Fresh-Validation-20261018.json",
+  "contactProfile": {
+    "status": "IMPLEMENTED_LOCAL_ONLY",
+    "transport": "POST /mana/oauth/strict/v1/profile and /oauth/strict/v1/profile; form token + authenticated server Basic; no browser Origin/Cookie",
+    "requiredGrantedScopes": [
+      "profile",
+      "email"
+    ],
+    "contactSource": "userBN top-level email/emailVerified/displayName; no provider fallback",
+    "identityKey": "issuer + subject; email never linking proof",
+    "missingEmail": "409 contact_required; no placeholders",
+    "revocation": "Current family/subject/registration rechecked after contact I/O",
+    "customerMapping": "NOT_IMPLEMENTED"
+  },
+  "priorReviewArtifact": {
+    "path": "../artifacts/M1b-Portal-Candidate-20261018.patch",
+    "sha256": "a76beb11b30e5c5cde77d37228894481355fb461af277dc0fccc1ecf97001f38",
+    "reverseCheck": "PASS",
+    "stagedContents": 0
+  },
+  "sourcePublication": {
+    "repository": "Portal.Service",
+    "commit": "b23f3d5c366438d056b0a68f91d303c395f7d0be",
+    "branch": "codex/m1b-portal-strict-identity",
+    "pushed": true,
+    "remoteShaVerified": true,
+    "targetBranch": "developmerger",
+    "targetHead": "e54028d0a3a9fa22fdac2acca1f84744df115225",
+    "targetCommitsAheadOfTestedBase": 0,
+    "reviewedPathCount": 24,
+    "targetDiffMatchesAllowlist": true,
+    "prStatus": "COMPLETED_SOURCE_ONLY_MERGE",
+    "releaseTagsPushed": false,
+    "mergeAuthorized": true,
+    "deploymentAuthorized": false,
+    "apiMetadataAccess": "401 using existing credential helper; no credential values persisted",
+    "remoteRuns": "NOT_VERIFIED; no job intentionally queued; commit uses skip ci for deployment pipeline",
+    "pullRequestId": 137,
+    "pullRequestUrl": "https://dev.azure.com/raum-au/mg23/_git/Portal.Service/pullrequest/137",
+    "uiVerification": {
+      "status": "COMPLETED",
+      "mergeCommit": "35a47c9d6d7b41adbed5cc6556a4e9bbe78269ba",
+      "sourceBranchMatches": true,
+      "targetBranch": "developmerger",
+      "mergeType": "MERGE_NO_FAST_FORWARD",
+      "noPolicyBypass": true,
+      "sourceBranchRetained": true,
+      "screenshot": "M1b-Portal-Merged-137-20261018.png",
+      "proof": "Visible completion page plus Git-ref/tree/parent verification"
+    },
+    "screenshot": "M1b-Portal-Draft-PR-137-20261018.png",
+    "screenshotSha256": "1b48101c9a2845eefdcd5367f6b403a274a69c450c2bcdd8113e16d09e49387a",
+    "submittedDescription": "../artifacts/M1b-Portal-Draft-PR-20261018.md",
+    "submittedDescriptionSha256": "b4d4b41f0d04a98e8b7e23db083addb4609eaafde066b8397fb1ca51db09c801",
+    "appAttachment": "ATTEMPTED; Codex attach_artifact rejected this Azure PR URL as unsupported; direct URL retained",
+    "mergeResult": {
+      "repository": "Portal.Service",
+      "pullRequestId": 137,
+      "url": "https://dev.azure.com/raum-au/mg23/_git/Portal.Service/pullrequest/137",
+      "status": "COMPLETED_UI_VERIFIED",
+      "targetBranch": "developmerger",
+      "mergeCommit": "35a47c9d6d7b41adbed5cc6556a4e9bbe78269ba",
+      "resultTree": "fd4a59e3cb7cd03b280999b1294e5115d849e6ef",
+      "approvedPreviewMatched": true,
+      "parents": [
+        "e54028d0a3a9fa22fdac2acca1f84744df115225",
+        "b23f3d5c366438d056b0a68f91d303c395f7d0be"
+      ],
+      "parentOrderVerified": true,
+      "candidatePathCount": 24,
+      "sourceBranchRetained": true,
+      "liveTargetAndSourceRefsRechecked": "2026-10-19",
+      "mergeType": "MERGE_NO_FAST_FORWARD",
+      "skipCiInMergeMessage": true,
+      "policyBypass": false,
+      "autoComplete": false,
+      "associatedWorkItemsCompleted": false,
+      "policyReadOnly": {
+        "requiredReviewers": "OFF",
+        "buildValidationPolicies": 0,
+        "statusPolicies": 0,
+        "automaticReviewerPolicies": 0,
+        "linkedWorkItems": "OFF",
+        "commentResolution": "OFF",
+        "mergeTypeRestriction": "OFF",
+        "settingsChanged": false
+      },
+      "screenshot": "M1b-Portal-Merged-137-20261018.png",
+      "screenshotSha256": "eea4b8fe784635ab7b4f38655f3de4ae6ca79f302a761920abe99811bbc6652c"
+    },
+    "preMergeUiVerification": {
+      "isDraft": true,
+      "sourceBranchMatches": true,
+      "targetBranch": "developmerger",
+      "fileCount": 24,
+      "commits": 1,
+      "mergeConflicts": "NONE_SHOWN",
+      "reviewersNotified": "NONE_IN_DRAFT_MODE",
+      "autoComplete": "NOT_SELECTED_ON_CREATION",
+      "verification": "Visible signed-in browser; no REST API or session credential extraction"
+    },
+    "mergedTargetHead": "35a47c9d6d7b41adbed5cc6556a4e9bbe78269ba"
+  },
+  "founderSourceReview": {
+    "status": "APPROVED",
+    "source": "Direct founder chat: source review approved.",
+    "date": "2026-10-18",
+    "scope": "Existing Portal #137 b23f3d5c and Core #138 0f875346 only",
+    "azureReviewVote": "NOT_CAST_BY_AGENT",
+    "newDockerfilePatch": "NOT_INCLUDED_IN_APPROVED_SOURCE",
+    "merge": "NOT_AUTHORIZED",
+    "activation": "NOT_AUTHORIZED",
+    "failureWaiver": "NONE_INFERRED"
+  },
+  "mergedSource": {
+    "commit": "35a47c9d6d7b41adbed5cc6556a4e9bbe78269ba",
+    "tree": "fd4a59e3cb7cd03b280999b1294e5115d849e6ef",
+    "receipt": "M1b-Source-Merge-Result-20261018.json",
+    "validation": "Exact approved preview tree and two parents match; no new application source beyond tested/approved overlay",
+    "runtimeDeployment": "NOT_PERFORMED"
+  }
+}

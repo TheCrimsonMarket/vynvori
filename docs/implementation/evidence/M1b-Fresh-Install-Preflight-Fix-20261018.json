@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-18",
+  "problem": "Windows PowerShell native argument quoting removed JavaScript string quotes in node -e preflight",
+  "correction": "Separate CommonJS validator invoked by file path and lockfile argument",
+  "checks": {
+    "windowsPowerShell51RealCandidatePreview": "PASS: Portal and Core",
+    "validatorCases": "7 PASS / 0 FAIL",
+    "npmCi": "NOT_RUN_BY_AGENT",
+    "originalDependencyJunctions": "BOTH_PRESENT",
+    "candidateSourceEdits": "NONE"
+  },
+  "artifacts": [
+    {
+      "path": "artifacts/M1b-Fresh-Dependencies-20261018.ps1",
+      "sha256": "3247dd64d105a60f13552a1a70098e614a01258503e15b7f5173519e8daedbbc"
+    },
+    {
+      "path": "artifacts/M1b-Validate-Lockfile-20261018.cjs",
+      "sha256": "e9c35d03c91808e9b045c49dec71e0d6fd479f1a0f847f3491dc2bc46fee988a"
+    },
+    {
+      "path": "artifacts/M1b-Validate-Lockfile-20261018.test.cjs",
+      "sha256": "08c77be50c9c1f2e54a9b800067e91996e6bb5de0dfec6ace3a69529a85ff0ce"
+    }
+  ]
+}

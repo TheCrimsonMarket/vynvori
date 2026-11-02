@@ -1,0 +1,12 @@
+{
+  "installedFramework": "2.21.2",
+  "configuredId": "probe-config",
+  "staticIdentifier": "probe-class",
+  "registeredAuthKeys": [
+    "au_probe-config"
+  ],
+  "selectableProviderIds": [
+    "probe-config"
+  ],
+  "scope": "inert installed-loader probe; lazy provider never instantiated; no app/database/network activation"
+}

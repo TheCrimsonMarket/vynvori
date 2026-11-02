@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-18",
+  "status": "SOURCE_ONLY_MERGE_PROPOSED_NOT_AUTHORIZED",
+  "results": [
+    {
+      "repository": "Portal.Service",
+      "sourceHead": "b23f3d5c366438d056b0a68f91d303c395f7d0be",
+      "targetHead": "e54028d0a3a9fa22fdac2acca1f84744df115225",
+      "resultTree": "fd4a59e3cb7cd03b280999b1294e5115d849e6ef",
+      "pathCount": 24,
+      "exactAllowlist": true,
+      "candidateBlobsMatchApprovedSource": true,
+      "conflicts": "NONE",
+      "mode": "LOCAL_MERGE_TREE_ONLY",
+      "branchMove": false,
+      "commitCreated": false,
+      "remoteMutation": false
+    },
+    {
+      "repository": "service.core-ui",
+      "sourceHead": "422095fc4c798d0c748d0de9ffc49b515d5d9c82",
+      "targetHead": "cb7668f4e770bc7b6a916b141e0766f2f4fbd011",
+      "resultTree": "445e642773a2f5fbe1acb087b89cc428db0395d0",
+      "pathCount": 4,
+      "exactAllowlist": true,
+      "candidateBlobsMatchApprovedSource": true,
+      "conflicts": "NONE",
+      "mode": "LOCAL_MERGE_TREE_ONLY",
+      "branchMove": false,
+      "commitCreated": false,
+      "remoteMutation": false
+    }
+  ],
+  "merge": false,
+  "build": false,
+  "releaseTag": false,
+  "deployment": false,
+  "proposal": "../M1b-Source-Only-Merge-Proposal-20261018.md"
+}

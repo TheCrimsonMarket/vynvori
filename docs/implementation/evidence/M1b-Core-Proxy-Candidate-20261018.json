@@ -1,0 +1,241 @@
+{
+  "date": "2026-10-18",
+  "timezone": "Asia/Dhaka",
+  "scope": "LOCAL_CORE_AUTHORIZATION_PROXY_ONLY_NOT_DEPLOYED",
+  "releaseSource": "2c7f0113dd0c2b1566ad88f69fb9a7cc675387fc",
+  "localBranch": "codex/m1b-core-authorizer-provenance",
+  "worktree": "C:\\Users\\User\\AppData\\Local\\Temp\\VYNVORI-M1b-20261018\\core-release-2c7f0113",
+  "candidateFiles": [
+    {
+      "path": "src/app/api/oauth/__tests__/authorize-proxy.test.js",
+      "sha256": "d01c90692c6ff501d5ef1c639e575cb87af32d38eb0b30d74e4fe69fa52395d6"
+    },
+    {
+      "path": "src/app/api/oauth/_lib/strict-proxy.js",
+      "sha256": "8ca29666b2fb81ed23a0d79cb5f41b217e6412eb8b5b0cec5040a666d6d890a3"
+    },
+    {
+      "path": "src/app/api/oauth/authorize/route.js",
+      "sha256": "ffb5ad1fa3a09cbd9fb41287f42ee6b2110e26a5e8c5f513eaaedce6e40906dd"
+    },
+    {
+      "path": "Dockerfile",
+      "sha256": "7fe1c20344a3b4dade85bc79695f5a2d33bc238c8a9566c1a54d4a613c699a20"
+    }
+  ],
+  "manifestFiles": [
+    {
+      "path": "package.json",
+      "sha256": "379077338804261907952ba1a6a667ca34eae3f7c748f8060b849afda2ec08dc"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "e4eac019616247ddfd3470bedae1121cc33a974acf0c4c02059aa58498bf1c14"
+    }
+  ],
+  "baseline": {
+    "suitesPassed": 24,
+    "suitesFailed": 2,
+    "testsPassed": 157,
+    "testsFailed": 22
+  },
+  "candidate": {
+    "suitesPassed": 25,
+    "suitesFailed": 2,
+    "testsPassed": 176,
+    "testsFailed": 22
+  },
+  "failureSuiteDelta": [],
+  "failureTestDelta": [],
+  "removedOrChangedBaselineAssertions": [],
+  "newPassingAssertions": 19,
+  "legacyBehavior": "Existing success/consent/4xx/exception payload/status and shared upstream contracts retained; credentials removed from diagnostic logs",
+  "strictBehavior": "Explicit server cohort + exact HTTPS web/API origin; reject forged/missing POST Origin and duplicate query fields; no redirects; no raw upstream failures; no-store",
+  "publicDevAuthorizerProbe": {
+    "url": "https://dev.portal.raum.au/mana/oauth/authorize",
+    "status": 404,
+    "credentials": "none",
+    "meaning": "Existing public alias absent; candidate Portal adds default-off strict-cohort-only alias; not deployed"
+  },
+  "jointIntegration": {
+    "portalTest": "src/__tests__/oauth-strict-core-contract.test.js",
+    "cases": 3,
+    "actual": [
+      "core proxy handler source",
+      "Portal controller/service/model source",
+      "local Express HTTP",
+      "disposable real MongoDB"
+    ],
+    "adapters": [
+      "Next request/response context",
+      "Axios upstream transport redirected to local HTTP",
+      "unrelated legacy provider modules"
+    ],
+    "legacyAutoIndex": "Disabled in joint fixture due verified pre-existing boolean index directions; valid unique indexes explicitly prepared; not a fresh legacy-DDL acceptance claim"
+  },
+  "freshNpmCi": "PASS_OWNER_EXECUTED; fresh suite retains all previous assertion identities/statuses",
+  "deployment": "BLOCKED",
+  "m1b": "IN_PROGRESS_NOT_COMPLETE",
+  "reviewArtifact": {
+    "path": "../artifacts/M1b-Core-Proxy-Candidate-v2-20261018.patch",
+    "sha256": "fda3e4f087f618add1b273398e83857ca28514180a76f66d3526b4e0cb1edd02",
+    "reverseCheck": "PASS",
+    "stagedContents": 0
+  },
+  "freshValidationReceipt": "M1b-Fresh-Validation-20261018.json",
+  "sourcePublication": {
+    "repository": "service.core-ui",
+    "commit": "422095fc4c798d0c748d0de9ffc49b515d5d9c82",
+    "branch": "codex/m1b-core-authorizer-provenance",
+    "pushed": true,
+    "remoteShaVerified": true,
+    "targetBranch": "developmerger",
+    "targetHead": "cb7668f4e770bc7b6a916b141e0766f2f4fbd011",
+    "targetCommitsAheadOfTestedBase": 14,
+    "reviewedPathCount": 4,
+    "targetDiffMatchesAllowlist": true,
+    "prStatus": "COMPLETED_SOURCE_ONLY_MERGE",
+    "releaseTagsPushed": false,
+    "mergeAuthorized": true,
+    "deploymentAuthorized": false,
+    "apiMetadataAccess": "401 using existing credential helper; no credential values persisted",
+    "remoteRuns": "NOT_VERIFIED; no job intentionally queued; commit uses skip ci for deployment pipeline",
+    "pullRequestId": 138,
+    "pullRequestUrl": "https://dev.azure.com/raum-au/mg23/_git/service.core-ui/pullrequest/138",
+    "uiVerification": {
+      "status": "COMPLETED",
+      "mergeCommit": "30efb9e295ccdf4e6a51c3c3d8d2b05c6494381f",
+      "sourceBranchMatches": true,
+      "targetBranch": "developmerger",
+      "mergeType": "MERGE_NO_FAST_FORWARD",
+      "noPolicyBypass": true,
+      "sourceBranchRetained": true,
+      "screenshot": "M1b-Core-Merged-138-20261018.png",
+      "proof": "Visible completion page plus Git-ref/tree/parent verification"
+    },
+    "screenshot": "M1b-Core-Draft-PR-138-20261018.png",
+    "screenshotSha256": "1c59a491c5a77eb4eaa057cb7895a29f5da90f28aa4a642b7655dae795b7134a",
+    "submittedDescription": "../artifacts/M1b-Core-Draft-PR-20261018.md",
+    "submittedDescriptionSha256": "0134cbfd33f8d0072316d31fbd5cbd1dab4d210fe851e8f56071ba068baec567",
+    "appAttachment": "ATTEMPTED; Codex attach_artifact rejected this Azure PR URL as unsupported; direct URL retained",
+    "originalCommit": "0f875346466f9257ffa1fc7624ed76aba94fd1c3",
+    "creationUiVerification": {
+      "isDraft": true,
+      "sourceBranchMatches": true,
+      "targetBranch": "developmerger",
+      "fileCount": 3,
+      "commits": 1,
+      "mergeConflicts": "NONE_SHOWN",
+      "reviewersNotified": "NONE_IN_DRAFT_MODE",
+      "autoComplete": "NOT_SELECTED_ON_CREATION",
+      "verification": "Visible signed-in browser; no REST API or session credential extraction"
+    },
+    "originalSubmittedDescriptionSha256": "c6f771ce9c8450a854647bc701e2ec36029a828a1b44d9d94e4b85b7335e7136",
+    "mergeResult": {
+      "repository": "service.core-ui",
+      "pullRequestId": 138,
+      "url": "https://dev.azure.com/raum-au/mg23/_git/service.core-ui/pullrequest/138",
+      "status": "COMPLETED_UI_VERIFIED",
+      "targetBranch": "developmerger",
+      "mergeCommit": "30efb9e295ccdf4e6a51c3c3d8d2b05c6494381f",
+      "resultTree": "445e642773a2f5fbe1acb087b89cc428db0395d0",
+      "approvedPreviewMatched": true,
+      "parents": [
+        "cb7668f4e770bc7b6a916b141e0766f2f4fbd011",
+        "422095fc4c798d0c748d0de9ffc49b515d5d9c82"
+      ],
+      "parentOrderVerified": true,
+      "candidatePathCount": 4,
+      "sourceBranchRetained": true,
+      "liveTargetAndSourceRefsRechecked": "2026-10-19",
+      "mergeType": "MERGE_NO_FAST_FORWARD",
+      "skipCiInMergeMessage": true,
+      "policyBypass": false,
+      "autoComplete": false,
+      "associatedWorkItemsCompleted": false,
+      "policyReadOnly": {
+        "requiredReviewers": "OFF",
+        "buildValidationPolicies": 0,
+        "statusPolicies": 0,
+        "automaticReviewerPolicies": 0,
+        "linkedWorkItems": "OFF",
+        "commentResolution": "OFF",
+        "mergeTypeRestriction": "OFF",
+        "settingsChanged": false
+      },
+      "screenshot": "M1b-Core-Merged-138-20261018.png",
+      "screenshotSha256": "4cc6f7592008e9c314a85b39fcb89d727102d084cde0443c2b0af99f82e7031b"
+    },
+    "preMergeUiVerification": {
+      "isDraft": true,
+      "sourceBranchMatches": true,
+      "targetBranch": "developmerger",
+      "mergeConflicts": "NONE_SHOWN",
+      "latestVisibleCommit": "422095fc4c798d0c748d0de9ffc49b515d5d9c82",
+      "descriptionSaved": true,
+      "fullDiffCount": 4,
+      "fullDiffCountEvidence": "GIT_VERIFIED",
+      "verification": "Visible signed-in PR page before session renewal; no browser credentials extracted"
+    },
+    "mergedTargetHead": "30efb9e295ccdf4e6a51c3c3d8d2b05c6494381f"
+  },
+  "currentTargetValidation": {
+    "receipt": "M1b-Core-Current-Target-Validation-20261018.json",
+    "target": "cb7668f4e770bc7b6a916b141e0766f2f4fbd011",
+    "baseline": {
+      "suitesPassed": 27,
+      "suitesFailed": 2,
+      "testsPassed": 165,
+      "testsFailed": 22
+    },
+    "candidate": {
+      "suitesPassed": 28,
+      "suitesFailed": 2,
+      "testsPassed": 184,
+      "testsFailed": 22
+    },
+    "allPriorAssertionsPreserved": true,
+    "newPassingAssertions": 19,
+    "remoteMerge": "NOT_PERFORMED"
+  },
+  "founderSourceReview": {
+    "status": "APPROVED",
+    "source": "Direct founder chat: source review approved.",
+    "date": "2026-10-18",
+    "scope": "Existing Portal #137 b23f3d5c and Core #138 0f875346 only",
+    "azureReviewVote": "NOT_CAST_BY_AGENT",
+    "newDockerfilePatch": "NOT_INCLUDED_IN_APPROVED_SOURCE",
+    "merge": "NOT_AUTHORIZED",
+    "activation": "NOT_AUTHORIZED",
+    "failureWaiver": "NONE_INFERRED"
+  },
+  "priorReviewArtifact": {
+    "path": "../artifacts/M1b-Core-Proxy-Candidate-20261018.patch",
+    "sha256": "b744a071ca64ce0431c9d79100fa20de714611c0b6acf24e2e90ab7a5aa9fc78",
+    "reverseCheck": "PASS",
+    "stagedContents": 0
+  },
+  "logOnlyFollowUp": {
+    "approvedBy": "Founder chat: Approve the log-only fix publication",
+    "commit": "422095fc4c798d0c748d0de9ffc49b515d5d9c82",
+    "parent": "0f875346466f9257ffa1fc7624ed76aba94fd1c3",
+    "patchSha256": "4908bbc271016e796ce5a7e5efd1ddc3d4247d88377d7a0b3657b371ed594945",
+    "changedFiles": [
+      "Dockerfile"
+    ],
+    "insertions": 0,
+    "deletions": 2,
+    "stagedPatchExactlyMatchedReview": true,
+    "originalAuthSourceUnchanged": true,
+    "imageBuild": "NOT_RUN_NOT_AUTHORIZED",
+    "ui": "Draft PR #138 visibly shows 422095fc, Draft, correct branches and no merge conflicts; description saved with current-target evidence",
+    "newScreenshot": "NOT_CAPTURED: original tab became unavailable after successful UI save; reopened session requires renewed sign-in"
+  },
+  "mergedSource": {
+    "commit": "30efb9e295ccdf4e6a51c3c3d8d2b05c6494381f",
+    "tree": "445e642773a2f5fbe1acb087b89cc428db0395d0",
+    "receipt": "M1b-Source-Merge-Result-20261018.json",
+    "validation": "Exact approved preview tree and two parents match; no new application source beyond tested/approved overlay",
+    "runtimeDeployment": "NOT_PERFORMED"
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "date": "2026-10-19",
+  "status": "PASS_LOCAL_IMAGE_PROBES_ONLY",
+  "ownerReceiptSha256": "a08362e6b0bff81620cb23fdbb07d443695bf937a0917d97ec56865424a0746d",
+  "ownerReceiptPath": "C:\\Users\\User\\AppData\\Local\\Temp\\VYNVORI-M1b-20261018\\private-image-validation\\owner-build-receipt.json",
+  "results": [
+    {
+      "component": "Portal",
+      "source": "35a47c9d6d7b41adbed5cc6556a4e9bbe78269ba",
+      "tree": "fd4a59e3cb7cd03b280999b1294e5115d849e6ef",
+      "localImage": "vynvori-m1b-portal-review:35a47c9d",
+      "localImageId": "sha256:c64402c587ca92283bd78d15fd1e4834bc3ac27afb3fd49304194f6ea4c308b5",
+      "reusedVerifiedPriorImage": true,
+      "buildExit": "NOT_CAPTURED_PRIOR_RUNNER_STDERR_EXCEPTION",
+      "imageAliasAndRevisionVerified": true,
+      "probe": {
+        "status": "PASS_IMAGE_PROBE_ONLY",
+        "role": "Portal",
+        "node": "v20.17.0",
+        "checks": [
+          "node_20_17_0",
+          "strict_cohort_off",
+          "production_dependencies",
+          "default_off_no_database_or_route",
+          "invalid_strict_config_denied",
+          "synthetic_bound_token_accepted",
+          "wrong_audience_denied"
+        ],
+        "network": "disabled_by_docker_command",
+        "database": "not_connected",
+        "publicServer": "not_started",
+        "acceptance": "NOT_M1B_OR_DEPLOYED_ACCEPTANCE"
+      },
+      "logSha256": null,
+      "buildStderrSha256": null,
+      "probeSha256": "2282e9f9a90fdfff6a8ae233e4bf55a9cac12678d40fc04d7b1d2bf32d643b2f",
+      "probeStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourceUnchanged": true
+    },
+    {
+      "component": "Core",
+      "source": "30efb9e295ccdf4e6a51c3c3d8d2b05c6494381f",
+      "tree": "445e642773a2f5fbe1acb087b89cc428db0395d0",
+      "localImage": "vynvori-m1b-core-review:30efb9e2",
+      "localImageId": "sha256:eaf95af446943e7e6c32a9db16c3d366bda4881aee8480f141be0aea30eee5f9",
+      "reusedVerifiedPriorImage": false,
+      "buildExit": 0,
+      "imageAliasAndRevisionVerified": true,
+      "probe": {
+        "status": "PASS_IMAGE_PROBE_ONLY",
+        "role": "Core",
+        "node": "v20.17.0",
+        "checks": [
+          "node_20_17_0",
+          "strict_cohort_off",
+          "compiled_authorizer_present",
+          "production_route_module_loads",
+          "get_post_exports_present"
+        ],
+        "network": "disabled_by_docker_command",
+        "database": "not_connected",
+        "publicServer": "not_started",
+        "acceptance": "NOT_M1B_OR_DEPLOYED_ACCEPTANCE"
+      },
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "buildStderrSha256": "94eac6341af24f5024decec26921f38bc4e992f8b8449635481e61c36df43374",
+      "probeSha256": "eb4f028f1655b663c0b39f0ba3fcc54cfdc403cc4d8a2ac59541169b8b476994",
+      "probeStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourceUnchanged": true
+    }
+  ],
+  "independentlyVerified": {
+    "platforms": "linux/amd64 BOTH",
+    "imageIdsAndRevisionLabels": "MATCH_APPROVED_MERGED_SOURCES",
+    "recordedLogHashes": "MATCH_RECOMPUTED_PRIVATE_FILES",
+    "rawLogs": "RETAINED_PRIVATE_NOT_PUBLISHED"
+  },
+  "portalBuildExitCaveat": "Original build exit was not captured; verified completed image reused and image probe passed. Do not infer original exit zero.",
+  "imagePush": false,
+  "gitTag": false,
+  "deployment": false,
+  "databaseMutation": false,
+  "registration": false,
+  "fullApplicationAcceptance": "NOT_RUN",
+  "deployedLegacyCompatibility": "NOT_RUN",
+  "m1bAcceptance": "NOT_COMPLETE"
+}

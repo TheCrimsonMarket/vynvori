@@ -1,0 +1,91 @@
+{
+  "operationDate": "2026-10-18",
+  "verificationDate": "2026-10-19",
+  "timezone": "Asia/Dhaka",
+  "status": "PASS_APPROVED_SOURCE_ONLY_MERGES",
+  "authorization": "Direct founder reply: Approve source-only merges; builds/tags/registration/storage/configuration/deployment excluded",
+  "results": [
+    {
+      "repository": "Portal.Service",
+      "pullRequestId": 137,
+      "url": "https://dev.azure.com/raum-au/mg23/_git/Portal.Service/pullrequest/137",
+      "status": "COMPLETED_UI_VERIFIED",
+      "targetBranch": "developmerger",
+      "mergeCommit": "35a47c9d6d7b41adbed5cc6556a4e9bbe78269ba",
+      "resultTree": "fd4a59e3cb7cd03b280999b1294e5115d849e6ef",
+      "approvedPreviewMatched": true,
+      "parents": [
+        "e54028d0a3a9fa22fdac2acca1f84744df115225",
+        "b23f3d5c366438d056b0a68f91d303c395f7d0be"
+      ],
+      "parentOrderVerified": true,
+      "candidatePathCount": 24,
+      "sourceBranchRetained": true,
+      "liveTargetAndSourceRefsRechecked": "2026-10-19",
+      "mergeType": "MERGE_NO_FAST_FORWARD",
+      "skipCiInMergeMessage": true,
+      "policyBypass": false,
+      "autoComplete": false,
+      "associatedWorkItemsCompleted": false,
+      "policyReadOnly": {
+        "requiredReviewers": "OFF",
+        "buildValidationPolicies": 0,
+        "statusPolicies": 0,
+        "automaticReviewerPolicies": 0,
+        "linkedWorkItems": "OFF",
+        "commentResolution": "OFF",
+        "mergeTypeRestriction": "OFF",
+        "settingsChanged": false
+      },
+      "screenshot": "M1b-Portal-Merged-137-20261018.png",
+      "screenshotSha256": "eea4b8fe784635ab7b4f38655f3de4ae6ca79f302a761920abe99811bbc6652c"
+    },
+    {
+      "repository": "service.core-ui",
+      "pullRequestId": 138,
+      "url": "https://dev.azure.com/raum-au/mg23/_git/service.core-ui/pullrequest/138",
+      "status": "COMPLETED_UI_VERIFIED",
+      "targetBranch": "developmerger",
+      "mergeCommit": "30efb9e295ccdf4e6a51c3c3d8d2b05c6494381f",
+      "resultTree": "445e642773a2f5fbe1acb087b89cc428db0395d0",
+      "approvedPreviewMatched": true,
+      "parents": [
+        "cb7668f4e770bc7b6a916b141e0766f2f4fbd011",
+        "422095fc4c798d0c748d0de9ffc49b515d5d9c82"
+      ],
+      "parentOrderVerified": true,
+      "candidatePathCount": 4,
+      "sourceBranchRetained": true,
+      "liveTargetAndSourceRefsRechecked": "2026-10-19",
+      "mergeType": "MERGE_NO_FAST_FORWARD",
+      "skipCiInMergeMessage": true,
+      "policyBypass": false,
+      "autoComplete": false,
+      "associatedWorkItemsCompleted": false,
+      "policyReadOnly": {
+        "requiredReviewers": "OFF",
+        "buildValidationPolicies": 0,
+        "statusPolicies": 0,
+        "automaticReviewerPolicies": 0,
+        "linkedWorkItems": "OFF",
+        "commentResolution": "OFF",
+        "mergeTypeRestriction": "OFF",
+        "settingsChanged": false
+      },
+      "screenshot": "M1b-Core-Merged-138-20261018.png",
+      "screenshotSha256": "4cc6f7592008e9c314a85b39fcb89d727102d084cde0443c2b0af99f82e7031b"
+    }
+  ],
+  "sourceBranchesDeleted": false,
+  "imageBuild": "NOT_RUN",
+  "imagePush": false,
+  "releaseTagsCreated": false,
+  "pipelineManuallyQueued": false,
+  "remoteRunState": "NOT_INDEPENDENTLY_VERIFIED; branch policy build checks were zero; checked-in pipelines tag-triggered; merge messages contain skip ci",
+  "registration": "NOT_PERFORMED",
+  "configuration": "UNCHANGED",
+  "storageMutation": false,
+  "deployment": "NOT_PERFORMED",
+  "acceptance": "M1B_NOT_COMPLETE",
+  "nextProposal": "../M1b-Build-Only-Review-20261019.md"
+}

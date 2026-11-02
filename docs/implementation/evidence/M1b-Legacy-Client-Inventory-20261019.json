@@ -1,0 +1,515 @@
+{
+  "date": "2026-10-19",
+  "status": "OWNER_METADATA_RECEIVED_NOT_DEPLOYED_ACCEPTANCE",
+  "database": "portaldb",
+  "environmentBinding": "OWNER_CONFIRMED_DEVELOPMENT_CONNECTION",
+  "sourceAttachmentSha256": "6e1ccf6d85c5be300c332e4302ece01eaff89d57c60429f5fdf56ab4ba61ec9d",
+  "portalSource": "35a47c9d6d7b41adbed5cc6556a4e9bbe78269ba",
+  "grantResolutionSource": "src/util/oauthGrants.js resolveAllowedGrants",
+  "counts": {
+    "active": 19,
+    "total": 19,
+    "legacyMissingGrants": 10,
+    "explicitInteractive": 3,
+    "explicitService": 6
+  },
+  "clients": [
+    {
+      "clientId": "tcm_35acacfeba44f9ff7443cea9f57e19a9",
+      "name": "Social Riddle",
+      "active": true,
+      "storedAllowedGrants": null,
+      "grantEvidence": "FIELD_ABSENT_SOURCE_LEGACY_FALLBACK",
+      "effectiveGrantsFromSource": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "allowedScopes": [
+        "profile",
+        "youtube"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_cd21080b0307695037a1186f0cf032ca",
+      "name": "Charades Collective",
+      "active": true,
+      "storedAllowedGrants": null,
+      "grantEvidence": "FIELD_ABSENT_SOURCE_LEGACY_FALLBACK",
+      "effectiveGrantsFromSource": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "allowedScopes": [
+        "profile",
+        "external_club",
+        "email"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_70d58c063b1f4e97d8a618df44cc2a7f",
+      "name": "Stream Elements",
+      "active": true,
+      "storedAllowedGrants": null,
+      "grantEvidence": "FIELD_ABSENT_SOURCE_LEGACY_FALLBACK",
+      "effectiveGrantsFromSource": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "allowedScopes": [
+        "profile",
+        "email",
+        "subscriptions",
+        "listings",
+        "gaming",
+        "relics",
+        "youtube",
+        "external_club"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_0831871c0735d0d45121da851f4b624d",
+      "name": "Printing",
+      "active": true,
+      "storedAllowedGrants": null,
+      "grantEvidence": "FIELD_ABSENT_SOURCE_LEGACY_FALLBACK",
+      "effectiveGrantsFromSource": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "allowedScopes": [
+        "profile",
+        "email",
+        "subscriptions",
+        "listings",
+        "roles",
+        "gaming",
+        "relics",
+        "youtube",
+        "external_club"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_6ddb70472d9554272208239542c36cd2",
+      "name": "DiscordManager",
+      "active": true,
+      "storedAllowedGrants": null,
+      "grantEvidence": "FIELD_ABSENT_SOURCE_LEGACY_FALLBACK",
+      "effectiveGrantsFromSource": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "allowedScopes": [
+        "profile",
+        "email",
+        "subscriptions",
+        "listings",
+        "roles",
+        "relics",
+        "gaming",
+        "youtube"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_082cae7741ae2ac322c8eafb870839f5",
+      "name": "Publer",
+      "active": true,
+      "storedAllowedGrants": null,
+      "grantEvidence": "FIELD_ABSENT_SOURCE_LEGACY_FALLBACK",
+      "effectiveGrantsFromSource": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "allowedScopes": [
+        "profile",
+        "email"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_471a473c4cb73be6bd583bb73a45e887",
+      "name": "Publer",
+      "active": true,
+      "storedAllowedGrants": null,
+      "grantEvidence": "FIELD_ABSENT_SOURCE_LEGACY_FALLBACK",
+      "effectiveGrantsFromSource": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "allowedScopes": [
+        "profile",
+        "email"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_be01fe57314d0c17c176779004c9cd31",
+      "name": "StockChecker",
+      "active": true,
+      "storedAllowedGrants": null,
+      "grantEvidence": "FIELD_ABSENT_SOURCE_LEGACY_FALLBACK",
+      "effectiveGrantsFromSource": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "allowedScopes": [
+        "profile",
+        "email",
+        "subscriptions",
+        "listings",
+        "roles",
+        "relics",
+        "gaming"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_4982f6db5b168f2f53da23078f301101",
+      "name": "Test2",
+      "active": true,
+      "storedAllowedGrants": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "grantEvidence": "EXPLICIT_OWNER_METADATA",
+      "effectiveGrantsFromSource": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "allowedScopes": [
+        "profile",
+        "external_club",
+        "email",
+        "subscriptions",
+        "listings",
+        "roles",
+        "gaming",
+        "relics",
+        "youtube",
+        "wallet_embed"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_8a4f2ee56492469bff0812d49d2a6022",
+      "name": "Giveaways",
+      "active": true,
+      "storedAllowedGrants": null,
+      "grantEvidence": "FIELD_ABSENT_SOURCE_LEGACY_FALLBACK",
+      "effectiveGrantsFromSource": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "allowedScopes": [
+        "profile",
+        "email",
+        "subscriptions",
+        "roles",
+        "gaming",
+        "relics"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_390446c6131b344f9165198da6909d41",
+      "name": "My TCM Login Test",
+      "active": true,
+      "storedAllowedGrants": null,
+      "grantEvidence": "FIELD_ABSENT_SOURCE_LEGACY_FALLBACK",
+      "effectiveGrantsFromSource": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "allowedScopes": [
+        "profile",
+        "email",
+        "external_club"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_38c347da7395d78ca6240655d92eeabc",
+      "name": "Hub2 Login",
+      "active": true,
+      "storedAllowedGrants": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "grantEvidence": "EXPLICIT_OWNER_METADATA",
+      "effectiveGrantsFromSource": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "allowedScopes": [
+        "profile",
+        "email",
+        "subscriptions",
+        "listings",
+        "gaming",
+        "roles",
+        "relics",
+        "youtube",
+        "external_club",
+        "wallet_embed"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_d431e92f8f10b5412183b7c78e95913e",
+      "name": "Embed Iframe",
+      "active": true,
+      "storedAllowedGrants": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "grantEvidence": "EXPLICIT_OWNER_METADATA",
+      "effectiveGrantsFromSource": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "allowedScopes": [
+        "profile",
+        "external_club",
+        "wallet_embed",
+        "email",
+        "subscriptions",
+        "listings",
+        "roles",
+        "gaming",
+        "relics",
+        "youtube"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_ade6262347f85e0068daabe368f3b776",
+      "name": "Giveaway City dev social connections",
+      "active": true,
+      "storedAllowedGrants": [
+        "client_credentials"
+      ],
+      "grantEvidence": "EXPLICIT_OWNER_METADATA",
+      "effectiveGrantsFromSource": [
+        "client_credentials"
+      ],
+      "allowedScopes": [
+        "connect:read",
+        "connect:write"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_5f78b5cde33bec116232478be63c6ae8",
+      "name": "TCM chat bot listings",
+      "active": true,
+      "storedAllowedGrants": [
+        "client_credentials"
+      ],
+      "grantEvidence": "EXPLICIT_OWNER_METADATA",
+      "effectiveGrantsFromSource": [
+        "client_credentials"
+      ],
+      "allowedScopes": [
+        "messages:write",
+        "conversations:provision"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_b327e56558863262e1a34500da268df6",
+      "name": "TCM chat bot escrow",
+      "active": true,
+      "storedAllowedGrants": [
+        "client_credentials"
+      ],
+      "grantEvidence": "EXPLICIT_OWNER_METADATA",
+      "effectiveGrantsFromSource": [
+        "client_credentials"
+      ],
+      "allowedScopes": [
+        "messages:write",
+        "messages:read",
+        "commands:write",
+        "conversations:provision",
+        "listen:trade"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_e61b9ceb043a6b1d73c15673ec6b086c",
+      "name": "TCM chat bot system",
+      "active": true,
+      "storedAllowedGrants": [
+        "client_credentials"
+      ],
+      "grantEvidence": "EXPLICIT_OWNER_METADATA",
+      "effectiveGrantsFromSource": [
+        "client_credentials"
+      ],
+      "allowedScopes": [
+        "messages:write"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_61a641982a8f4bd935a324ebcc5d075e",
+      "name": "TCM chat bot discord-bridge",
+      "active": true,
+      "storedAllowedGrants": [
+        "client_credentials"
+      ],
+      "grantEvidence": "EXPLICIT_OWNER_METADATA",
+      "effectiveGrantsFromSource": [
+        "client_credentials"
+      ],
+      "allowedScopes": [
+        "messages:read",
+        "bridge:post",
+        "bridge:act_as_linked_user",
+        "conversations:provision"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    },
+    {
+      "clientId": "tcm_b7c6cca05fa5a18ba74368ac572e8c27",
+      "name": "TCM chat bot giftcodes",
+      "active": true,
+      "storedAllowedGrants": [
+        "client_credentials"
+      ],
+      "grantEvidence": "EXPLICIT_OWNER_METADATA",
+      "effectiveGrantsFromSource": [
+        "client_credentials"
+      ],
+      "allowedScopes": [
+        "messages:write",
+        "conversations:provision"
+      ],
+      "owner": "UNKNOWN",
+      "testLocation": "UNKNOWN",
+      "baseline": "NOT_RUN",
+      "postChange": "NOT_RUN",
+      "sessionContinuity": "NOT_RUN",
+      "rollback": "NOT_RUN"
+    }
+  ],
+  "limitations": [
+    "Owner-provided projected metadata, not independent live database query",
+    "Database name alone does not verify deployment binding",
+    "Effective legacy grants are verified source behavior, not executed consumer tests",
+    "No claim of consumer, provider or callback coverage from registration metadata"
+  ],
+  "registration": false,
+  "deployment": false,
+  "clientMutation": false,
+  "grantResolverBaselineComparison": "PASS: git diff --exit-code e54028d0 35a47c9d -- src/util/oauthGrants.js; no changes",
+  "sourceGrantResolutionCheck": {
+    "status": "PASS_SOURCE_POLICY_ONLY",
+    "clients": 19,
+    "node": "v22.23.3",
+    "expectedGrantMembershipChecks": 57,
+    "inputMutation": "NONE",
+    "database": "NOT_CONNECTED",
+    "deployedAcceptance": "NOT_RUN"
+  },
+  "environmentConfirmation": {
+    "date": "2026-10-19",
+    "source": "Direct owner response: Confirmed development connection",
+    "independentConnectionInspection": "NOT_PERFORMED"
+  },
+  "testExecutor": "Owner: direct response I can run legacy smoke test"
+}
