@@ -4,7 +4,7 @@ import { digest, sha256 } from "./audit-policy.mjs";
 
 // Founder-approved 2026-11-02 (ADR-0020). Updated only by an explicitly reviewed policy change, never by the runner/tests.
 export const WAIVER_POLICY_PATH = "security/dependency-waiver-policy.json";
-export const WAIVER_POLICY_SHA256 = "b747a8949f254c3eecd736cc2e45f4dec2dc9ece0f586105ef4122a6eaf1593d";
+export const WAIVER_POLICY_SHA256 = "312fc849bb18b953a02c06eaf0a43e38245221c3e6651388b273b8c17673c28e";
 // Hard ceiling in code: editing the JSON cannot extend the window even if the anchor were also changed carelessly.
 export const WAIVER_CEILING = "2026-12-17T23:59:59Z";
 const WAIVER_FLOOR = "2026-11-02T00:00:00Z";
@@ -34,12 +34,20 @@ export function validateWaiverPolicy(policy) {
     check(typeof waiver.package === "string" && WAIVABLE.has(waiver.severity) && typeof waiver.range === "string" &&
       typeof waiver.owner === "string" && typeof waiver.rationale === "string" && typeof waiver.recheck === "string", "WAIVER_SCOPE_INVALID");
     check(Array.isArray(waiver.nodes) && waiver.nodes.length > 0 && waiver.nodes.every(node => safePath(node.path) &&
-      nameAt(node.path) === waiver.package && typeof node.version === "string" && CONTEXTS.has(node.context)), "WAIVER_SCOPE_INVALID");
+      nameAt(node.path) === waiver.package && typeof node.version === "string" && CONTEXTS.has(node.context) &&
+      /^https:\/\/registry\.npmjs\.org\//.test(node.resolved) && /^sha512-[A-Za-z0-9+/]+=*$/.test(node.integrity)), "WAIVER_SCOPE_INVALID");
   }
 }
 
-/** Read-only: verifies every waived node in the lockfile and in the physical install. No fingerprint of unrelated files. */
+/** Validates the reviewed policy before touching any path it names, then inspects the waived nodes. */
 export async function collectWaiverState(root, policy) {
+  validateWaiverPolicy(policy);
+  return inspectWaivedNodes(root, policy);
+}
+
+/** Read-only: verifies every waived node in the lockfile and in the physical install. No fingerprint of unrelated files. */
+export async function inspectWaivedNodes(root, policy) {
+  const realRoot = await fs.realpath(root);
   const lockBytes = await fs.readFile(path.join(root, "package-lock.json"));
   const lock = JSON.parse(lockBytes);
   check(lock.lockfileVersion === 3 && lock.packages, "LOCK_FORMAT");
@@ -50,10 +58,12 @@ export async function collectWaiverState(root, policy) {
   const installed = {};
   for (const waiver of policy.waivers) for (const node of waiver.nodes) {
     const record = lock.packages[node.path];
-    check(record && !record.link && record.version === node.version && (record.name ?? nameAt(node.path)) === waiver.package, "WAIVED_LOCK_ENTRY_CHANGED");
+    check(record && !record.link && record.version === node.version && (record.name ?? nameAt(node.path)) === waiver.package &&
+      record.resolved === node.resolved && record.integrity === node.integrity, "WAIVED_LOCK_ENTRY_CHANGED");
     check((record.dev === true) === (node.context === "development"), "WAIVED_NODE_CONTEXT_CHANGED");
     const directory = path.join(root, node.path);
-    check(!(await fs.lstat(directory)).isSymbolicLink(), "WAIVED_NODE_SYMLINK");
+    // Every path component, not only the last, must be a real directory inside the checkout.
+    check(await fs.realpath(directory) === path.join(realRoot, node.path), "WAIVED_NODE_SYMLINK");
     const manifest = JSON.parse(await fs.readFile(path.join(directory, "package.json"), "utf8"));
     check(manifest.name === waiver.package && manifest.version === node.version, "WAIVED_INSTALLED_PACKAGE_CHANGED");
     installed[node.path] = { name: manifest.name, version: manifest.version, context: node.context };
@@ -68,6 +78,14 @@ function checkEnvironment(env) {
     if (key.toLowerCase() === "npm_config_registry" && value) check(["https://registry.npmjs.org", "https://registry.npmjs.org/"].includes(value), "UNREVIEWED_AUDIT_REGISTRY");
     if (["npm_config_workspace", "npm_config_workspaces"].includes(key.toLowerCase()) && value !== undefined) check(key.toLowerCase() === "npm_config_workspaces" && value === "true", "PARTIAL_WORKSPACE_AUDIT");
     if (key.startsWith("VYNVORI_") && value !== undefined) check(value === "false", "OPERATIONAL_FEATURE_ENABLED");
+    // Configuration that can silently narrow either audit (e.g. drop dev dependencies) is never accepted.
+    if (/^npm_config_(omit|include|only|production|dev|also|audit_level|package_lock|package_lock_only)$/i.test(key) && value !== undefined) fail("AUDIT_SCOPE_OVERRIDE");
+    if (key === "NODE_ENV" && value === "production") fail("AUDIT_SCOPE_OVERRIDE");
+    if (/^M2_.*(?:ORIGIN|DATABASE_URL)$/.test(key) && value) {
+      let url;
+      try { url = new URL(value); } catch { fail("INVALID_INTEGRATION_ENVIRONMENT"); }
+      check(["localhost", "127.0.0.1", "[::1]"].includes(url.hostname), "REMOTE_DEPENDENCY_CONFIGURED");
+    }
   }
 }
 
@@ -116,6 +134,11 @@ function auditGraph(run, policy, state, contexts) {
     counts[record.severity]++; counts.total++;
   }
   for (const level of [...levels, "total"]) check(audit.metadata.vulnerabilities[level] === counts[level], "AUDIT_COUNTS_INCOMPLETE");
+  // Each waived node is installed at a reviewed version inside its advisory range, so a complete audit of its
+  // context must report it. Absence means a narrowed/truncated audit (or a withdrawn advisory): fail closed.
+  for (const waiver of policy.waivers) for (const node of waiver.nodes) {
+    if (contexts.includes(node.context)) check(audit.vulnerabilities[waiver.package]?.nodes.includes(node.path), "AUDIT_GRAPH_INCOMPLETE");
+  }
   check(Number.isInteger(audit.metadata.dependencies.total) && audit.metadata.dependencies.total > 0, "AUDIT_DEPENDENCIES_INCOMPLETE");
   check(run.exitCode === (counts.total ? 1 : 0), "AUDIT_EXIT_STATUS_INCONSISTENT");
   for (let i = 0; i < Object.keys(graph).length; i++) for (const record of Object.values(graph)) for (const v of record.via) for (const id of graph[v].origins) record.origins.add(id);
@@ -125,7 +148,7 @@ function auditGraph(run, policy, state, contexts) {
     // A propagated record can never be more severe than the waived origins it inherits from.
     check(rank(record.severity) <= Math.max(...[...record.origins].map(id => rank(severityOf[id]))), "ADVISORY_GRAPH_CHANGED");
   }
-  return { counts, waiversUsed: [...used].sort() };
+  return { counts, waiversUsed: [...used].sort(), records: audit.vulnerabilities };
 }
 
 /** Pure deterministic evaluation; the runner supplies real time, state and both audits. */
@@ -136,6 +159,10 @@ export function evaluateWaivers({ policy, state, production, all, now = new Date
     checkEnvironment(env);
     const prod = auditGraph(production, policy, state, ["production"]);
     const full = auditGraph(all, policy, state, ["production", "development"]);
+    // The full audit must contain every production finding at the same or more nodes; a narrowed run cannot pass.
+    for (const [name, record] of Object.entries(prod.records)) {
+      check(full.records[name] && record.nodes.every(node => full.records[name].nodes.includes(node)), "FULL_AUDIT_NARROWED");
+    }
     const clean = prod.counts.total === 0 && full.counts.total === 0;
     return { accepted: true, status: clean ? "CLEAN" : "ACCEPTED_WITH_DATED_WAIVER", originalAuditExitCode: production.exitCode,
       allDependencyAuditExitCode: all.exitCode, counts: prod.counts, allDependencyCounts: full.counts,

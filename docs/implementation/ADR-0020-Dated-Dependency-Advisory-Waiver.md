@@ -30,7 +30,15 @@ The gate **rejects** (fail-closed) when any of the following holds:
 - a development-only node appears in the production audit;
 - any propagated record does not trace to a waived origin, or is more severe than that origin;
 - either audit has an execution error, a signal, an inconsistent exit code, malformed JSON or inconsistent counts;
-- `.npmrc` or `npm-shrinkwrap.json` exists, the registry is unreviewed, the workspace audit is partial, the context is remote (Vercel or Cloud Run), or any `VYNVORI_*` flag is not `false`.
+- `.npmrc` or `npm-shrinkwrap.json` exists, the registry is unreviewed, the workspace audit is partial, the context is remote (Vercel or Cloud Run), or any `VYNVORI_*` flag is not `false`;
+- a waived node's lockfile `resolved` URL or `integrity` hash differs from the pinned values (tarball substitution);
+- an installed waived node's real path leaves the checkout through a symlinked component;
+- audit-narrowing configuration is set (`npm_config_omit`, `include`, `only`, `production`, `dev`, `also`, `audit_level`, `package_lock`, `package_lock_only`, or `NODE_ENV=production`). The full audit also passes `--include=dev` explicitly;
+- the full audit lacks any production finding (`FULL_AUDIT_NARROWED`);
+- any waived node that is still installed is missing from the audit covering its context (`AUDIT_GRAPH_INCOMPLETE`). Each one sits at a reviewed version inside its advisory's range, so a complete audit must report it. This detects narrowed or truncated output. A withdrawn advisory also fails closed and needs a policy update;
+- `M2_*ORIGIN` or `M2_*DATABASE_URL` points anywhere other than localhost.
+
+`collectWaiverState` validates the policy anchor before reading any path the policy names.
 
 **Intentionally removed:** the lockfile, manifest, ancestry and source-tree fingerprints. Dependency changes that introduce **no** new advisory now pass; any change that makes an advisory-relevant difference fails through the checks above. This is the founder-approved trade-off ("allowlist plus dated waiver").
 
@@ -48,16 +56,26 @@ Revert the commit. The runner falls back to the historical sealed policies, whic
 
 ## Security review notes
 
-- Removes a control (the whole-tree seal) by explicit founder decision. Compensating controls are listed under Decision; 18 unit tests cover them. Mutation checks: removing the severity, unwaived-advisory, node/version, dev-in-production, counts, mapping, severity-propagation, environment, anchor or expiry checks each fails at least one test. Removing only one of the two equivalent expiry comparisons is masked by the other.
+- Removes a control (the whole-tree seal) by explicit founder decision. Compensating controls are listed under Decision; 20 unit tests cover them. Mutation checks: removing the severity, unwaived-advisory, node/version, dev-in-production, counts, mapping, severity-propagation, environment, anchor or expiry checks each fails at least one test. Removing only one of the two equivalent expiry comparisons is masked by the other.
 - No feature flag, secret, endpoint or deployment change. The waiver grants nothing outside the audit gate.
-- An independent `security-reviewer` agent pass over this diff is recorded in the PR.
+- Independent `security-reviewer` agent pass (2026-11-02): nothing blocking. Findings and dispositions:
+  - Medium: full audit could silently omit dev dependencies → fixed (explicit `--include=dev`, scope-override rejection, superset and waived-node completeness checks).
+  - Medium: version-only pinning → fixed (`resolved` + `integrity` pinned and anchored).
+  - Low: state collected before policy validation → fixed.
+  - Low: only the last path component symlink-checked → fixed (realpath).
+  - Dropped localhost-only integration check → restored.
+  - Truncated-report defence → restored via the waived-node completeness check.
+  - Not enforced in code: the deepmerge and esbuild rationales ("SendGrid not configured", "dev server never started"). They are re-checked by humans per each waiver's `recheck` field.
+  - **Open (governance):** the evaluator, anchor and ceiling live in files a PR can change together. Only review protects them. Recommendation: CODEOWNERS for `scripts/security/**` and `security/**` with required owner review. This is a founder or repository-settings decision.
+- Mutation checks: removing any one of the completeness, superset, integrity, scope-override, localhost or validate-first checks fails at least one test.
 
 ## Evidence (local, 2026-11-02, Node 22.23.4, clean `npm ci`)
 
 | Check | Result |
 |---|---|
 | `npm run security:audit` | **ACCEPTED_WITH_DATED_WAIVER**, exit 0 |
-| `npm run test:security-policy` (including 18 new waiver tests) | PASS |
-| `npm test` | exit 0: 282 pass, 0 fail, 18 skipped |
+| `npm run test:security-policy` (including 20 new waiver tests) | PASS |
+| `npm test` | exit 0: 284 pass, 0 fail, 18 skipped |
 | `npm run lint` / `npm run typecheck` | exit 0 / exit 0 |
 | `npm run verify` | **fails at `verify:reference`**: `docs/technical/20-acceptance-matrix.md` no longer matches its anchor in `M0-protected-files.json`. Pre-existing on `main` since PR #10, and unrelated to this change; it needs a founder decision to re-anchor. |
+| `NODE_ENV=production` / `npm_config_omit=dev` + `security:audit` | REJECTED `AUDIT_SCOPE_OVERRIDE` (negative checks) |

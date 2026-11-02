@@ -49,7 +49,7 @@ export async function runAudit(productionOnly = true) {
   if (!npmCli || !path.isAbsolute(npmCli) || !npmCli.endsWith("npm-cli.js")) throw new Error("RUN_THROUGH_NPM");
   const registry = await exec(process.execPath, [npmCli, "config", "get", "registry"], { cwd: root, timeout: 10000, maxBuffer: 4096, windowsHide: true });
   if (!["https://registry.npmjs.org/", "https://registry.npmjs.org"].includes(registry.stdout.trim())) throw new Error("UNREVIEWED_AUDIT_REGISTRY");
-  const handle = startProcess(process.execPath, [npmCli, "audit", ...(productionOnly ? ["--omit=dev"] : []), "--json"], { cwd: root, env: process.env });
+  const handle = startProcess(process.execPath, [npmCli, "audit", ...(productionOnly ? ["--omit=dev"] : ["--include=dev"]), "--json"], { cwd: root, env: process.env });
   let stdout = "", stderr = "", exceeded = false;
   const capture = which => bytes => {
     if (stdout.length + stderr.length + bytes.length > MAX_BYTES) { exceeded = true; return; }

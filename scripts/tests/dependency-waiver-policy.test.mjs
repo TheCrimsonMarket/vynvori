@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { digest } from "../security/audit-policy.mjs";
-import { evaluateWaivers, collectWaiverState, validateWaiverPolicy, WAIVER_POLICY_SHA256, WAIVER_CEILING } from "../security/dependency-waiver-policy.mjs";
+import { evaluateWaivers, collectWaiverState, inspectWaivedNodes, validateWaiverPolicy, WAIVER_POLICY_SHA256, WAIVER_CEILING } from "../security/dependency-waiver-policy.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const policy = JSON.parse(await fs.readFile(new URL("../../security/dependency-waiver-policy.json", import.meta.url), "utf8"));
@@ -158,11 +158,34 @@ test("execution, signal and exit-status failures are never waived, for either au
 test("remote context, feature activation and unreviewed registry invalidate the waiver", () => {
   for (const env of [{ M2_ENV: "staging" }, { VERCEL_ENV: "production" }, { VERCEL: "1" }, { K_SERVICE: "remote" }, { VYNVORI_PAYMENTS_LIVE: "true" },
     { NPM_CONFIG_REGISTRY: "https://unreviewed.invalid" }, { npm_config_workspaces: "false" }]) rejected(call({ env }));
+  rejected(call({ env: { M2_MEDUSA_ORIGIN: "https://remote.example" } }), "REMOTE_DEPENDENCY_CONFIGURED");
+  rejected(call({ env: { M2_DATABASE_URL: "not a url" } }), "INVALID_INTEGRATION_ENVIRONMENT");
+  assert.equal(call({ env: { M2_DATABASE_URL: "postgres://localhost:5432/db" } }).accepted, true);
 });
 
-test("a fully clean pair of audits passes as CLEAN", () => {
+test("configuration that could narrow either audit is rejected", () => {
+  for (const env of [{ npm_config_omit: "dev" }, { NPM_CONFIG_PRODUCTION: "true" }, { npm_config_include: "prod" }, { npm_config_only: "prod" },
+    { npm_config_audit_level: "critical" }, { npm_config_package_lock: "false" }, { NODE_ENV: "production" }]) rejected(call({ env }), "AUDIT_SCOPE_OVERRIDE");
+  assert.equal(call({ env: { NODE_ENV: "test", npm_config_user_agent: "npm/10.9.9" } }).accepted, true);
+});
+
+test("a full audit that silently dropped development or production findings is rejected", () => {
+  // Equivalent to running the "all" audit with dev dependencies omitted.
+  rejected(call({ all: run(fixture.production) }), "AUDIT_GRAPH_INCOMPLETE");
+  const narrowed = structuredClone(fixture.all);
+  const dropped = Object.keys(fixture.production.vulnerabilities).find(key => !["glob", "minimatch", "deepmerge"].includes(key) &&
+    !Object.values(narrowed.vulnerabilities).some(record => record.via.includes(key)));
+  delete narrowed.vulnerabilities[dropped];
+  narrowed.metadata.vulnerabilities[fixture.all.vulnerabilities[dropped].severity]--; narrowed.metadata.vulnerabilities.total--;
+  rejected(call({ all: run(narrowed) }), "FULL_AUDIT_NARROWED");
+});
+
+test("an empty audit cannot pass while reviewed vulnerable nodes are still installed", () => {
   const clean = audit => ({ ...audit, vulnerabilities: {}, metadata: { ...audit.metadata, vulnerabilities: { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 } } });
-  assert.equal(call({ production: run(clean(fixture.production)), all: run(clean(fixture.all)) }).status, "CLEAN");
+  rejected(call({ production: run(clean(fixture.production)), all: run(clean(fixture.all)) }), "AUDIT_GRAPH_INCOMPLETE");
+  const missing = structuredClone(fixture.all);
+  missing.vulnerabilities.minimatch.nodes = missing.vulnerabilities.minimatch.nodes.filter(node => !node.startsWith("node_modules/eslint/"));
+  rejected(call({ all: run(missing) }), "AUDIT_GRAPH_INCOMPLETE");
 });
 
 test("installed-tree collection fails closed on changed versions or contexts", async () => {
@@ -170,10 +193,15 @@ test("installed-tree collection fails closed on changed versions or contexts", a
   // The real install either matches every reviewed node or is rejected with a waiver-specific code.
   if (current.error) assert.match(current.error.message, /^(WAIVED_|UNREVIEWED_NPM_CONFIGURATION|LOCK_FORMAT)/);
   else assert.deepEqual(Object.keys(current.value.installed).sort(), policy.waivers.flatMap(waiver => waiver.nodes.map(node => node.path)).sort());
-  const version = structuredClone(policy);
-  version.waivers[0].nodes[0].version = "13.0.5";
-  await assert.rejects(collectWaiverState(root, version), /WAIVED_LOCK_ENTRY_CHANGED/);
+  // An unreviewed policy is rejected before any path it names is read.
+  await assert.rejects(collectWaiverState(root, { ...policy, waivers: [{ ...policy.waivers[0], nodes: [{ ...policy.waivers[0].nodes[0], path: "node_modules/../../etc" }] }] }), /WAIVER_POLICY_FINGERPRINT_MISMATCH/);
+  if (current.error) return;
+  for (const [field, value] of [["version", "13.0.5"], ["integrity", "sha512-AAAA"], ["resolved", "https://registry.npmjs.org/glob/-/glob-0.0.0.tgz"]]) {
+    const changed = structuredClone(policy);
+    changed.waivers[0].nodes[0][field] = value;
+    await assert.rejects(inspectWaivedNodes(root, changed), /WAIVED_LOCK_ENTRY_CHANGED/);
+  }
   const context = structuredClone(policy);
   context.waivers[0].nodes[0].context = "development";
-  await assert.rejects(collectWaiverState(root, context), /WAIVED_NODE_CONTEXT_CHANGED/);
+  await assert.rejects(inspectWaivedNodes(root, context), /WAIVED_NODE_CONTEXT_CHANGED/);
 });
