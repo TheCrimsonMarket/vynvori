@@ -48,8 +48,12 @@ test("exact frozen local input is accepted, raw audit failures and remote prohib
   assert.equal(result.osFindingPairs, 31);
   assert.equal(result.remoteExecutionApproved, false);
 });
+// The PR5 activation is superseded once HEAD differs from it beyond its two activation paths (e.g. later staging or
+// milestone work, even after the staging approval itself is retired). A superseded activation must stay rejected.
+const supersededActivation = active && execFileSync("git", ["diff", "--name-only", PR5_IMPLEMENTATION_COMMIT, "HEAD"], { cwd: root, encoding: "utf8" })
+  .trim().split("\n").sort().join("\n") !== [POLICY_PATH, "scripts/security/run-audit.mjs"].sort().join("\n");
 test("actual committed activation is sealed, or the unactivated implementation fails closed", async () => {
-  if (STAGING_IMPLEMENTATION_COMMIT !== "UNACTIVATED") {
+  if (STAGING_IMPLEMENTATION_COMMIT !== "UNACTIVATED" || supersededActivation) {
     await assert.rejects(collectLocalState(root, PR5_IMPLEMENTATION_COMMIT, PR5_POLICY_DIGEST, policy, legacy), /UNAUTHORIZED_ACTIVATION_DELTA/);
   } else if (!active) {
     await assert.rejects(collectLocalState(root, PR5_IMPLEMENTATION_COMMIT, PR5_POLICY_DIGEST, fixturePolicy, legacy), /LOCAL_POLICY_NOT_ACTIVATED/);

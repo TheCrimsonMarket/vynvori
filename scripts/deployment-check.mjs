@@ -27,7 +27,7 @@ async function copy(from, to) {
     else if (entry.isFile()) await fs.copyFile(source,destination);
   }
 }
-for (const directory of ["apps/web", "packages/shared", "packages/commerce", "packages/db"])
+for (const directory of ["apps/web", "packages/shared", "packages/commerce", "packages/db", "packages/contracts"])
   await copy(path.join(root,directory),path.join(output,directory));
 // Keep every workspace manifest so a Vercel npm install does not prune the lockfile.
 // BFF packages are required at build time. Native Medusa/worker source is not copied.
