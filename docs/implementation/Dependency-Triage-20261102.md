@@ -57,6 +57,30 @@ Founder approved item 1. `next` and `eslint-config-next` are now pinned at 16.4.
 
 `security/pr5-local-preparation-policy.json` still records `next` 16.4.0 as a sealed spec. It is deliberately not edited here, because the seal-replacement PR supersedes it. Not run: browser checks and Vercel preview.
 
+## Status update — dependency remediation applied (2026-11-02)
+
+Founder approved item 2. Changes:
+
+- `packages/contracts`: `zod` 4.2.0 → 4.6.7 (exact pin).
+- Root `overrides.zod = "4.6.7"`. This forces Medusa 2.21.2's exact `zod` 4.2.0 pin (`@medusajs/deps`, `dashboard`, `draft-order`) onto a 4.x minor. `npm ls zod` shows a single 4.6.7.
+- In-range updates: `body-parser` 1.20.9, `fast-uri` 3.1.9, `follow-redirects` 1.16.2, `multer` 2.5.0.
+- The lockfile diff is exactly these 5 packages plus the `packages/contracts` entry. `npm ci` leaves it unchanged, and `npm install --package-lock-only` reproduces it byte-for-byte.
+
+**glob/minimatch: no override (changed from the T2 trial).** `glob` 13.0.6 is pinned exactly by `@medusajs/framework` (runtime module loading), `@medusajs/admin-bundler` and `@medusajs/cli`. No 13.x or 10.x release fixes the advisories, so the only fix is a major upgrade forced into Medusa's runtime loader. The patterns are Medusa-internal, not user input. Recommended disposition: dated waiver, re-checked on every Medusa release.
+
+| Check (clean `npm ci`, Node 22.23.4) | Result |
+|---|---|
+| `npm run lint` / `npm run typecheck` | exit 0 / exit 0 |
+| `npm test` | exit 0: 264 pass, 0 fail, 18 skipped (unchanged environment skips) |
+| `npm run build:web` / `npm run build:m2` (incl. Medusa backend build) | exit 0 / exit 0 |
+| `npm audit --omit=dev` | **63 entries: 0 critical, 0 high**, 59 moderate, 4 low. Roots: `glob` ([GHSA-3g3m-2fjr-6pw4](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4)), `minimatch` ([GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)), `deepmerge` ([GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4)) |
+| `npm audit` (all) | 82 entries: 0 critical, 0 high; adds dev-only `esbuild` via `drizzle-kit` |
+| `npm run security:audit` | REJECTED `LOCK_FINGERPRINT_MISMATCH` (unchanged; awaits seal replacement) |
+
+Not run: the native Medusa HTTP probe (`scripts/test-m1b-native-medusa.mjs`, since no Docker daemon is available in this session) and the disposable-PostgreSQL scenarios. Run both before relying on the `zod` override at runtime: Medusa request validation now executes on zod 4.6.7 instead of the 4.2.0 it pins.
+
+The remaining waiver candidates for the seal-replacement policy are `glob`, `minimatch`, `deepmerge` (production) and `esbuild` (dev).
+
 ## Not done in this triage
 
 No `npm ci`, build, test or Medusa/web run against the trial lockfiles. Runtime compatibility of zod 4.6.x under Medusa 2.21.2 and of Next 16.4.3 is unverified. Vercel and Medusa deployment state were not checked, because this session has no cloud access.
