@@ -43,6 +43,20 @@ In T2, the remaining advisories are only `glob`/`minimatch` (moderate), `deepmer
 4. **Do not** upgrade Medusa 2.21.2 → 2.22.2 inside this PR. It would fix zod natively, but it reopens M2 source pins and evidence. Consider it a separate, later decision.
 5. **Seal replacement:** the M2 policy's byte-for-byte tree and lockfile fingerprint (`LOCK_FINGERPRINT_MISMATCH` today) is replaced by a reviewed allowlist of advisory IDs, with expiry and owner, evaluated against a fresh audit. This is a security-policy change: ADR, `security-reviewer` pass, `npm run test:security-policy` updated, and founder approval of the exact residual list. It must land before 2026-11-15, when `m2-exception-policy.json` and `pr5-local-preparation-policy.json` expire.
 
+## Status update — Next.js hotfix applied (2026-11-02)
+
+Founder approved item 1. `next` and `eslint-config-next` are now pinned at 16.4.3. The lockfile diff is exactly 12 `next`/`@next/*`/`eslint-config-next` entries, changed in place: same hoisted paths, nothing else touched. `npm install --package-lock-only` reproduces the lock byte-for-byte. An in-place `npm install` initially nested `next` under `apps/web`, which broke the root `eslint-config-next` parser; restoring the original hoisted placement fixed it.
+
+| Check (clean `npm ci`, Node 22.23.4) | Result |
+|---|---|
+| `npm run lint` / `npm run typecheck` | exit 0 / exit 0 |
+| `npm test` | exit 0: 264 pass, 0 fail, 18 skipped (unchanged environment skips) |
+| `npm run build:web` | exit 0; the earlier Next.js "security upgrade" build message is gone |
+| `npm audit --omit=dev` | 75 entries: **0 critical**, 16 high, 55 moderate, 4 low; `next` no longer flagged |
+| `npm run security:audit` | REJECTED `LOCK_FINGERPRINT_MISMATCH` (unchanged; awaits seal replacement) |
+
+`security/pr5-local-preparation-policy.json` still records `next` 16.4.0 as a sealed spec. It is deliberately not edited here, because the seal-replacement PR supersedes it. Not run: browser checks and Vercel preview.
+
 ## Not done in this triage
 
 No `npm ci`, build, test or Medusa/web run against the trial lockfiles. Runtime compatibility of zod 4.6.x under Medusa 2.21.2 and of Next 16.4.3 is unverified. Vercel and Medusa deployment state were not checked, because this session has no cloud access.

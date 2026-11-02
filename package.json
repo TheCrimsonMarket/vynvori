@@ -48,7 +48,7 @@
   },
   "devDependencies": {
     "eslint": "9.39.5",
-    "eslint-config-next": "16.4.0",
+    "eslint-config-next": "16.4.3",
     "tsx": "4.23.15",
     "@medusajs/medusa": "2.21.2"
   },
