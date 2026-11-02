@@ -32,7 +32,7 @@ PR #6 checks: M2 foundation, container readiness, browser and Vercel SUCCESS; M0
 | M0 | Merged foundation and approved full-bleed storefront; local and published implementation verification PASS | All implementation check contexts green on PR #8; final documentation-only head must pass before merge |
 | M1a | Source-backed audit and threat model merged in PR #3 | Central issuer/client/product validation, session/revocation remedy and deployed provenance remain BLOCKED; source audit is not working SSO |
 | M2 | All four real staging workstreams PASS; published implementation CI green on PR #8 | PASSED for synthetic infrastructure; final documentation-only CI/conditional merge verified through PR #8. Production acceptance is separate |
-| M1b | NOT_STARTED; fresh-session handoff prepared | M2 prerequisite closed. Resolve source-backed central trust/registration/session/staff requirements in M1a-open-gates before bridge implementation/live auth |
+| M1b | IN_PROGRESS: local implementation merged in [PR #10](https://github.com/TheCrimsonMarket/vynvori/pull/10) (`8d53fcc`); ADR-0010–0016, [independent re-verification 2026-11-02](M1b-Independent-Verification-20261102.md) | Local tests, lint and typecheck pass; auth flag OFF. Not PASSED: central strict-endpoint trust remedy/provenance, live migration/grants, live auth negatives, expired CI approvals and reviewer sign-off remain open |
 | M3 | NOT_STARTED in application; approved editor simulation retained | Guest/scene work depends M2; owned persistence depends M1b |
 | M4–M5 | NOT_STARTED | M4 requires M2+M1b+M3; M5 requires M3+M4 |
 | M6a | NOT_STARTED in application; mock design contracts retained | M2+M1b |
