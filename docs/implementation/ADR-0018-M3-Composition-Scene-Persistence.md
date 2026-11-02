@@ -1,4 +1,4 @@
-# ADR-0017 — M3 composition scene persistence and BYO editor
+# ADR-0018 — M3 composition scene persistence and BYO editor
 
 Status: implemented locally, **not deployed**. Base commit `ad6392aaa7785e34fb5fa10c62b66c1c1f7e4a71`. Branch `claude/m3-byo-garment-editor`.
 

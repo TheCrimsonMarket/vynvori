@@ -64,3 +64,43 @@ test("changed contact cannot create a new customer for an existing identity mapp
   const result = await centralCustomerWorkflow(f.container).run({ input: { ...f.input, originalEmail: "changed@example.invalid" }, logOnError: false });
   assert.equal(result.result.customerId, "cus_synthetic_1"); assert.equal(f.counts().created, 1);
 });
+
+// Unverified central email: no contact email is written, login/account creation still proceed.
+import { verifiedContactEmail } from "../src/workflows/steps/central-customer";
+import { ProvisionSchema } from "../src/auth/provision-schema";
+test("only a centrally verified email is eligible as the Medusa contact email", () => {
+  assert.equal(verifiedContactEmail({ email: "a@example.invalid", emailVerified: true }), "a@example.invalid");
+  assert.equal(verifiedContactEmail({ email: "a@example.invalid", emailVerified: false }), "");
+});
+test("provision wire schema keeps the email key required but accepts only empty or a valid address", () => {
+  const base = { mode: "create", operationId: randomUUID() };
+  assert.ok(ProvisionSchema.safeParse({ ...base, originalEmail: "" }).success);
+  assert.ok(ProvisionSchema.safeParse({ ...base, originalEmail: "a@example.invalid" }).success);
+  for (const originalEmail of ["not-an-email", " a@example.invalid", "a@example.invalid\n", null, undefined, 7]) assert.equal(ProvisionSchema.safeParse({ ...base, originalEmail }).success, false);
+  assert.equal(ProvisionSchema.safeParse(base).success, false);
+});
+test("blank contact creates a linked account customer with no email through stock customer steps, once", async () => {
+  const f = fixture(); const input = { ...f.input, originalEmail: "" };
+  f.rows.set("cus_unrelated", { id: "cus_unrelated", email: "someone@example.invalid", has_account: true, metadata: {} } as CustomerDTO);
+  const first = await centralCustomerWorkflow(f.container).run({ input, logOnError: false });
+  assert.equal(first.result.state, "ready"); assert.equal(first.result.customerId, "cus_synthetic_1");
+  const row = f.rows.get("cus_synthetic_1")!;
+  assert.ok(!row.email, "no email may be written"); assert.equal(row.has_account, true);
+  assert.deepEqual(row.metadata, customerIdentityMetadata(input));
+  assert.equal(f.identity.app_metadata?.customer_id, "cus_synthetic_1");
+  assert.deepEqual(f.counts(), { created: 1, linked: 1 });
+  const repeated = await centralCustomerWorkflow(f.container).run({ input, logOnError: false });
+  assert.equal(repeated.result.customerId, "cus_synthetic_1"); assert.deepEqual(f.counts(), { created: 1, linked: 1 });
+});
+test("blank contact never creates during reconciliation, even with an unprovable orphan", async () => {
+  const f = fixture(); const input = { ...f.input, originalEmail: "", mode: "reconcile" as const };
+  f.rows.set("cus_orphan", { id: "cus_orphan", has_account: true, metadata: customerIdentityMetadata(input) } as CustomerDTO);
+  const result = await centralCustomerWorkflow(f.container).run({ input, logOnError: false });
+  assert.equal(result.result.state, "reconcile_required"); assert.deepEqual(f.counts(), { created: 0, linked: 0 });
+});
+test("blank contact still validates identity and rejects malformed addresses", async () => {
+  const f = fixture();
+  await assert.rejects(inspectCentralCustomer({ ...f.input, originalEmail: "bad address" }, f.services), /Commerce identity conflict/);
+  await assert.rejects(inspectCentralCustomer({ ...f.input, originalEmail: "", operationId: "not-a-uuid" }, f.services), /Commerce identity conflict/);
+  assert.deepEqual(await inspectCentralCustomer({ ...f.input, originalEmail: "" }, f.services), { existingCustomerId: null, needsLink: false, canCreate: true });
+});

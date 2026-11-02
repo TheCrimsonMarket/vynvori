@@ -1,4 +1,4 @@
--- M3 composition scene persistence (ADR-0017). Additive only: creates one new schema, alters no existing object,
+-- M3 composition scene persistence (ADR-0018). Additive only: creates one new schema, alters no existing object,
 -- grants nothing, seeds nothing. References vynvori_identity (M1b) one-way; nothing references this schema.
 CREATE SCHEMA vynvori_composition;
 

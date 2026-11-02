@@ -61,7 +61,7 @@ The prior receipts used PostgreSQL 18.6, so the 16.x run is an independent engin
 
 ## Open observations (no change made)
 
-1. **`email_verified` is parsed but never consulted.** An unverified central email can become the Medusa customer email (used for receipts). The spec does not require gating, so this is a founder policy question, not a defect. Recommend deciding before enabling auth.
+1. **`email_verified` — RESOLVED by founder decision; see the follow-up below.**
 2. `customer()` runs three central introspections per owned read (`checked` twice plus `lookup`). This is an efficiency matter only, not a correctness one.
 3. The rollback for the four migrations is "disable and retain rows"; there is no down-migration, which is intentional and non-destructive. A tested backup/restore of the live creative database is still required before any live apply.
 
@@ -74,3 +74,24 @@ The prior receipts used PostgreSQL 18.6, so the 16.x run is an independent engin
 5. Reviewer sign-off.
 
 M3's owned-persistence track depends on M1b only through the verified-session interface, which is stable and locally tested. Guest and scene work in M3 already depends only on M2, so it can start independently.
+
+## Follow-up 2026-11-02 — verified-email gate implemented
+
+Founder decision (closed outside this audit): gate the Medusa contact email on `email_verified`. Recorded in [ADR-0017](ADR-0017-M1b-Verified-Contact-Email-Gate.md); scope is the contact email only, with identity, login and account creation unchanged and `identity.central_sso` still OFF. Starting commit `ad6392a` (`main` after PR #13).
+
+| Check | Result |
+|---|---|
+| Medusa workflow tests (`apps/medusa/tests/central-customer.test.ts`) | 11 / 11 pass: 5 new (gate function, wire schema, blank-contact create once with no email written and exact link, no create in reconcile, validation) plus the 6 existing, unchanged |
+| PostgreSQL scenarios (fresh PG16, restricted role) | 48 / 48 pass: 3 new (unverified is blanked yet mapping reaches ready; verified is forwarded and survives uncertain-create reconciliation; verification revoked after reservation sends blank) and 1 existing scenario made explicit with a verified contact |
+| Mutation check | Reverting the Vynvori-tier gate fails exactly the two gate scenarios; restored |
+| Whole scoped run (db, commerce, medusa, web, shared) | 177 tests: 176 pass, 0 fail, 1 skip (the unrelated M2 creative-DB test that needs a live URL) |
+| `npm run lint`, `npm run typecheck`, `npm run test:security-policy` | exit 0, exit 0, 34 / 34 |
+| `test:staging`, `security:audit` | not run; still expected-red on the expired approvals |
+
+Test-harness note: the PostgreSQL scenarios reuse fixed identifiers and create a cluster-level role, so they must run against a freshly created database each time (the repo's Docker harness does this). Re-running on a reused database gives false failures, which I hit and traced rather than accepted. Baseline `main` is 45 / 45 on a fresh database.
+
+**Not run:** the native Medusa HTTP probe (`scripts/test-m1b-native-medusa.mjs`, needs Docker and a scaffolded backend). So `provision()`'s 409 comparison is covered only through its extracted function, and the blank-email customer has not been created against a real Medusa database (including its unique index with a null email). That needs a re-run of the native probe before any staging enablement.
+
+Observations, deliberately not acted on: (a) an entirely missing email still blocks commerce provisioning while an unverified one now provisions blank, which is slightly inconsistent and worth a founder look; (b) there is no blank-to-verified update path yet, and M4 checkout must collect and verify its own email; (c) orphan recovery for blank-contact customers is operator-reviewed (ADR-0017).
+
+`M1a-open-gates.md` does not track `email_verified`, so it is unchanged. ACC rows are unchanged: ACC-02, ACC-03 and ACC-22 stay IN_PROGRESS (local evidence only).

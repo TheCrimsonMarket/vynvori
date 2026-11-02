@@ -1,4 +1,4 @@
--- ROLLBACK for 0001_composition_scene.sql (ADR-0017). NOT executed by any runner; an operator runs it by hand after a
+-- ROLLBACK for 0001_composition_scene.sql (ADR-0018). NOT executed by any runner; an operator runs it by hand after a
 -- verified pg_dump of schema vynvori_composition. It refuses to run while ANY customer composition data exists, so a
 -- rollback can never silently destroy saved work. Drop order respects the RESTRICT foreign keys.
 DO $guard$

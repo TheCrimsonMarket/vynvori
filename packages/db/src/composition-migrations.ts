@@ -26,7 +26,7 @@ export function compositionMigrationPlan(directory = folder) {
 }
 /**
  * LOCAL synthetic database only. M3 does NOT authorise any staging/production apply: that needs the founder's
- * separate remote-database approval and its own pinned target (see ADR-0017 §Rollout). Any other target is rejected
+ * separate remote-database approval and its own pinned target (see ADR-0018 §Rollout). Any other target is rejected
  * before a statement is issued. No grants, no retries, no down migration (the manual rollback script refuses while
  * customer data exists).
  */
