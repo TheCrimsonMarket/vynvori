@@ -1,6 +1,6 @@
 # M7 plan — credit-ledger core (W1)
 
-Status: **PROPOSED — awaiting founder review. No worker may start until the founder approves this plan** (registry rule 2: a plan is not authorization to implement). Author: M7 milestone manager. Base: `main` @ `92c8114`. Date: 2026-11-02. Revision 2 (after the blueprint adversarial review; dispositions in §14).
+Status: **PROPOSED — awaiting founder review. No worker may start until the founder approves this plan** (registry rule 2: a plan is not authorization to implement). Author: M7 milestone manager. Base: `main` @ `92c8114`. Date: 2026-11-02. Revision 3 (rev 2 = blueprint adversarial review, dispositions in §14; rev 3 = rulings on the open questions relayed by root from the founder, recorded in §12 — they do **not** approve this plan).
 
 Authority: founder-authorized W1 scope as relayed in the M7 manager kickoff; ADR-0021, the `packages/db/ledger-migrations/` journal and the `packages/contracts` lane are granted by root. This document changes no code, schema, flag or protected file.
 
@@ -55,9 +55,9 @@ Medusa top-ups, payment-capture grants, refunds/chargebacks, digital-export purc
 | F6 | `packages/shared/src/public.ts` `featureDefaults` covers every gated capability; all `false`. | Constraint 3. |
 | F7 | `test:m2` globs `packages/db/tests/*.test.ts`. The M2 job runs `lint`, `typecheck:m2` (db, commerce, medusa, image-processing — it type-checks contracts only transitively through db) and `test:m2`; **`test:contracts` runs only in the M0 job** (via `npm test`). | No root `package.json` change. Contract unit tests are evidence from the M0 job; Postgres tests are evidence from the M2 job. Briefs cite the right job for each. |
 | F8 | `@vynvori/db` already depends on `@vynvori/contracts`, `pg`, `drizzle-orm`. | **No dependency or lockfile change.** If one seems needed → RESOURCE REQUEST. |
-| F9 | PG 16 **server** binaries exist in this container at `/usr/lib/postgresql/16/bin` (not on `PATH`); `psql` and a `docker` CLI exist; no daemon. | Not assumed available to workers (Q5). |
+| F9 | PG 16 **server** binaries exist in this container at `/usr/lib/postgresql/16/bin` (not on `PATH`); `psql` and a `docker` CLI exist; no daemon. | Per the relayed ruling on Q5, workers **may** start a throwaway loopback cluster from these binaries for fast feedback; such runs are reported `NOT_RUN` as evidence (only CI counts). Workers must verify the binaries exist in their own container; sessions are isolated and not guaranteed to match. |
 | F10 | `test:m2` passes many files to a single `node --test`, which runs test files as parallel subprocesses. The composition fixture avoids shared-database collisions with two database names. The `foundation` service uses PostgreSQL's default `max_connections` (100), shared with `postgres.test.ts`. | Ledger fixture uses **one database name per test file** and enforces a per-file **connection budget** (D15). |
-| F11 | **Existing contracts disagree with canonical docs.** (a) `PLANE_C_BUNDLE_GRAPH` has no `closure_pending → open_for_refinements` edge, which doc 06 C-02 / doc 22 Plane B require for a verified-uncharged **first** final on an open package. (b) `PackageStateV1Schema` spells the state `refinements_open` (the Plane A *stage* name) while doc 22 Plane C, doc 04 and the graph use `open_for_refinements`. `PackageStateV1` is consumed by `screens.ts`. | Not silently encoded. Q7 / S7 gate: needs a root-approved contract fix before S7 (see §7 S7). |
+| F11 | **Existing contracts disagree with canonical docs.** (a) `PLANE_C_BUNDLE_GRAPH` has no `closure_pending → open_for_refinements` edge, which doc 06 C-02 / doc 22 Plane B require for a verified-uncharged **first** final on an open package. (b) `PackageStateV1Schema` spells the state `refinements_open` (the Plane A *stage* name) while doc 22 Plane C, doc 04 and the graph use `open_for_refinements`. `PackageStateV1` is consumed by `screens.ts`. | **Root-owned fix** (Q7): root opens a contract PR (edge restricted to the verified-uncharged first final; schema aligned to `open_for_refinements`, `screens.ts` consumers updated). S7 is blocked until it merges. M7 must not edit `state-machines.ts` or the package-state definitions in `operations.ts` in the meantime. |
 
 ## 5. Design decisions (proposed content of ADR-0021)
 
@@ -121,7 +121,7 @@ Authorization runs, in one transaction: owner match → lineage head is this ver
 
 **D14 Read-only checks.** `checkWalletInvariants` runs in a `READ ONLY` `REPEATABLE READ` transaction and reports (never repairs): wallet bucket = Σ entry deltas; every entry sums to zero; no negative bucket; reserved bucket = Σ `hold_units` of `reserved` reservations; held bucket = Σ of hold-state reservations; each reservation state matches its entry trail; allocation sums; promo uniqueness; registered synthetic sources. `findOrphanedReservations(client, { olderThan })` takes the cut-off as a **required argument with no default** and classifies `reserved_never_dispatched` (no `workflow_ref`), `reserved_dispatch_stale`, `hold_present`; it never mutates and never releases.
 
-**D15 Test databases and connection budget.** Each ledger test file uses its own database `vynvori_m7_<name>_test` (name from a fixture allow-list, loopback + user `synthetic` only), created/dropped by the fixture. All 100-way scenarios live in **one** file, `ledger-concurrency.test.ts` (extended by S2, S5 and S6): it fires 100 commands simultaneously over a pool capped at 40 connections; every other ledger file caps its pool at 5; the fixture exposes `ledgerPool(kind)` that enforces the caps, and the ADR records the budget (≤ 40 + 8×5 + existing suites < 97). The database serializes these commands on the wallet lock regardless, so the contention being tested is real, but the evidence will state exactly "100 commands in flight, ≤ 40 connections". A literal 100-connection run would need a larger `max_connections` in the CI service (root-owned workflow; Q3).
+**D15 Test databases and connection budget.** Each ledger test file uses its own database `vynvori_m7_<name>_test` (name from a fixture allow-list, loopback + user `synthetic` only), created/dropped by the fixture. All 100-way scenarios live in **one** file, `ledger-concurrency.test.ts` (extended by S2, S5 and S6): it fires 100 commands simultaneously over a pool capped at 40 connections; every other ledger file caps its pool at 5; the fixture exposes `ledgerPool(kind)` that enforces the caps, and the ADR records the budget (≤ 40 + 8×5 + existing suites < 97). The database serializes these commands on the wallet lock regardless, so the contention being tested is real, but the evidence will state exactly "100 commands in flight, ≤ 40 connections". Root has said it will raise the CI Postgres `max_connections` for an honest 100-way test (Q3, root-owned); until root states the exact limit after that PR merges, the caps above stand, and S1's ADR records the final numbers. The fixture must keep per-file databases and pool caps regardless.
 
 ## 6. Steps, dependencies and lanes
 
@@ -139,7 +139,7 @@ flowchart LR
  S6 --> S8
  S7 --> S8
  S8 --> S9[S9 acceptance suite + evidence]
- Q7{{Q7 contract fix}} -.gates.-> S7
+ Q7{{root contract PR}} -.blocks.-> S7
 ```
 
 | Step | Title | Migration | Depends on | May run in parallel with |
@@ -150,7 +150,7 @@ flowchart LR
 | S4 | Promo-claim uniqueness | `0004_promo_claims` | S1 | S2, S3 |
 | S5 | Authorize → reserve → release (single + atomic bundle), package creation | `0005_reservations` | S3 | — |
 | S6 | Settle, reconciliation hold, vendor-cost isolation | `0006_vendor_cost_evidence` | S5 | S7 |
-| S7 | Refinement slots, package transitions, closure | `0007_refinement_slots` | S5, Q7 | S6 |
+| S7 | Refinement slots, package transitions, closure | `0007_refinement_slots` | S5, **root contract PR (Q7)** | S6 |
 | S8 | Wallet-invariant check, orphan detection | none | S4, S6, S7 | — |
 | S9 | Acceptance suite, evidence record, grants proposal | none | S1–S8 | — |
 
@@ -164,7 +164,7 @@ All migration steps append to `plan.json` and to the `package.json` `exports` ma
 | S4 | `0004_promo_claims.sql` + rollback; `src/ledger-promo.ts`; `tests/ledger-promo.test.ts`; `plan.json`, `exports` (edit) | ledger journal |
 | S5 | `0005_reservations.sql` + rollback (adds the `ledger_entries.reservation_id` FK via `ALTER TABLE`, dropped by the rollback); `src/ledger-reservations.ts`; `tests/ledger-reservations.test.ts`; `ledger-concurrency.test.ts` (edit); `plan.json`, `exports` (edit) | ledger journal |
 | S6 | `0006_vendor_cost_evidence.sql` + rollback; `src/{ledger-settlement.ts,ledger-evidence.ts}`; `tests/ledger-settlement.test.ts`; `ledger-concurrency.test.ts` (edit); `plan.json`, `exports` (edit) | ledger journal |
-| S7 | `0007_refinement_slots.sql` + rollback; `src/ledger-entitlements.ts`; `tests/ledger-entitlements.test.ts`; contract fix per Q7; `plan.json`, `exports` (edit) | ledger journal, contracts (per Q7 ruling) |
+| S7 | `0007_refinement_slots.sql` + rollback; `src/ledger-entitlements.ts`; `tests/ledger-entitlements.test.ts`; `plan.json`, `exports` (edit); **no** edits to `state-machines.ts` / package-state definitions (root's PR) | ledger journal |
 | S8 | `src/ledger-invariants.ts`; `tests/ledger-invariants.test.ts`; `exports` (edit) | — |
 | S9 | `tests/ledger-acceptance.test.ts`; `docs/implementation/M7-Evidence.md`; `docs/implementation/M7-Runtime-Grants-Proposal.md` (proposal only, not applied) | — |
 
@@ -188,7 +188,7 @@ Common exit criteria for every step: `npm ci`; `npm run lint`; `npm run typechec
 
 **Out of scope.** Tables, wallet/quote logic, other journals, workflows.
 **Rollback.** Revert PR (nothing deployed); data: `0001` down script on a disposable DB.
-**Optional resource request (Q3).** Root may add `VYNVORI_REQUIRE_PG_TESTS=1` (and, if the founder wants literal 100 connections, a higher `max_connections`) to the `m2.yml` `foundation` job.
+**CI contract with root (Q3/Q4, root-owned `m2.yml` change).** Root will set `VYNVORI_REQUIRE_PG_TESTS=1`, `M1B_TEST_POSTGRES_URL`, `M3_TEST_POSTGRES_URL` and a higher `max_connections` on the `foundation` job and will tell the manager the exact names and limit once merged. `ledger-fixture.ts` must: (a) honour `VYNVORI_REQUIRE_PG_TESTS=1` — **fail, not skip,** when it is `1` and no usable URL is present; (b) otherwise skip (= `NOT_RUN`) when no URL is set; (c) keep gating on `M2_CREATIVE_DATABASE_URL` (optional local override `M7_TEST_POSTGRES_URL`). The fixture's unit test covers all three branches without a database. Do not edit workflows.
 
 ### S2 — Wallet, immutable command log, append-only ledger
 **Goal.** D1–D4, D10–D13 in the database, plus the store primitive every later step uses.
@@ -225,10 +225,10 @@ Common exit criteria for every step: `npm ci`; `npm run lint`; `npm run typechec
 
 **Tests.** Unknown outcome ⇒ hold; no exported function maps out of `reconciliation_hold`; **any invoice/usage evidence changes zero rows in wallets, ledger_entries, credit_reservations**; settle on a vendor-charge message / non-delivered status rejected; settle amount ≠ `charge_units` rejected; settle→release, release→settle, settle→hold, hold→release (no W1 path) all `INVALID_TRANSITION` with balances unchanged; one hold among three siblings leaves the others settleable; every transition replay-safe; out-of-order arrival (settle before reserve committed) ⇒ `NOT_FOUND`, safe to retry later; a reservation can never settle above `hold_units`; 100 mixed settle/release/hold commands over distinct reservations in the concurrency file ⇒ invariants hold.
 
-### S7 — Refinement slots, package transitions, closure (gated by Q7)
+### S7 — Refinement slots, package transitions, closure (blocked on root's contract PR, Q7)
 **Goal.** D9.
 
-**Pre-condition.** Q7 is ruled on and, if required, the root-approved contract fix is merged: add the `closure_pending → open_for_refinements` edge for the verified-uncharged first-final case (C-02), and reconcile `PackageStateV1` with `open_for_refinements` (or document the explicit mapping). The worker must **not** encode the graph differently from the contracts; if Q7 is unresolved the worker stops and reports.
+**Pre-condition (blocked until root's contract PR merges).** Root owns the fix: it adds `closure_pending → open_for_refinements` to `PLANE_C_BUNDLE_GRAPH`, restricted to the verified-uncharged **first** final attempt (doc 06 C-02), and aligns `PackageStateV1Schema` from `refinements_open` to `open_for_refinements` with `screens.ts` consumers updated. The worker starts only after that PR is on `main`, must **not** edit `state-machines.ts` or the package-state definitions in `operations.ts`, and derives the DB trigger from the merged graph (including the restriction on the new edge, which needs the first-final/revision distinction carried in the typed evidence argument). If the merged contract differs from this description, stop and report.
 
 **Tasks.** `0007_refinement_slots.sql`: `refinement_slots` + guard triggers per D9. `ledger-entitlements.ts`: slot operations (`skip`, `restore`, `markPending`, `markUnknown`, `consume`), package transitions with typed evidence args, `closeWithForfeiture` requiring a non-null `refinementClosureNoticeVersion`.
 
@@ -297,13 +297,13 @@ Workers stop and message the manager (→ root → founder) if they need: any nu
 
 ## 12. Open questions for the founder (answer at plan review; none blocks S1)
 
-- **Q1 (D12).** Confirm that W1 builds the ledger so that credits can only exist where a grant source has been **registered** (none in W1 migrations; tests register a synthetic one), i.e. there is deliberately no way to fund a real wallet until M4/W3 supplies a Medusa capture source.
-- **Q2 (D8).** After a promo claim ends `verified_uncharged_failure`, may that identity be offered the free preview again? Default: **no** (one claim row per identity ever) until a policy exists.
-- **Q3 (S1/D15).** Approve optional root-owned changes to `m2.yml`: `VYNVORI_REQUIRE_PG_TESTS=1` on the `foundation` job so ledger tests fail rather than skip without a DB; and, only if a literal 100-connection test is wanted, a higher Postgres `max_connections`. Without these, evidence is "100 commands in flight over ≤ 40 connections" plus a manually cited CI log.
-- **Q4 (side finding, not M7).** `M3_TEST_POSTGRES_URL` and `M1B_TEST_POSTGRES_URL` are not set by any workflow, so the existing composition and identity Postgres tests appear to skip in CI; "PG-verified" for ACC-06 reflects local runs only. Worth a root/M3-closure look; M7 cannot lean on those suites.
-- **Q5 (F9).** May workers start a throwaway loopback Postgres from the container's PG16 binaries for development feedback? Local-only, still `NOT_RUN` as CI evidence. Default: no.
-- **Q6 (D5).** Confirm W1 supports only **fixed** quoted charges (settle = allocation `charge_units`); variable/metered customer charges need an approved pricing policy.
-- **Q7 (F11).** Rule on the two contract/doc conflicts: (a) add the `closure_pending → open_for_refinements` edge (doc 06 C-02, doc 22 Plane B) to `PLANE_C_BUNDLE_GRAPH`; (b) `PackageStateV1Schema` uses `refinements_open`, canonical docs use `open_for_refinements`. (a) widens an enum graph; (b) renames a value consumed by `screens.ts`. Both need a root-approved contract PR before S7; S1–S6 and S8 are unaffected.
+- **Q1 (D12) — RULED (relayed by root): default accepted.** Confirm that W1 builds the ledger so that credits can only exist where a grant source has been **registered** (none in W1 migrations; tests register a synthetic one), i.e. there is deliberately no way to fund a real wallet until M4/W3 supplies a Medusa capture source.
+- **Q2 (D8) — RULED (relayed by root): default accepted, no re-offer.** After a promo claim ends `verified_uncharged_failure`, may that identity be offered the free preview again? Default: **no** (one claim row per identity ever) until a policy exists.
+- **Q3 (S1/D15) — RULED (relayed by root): root-owned `m2.yml` change; ledger tests honour `VYNVORI_REQUIRE_PG_TESTS`.** Approve optional root-owned changes to `m2.yml`: `VYNVORI_REQUIRE_PG_TESTS=1` on the `foundation` job so ledger tests fail rather than skip without a DB; and, only if a literal 100-connection test is wanted, a higher Postgres `max_connections`. Without these, evidence is "100 commands in flight over ≤ 40 connections" plus a manually cited CI log.
+- **Q4 (side finding, not M7) — verified independently by root; root-owned fix (sets the M3/M1b URLs in `foundation`). Side effect to expect: those suites will start running in CI and may surface pre-existing failures that are not M7's; they also share the job's connection budget.** `M3_TEST_POSTGRES_URL` and `M1B_TEST_POSTGRES_URL` are not set by any workflow, so the existing composition and identity Postgres tests appear to skip in CI; "PG-verified" for ACC-06 reflects local runs only. Worth a root/M3-closure look; M7 cannot lean on those suites.
+- **Q5 (F9) — RULED (relayed by root): yes, for fast feedback; results stay `NOT_RUN` as evidence.** May workers start a throwaway loopback Postgres from the container's PG16 binaries for development feedback? Local-only, still `NOT_RUN` as CI evidence. Default: no.
+- **Q6 (D5) — RULED (relayed by root): default accepted.** Confirm W1 supports only **fixed** quoted charges (settle = allocation `charge_units`); variable/metered customer charges need an approved pricing policy.
+- **Q7 (F11) — RULED (relayed by root): root-owned contract PR; S7 blocked on it; M7 must not edit those definitions.** Rule on the two contract/doc conflicts: (a) add the `closure_pending → open_for_refinements` edge (doc 06 C-02, doc 22 Plane B) to `PLANE_C_BUNDLE_GRAPH`; (b) `PackageStateV1Schema` uses `refinements_open`, canonical docs use `open_for_refinements`. (a) widens an enum graph; (b) renames a value consumed by `screens.ts`. Both need a root-approved contract PR before S7; S1–S6 and S8 are unaffected.
 - **Q8 (D3).** Privilege model A (invoker-rights triggers, depth guard) vs B (`SECURITY DEFINER`). Manager recommends A; the S1 security review will confirm or flip it in ADR-0021. Reported for visibility, not a founder decision unless the security review escalates.
 
 ## 13. Resources requested from root
@@ -312,8 +312,8 @@ Workers stop and message the manager (→ root → founder) if they need: any nu
 |---|---|
 | ADR-0021, ledger journal, contracts lane | granted (kickoff) |
 | Worker slot | 1 at a time; a second only on root's confirmation |
-| `m2.yml` env/`max_connections` (Q3) | optional; only if the founder approves Q3 |
-| Contract fix PR for Q7 | root-approved contract PR before S7 (or a grant to M7 after the founder rules) |
+| `m2.yml` env/`max_connections` (Q3/Q4) | root-owned PR in preparation; exact env names and the connection limit to be sent to the manager after it merges |
+| Contract fix PR for Q7 | root-owned; S7 blocked until it merges; the contracts lane is shared with that PR, so M7 does not touch `state-machines.ts` or the package-state definitions in `operations.ts` meanwhile |
 | Further ADR numbers | none (D1–D15 all live in ADR-0021) |
 
 ## 14. Plan review log
@@ -341,4 +341,6 @@ Workers stop and message the manager (→ root → founder) if they need: any nu
 
 Reviewer also confirmed as sound: F1 (and the Q4 side finding), F2–F6 details, state-graph fidelity, no invented values, lane table, conservative ACC proposals.
 
-_Founder review outcome: pending._
+**Revision 3 — rulings relayed by root (message from the root session, which reports that the founder gave them to root directly).** Q1, Q2, Q6 defaults accepted; Q3/Q4 CI changes and the Q7 contract fix are root-owned; Q5 allows local PG16 for non-evidentiary feedback. Root also independently verified Q4 and Q7 and is doing a read-only consistency review of this plan; its findings, if any, will be appended here. These rulings change no step's scope except: S7 is blocked on root's contract PR, and the S1 harness must honour `VYNVORI_REQUIRE_PG_TESTS`. A message between sessions is not plan approval.
+
+_Founder review outcome (plan approval): pending. Do not start S1 until the founder approves directly._
