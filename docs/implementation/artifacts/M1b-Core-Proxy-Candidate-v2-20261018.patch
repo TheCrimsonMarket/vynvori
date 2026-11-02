@@ -1,0 +1,464 @@
+diff --git a/Dockerfile b/Dockerfile
+index 95f3dc64..43003dce 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -23,8 +23,6 @@ COPY . /usr/src/app
+ RUN echo "Build NODE_ENV is: $NODE_ENV"
+ 
+ RUN if [ -f ".env.${NODE_ENV}" ]; then \
+-      echo "Contents of .env.${NODE_ENV}:"; \
+-      cat ".env.${NODE_ENV}"; \
+       cp .env.${NODE_ENV} .env; \
+       rm -f .env.*; \
+     else \
+diff --git a/src/app/api/oauth/__tests__/authorize-proxy.test.js b/src/app/api/oauth/__tests__/authorize-proxy.test.js
+new file mode 100644
+index 00000000..f0ef0a17
+--- /dev/null
++++ b/src/app/api/oauth/__tests__/authorize-proxy.test.js
+@@ -0,0 +1,184 @@
++/** @jest-environment node */
++jest.mock('axios', () => ({ get: jest.fn(), post: jest.fn() }));
++jest.mock('next/headers', () => ({ cookies: jest.fn() }));
++jest.mock('next/server', () => ({
++  NextResponse: { json: (body, options = {}) => ({ body, status: options.status || 200, headers: options.headers || {} }) },
++}));
++
++import axios from 'axios';
++import { cookies } from 'next/headers';
++import { GET, POST } from '../authorize/route';
++
++describe('OAuth authorizer proxy preserves legacy contracts and isolates strict provenance', () => {
++  const keys = ['API_URL', 'CORE_STRICT_OAUTH_CLIENT_IDS', 'CORE_STRICT_OAUTH_WEB_ORIGIN', 'CORE_STRICT_OAUTH_API_BASE_URL'];
++  const original = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
++  const origin = 'https://central.synthetic.invalid';
++  const access = 'synthetic-central-access-do-not-log';
++  const refresh = 'synthetic-central-refresh-do-not-log';
++  const parameters = { client_id: 'synthetic-strict', response_type: 'code', redirect_uri: 'https://product.synthetic.invalid/callback', scope: 'profile', state: 'synthetic-state', code_challenge: 'synthetic-challenge', code_challenge_method: 'S256' };
++  let log;
++  let errorLog;
++  beforeEach(() => {
++    jest.clearAllMocks();
++    process.env.API_URL = 'https://portal.synthetic.invalid/mana';
++    delete process.env.CORE_STRICT_OAUTH_CLIENT_IDS;
++    delete process.env.CORE_STRICT_OAUTH_WEB_ORIGIN;
++    delete process.env.CORE_STRICT_OAUTH_API_BASE_URL;
++    cookies.mockReturnValue({ get: (name) => name === 'authToken' ? { value: access } : name === 'refreshToken' ? { value: refresh } : undefined });
++    axios.get.mockResolvedValue({ status: 200, data: { redirectUrl: 'https://product.synthetic.invalid/callback?code=synthetic' } });
++    axios.post.mockResolvedValue({ status: 200, data: { redirectUrl: 'https://product.synthetic.invalid/callback?code=synthetic' } });
++    log = jest.spyOn(console, 'log').mockImplementation(() => {});
++    errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
++  });
++  afterEach(() => { log.mockRestore(); errorLog.mockRestore(); });
++  afterAll(() => keys.forEach((key) => {
++    if (original[key] === undefined) delete process.env[key];
++    else process.env[key] = original[key];
++  }));
++  function strict() {
++    process.env.CORE_STRICT_OAUTH_CLIENT_IDS = JSON.stringify(['synthetic-strict']);
++    process.env.CORE_STRICT_OAUTH_WEB_ORIGIN = origin;
++    process.env.CORE_STRICT_OAUTH_API_BASE_URL = `${origin}/mana`;
++  }
++  function incoming(method, body = parameters, suppliedOrigin, urlOrigin = origin, extraHeaders = {}) {
++    const values = { ...extraHeaders };
++    if (suppliedOrigin !== undefined) values.origin = suppliedOrigin;
++    return { method, url: `${urlOrigin}/api/oauth/authorize?${new URLSearchParams(body).toString()}`, headers: { get: (name) => values[name.toLowerCase()] || null }, json: async () => body };
++  }
++
++  test('legacy GET retains parameter/cookie/status/response contracts without claiming strict provenance', async () => {
++    const response = await GET(incoming('GET', { ...parameters, client_id: 'legacy' }));
++    expect(response.status).toBe(200);
++    expect(response.body).toEqual({ redirectUrl: 'https://product.synthetic.invalid/callback?code=synthetic' });
++    const [url, config] = axios.get.mock.calls[0];
++    expect(url).toBe('https://portal.synthetic.invalid/mana/oauth/authorize');
++    expect(config.params.client_id).toBe('legacy');
++    expect(config.headers.Cookie).toBe(`authToken=${access}; refreshToken=${refresh}`);
++    expect(config.headers['X-OAuth-Request-Origin']).toBe('null');
++    expect(config.validateStatus(499)).toBe(true);
++    expect(config.validateStatus(500)).toBe(false);
++    expect(response.headers).toEqual({});
++  });
++
++  test('legacy POST still forwards the established consent body without requiring Origin or response_type', async () => {
++    const { response_type: _responseType, ...body } = { ...parameters, client_id: 'legacy', approved: true };
++    const response = await POST(incoming('POST', body));
++    expect(response.status).toBe(200);
++    expect(axios.post.mock.calls[0][1]).toEqual(body);
++    expect(axios.post.mock.calls[0][2].headers.Cookie).toBe(`authToken=${access}; refreshToken=${refresh}`);
++    expect(axios.post.mock.calls[0][2].headers['X-OAuth-Request-Origin']).toBe('null');
++  });
++
++  test.each(['GET', 'POST'])('strict %s sends only server-selected same-origin provenance', async (method) => {
++    strict();
++    const response = await (method === 'GET' ? GET : POST)(incoming(method, { ...parameters, approved: true }, origin, origin, { 'x-oauth-request-origin': 'https://forged.synthetic.invalid' }));
++    expect(response.status).toBe(200);
++    const options = method === 'GET' ? axios.get.mock.calls[0][1] : axios.post.mock.calls[0][2];
++    expect(method === 'GET' ? axios.get.mock.calls[0][0] : axios.post.mock.calls[0][0]).toBe(`${origin}/mana/oauth/authorize`);
++    expect(options.headers['X-OAuth-Request-Origin']).toBe(origin);
++    expect(response.headers['Cache-Control']).toBe('no-store');
++  });
++
++  test('strict top-level GET without Origin is bound to configured request URL origin', async () => {
++    strict();
++    expect((await GET(incoming('GET'))).status).toBe(200);
++    expect((await GET(incoming('GET', parameters, undefined, 'https://other.synthetic.invalid'))).status).toBe(403);
++    expect(axios.get).toHaveBeenCalledTimes(1);
++  });
++
++  test.each([undefined, 'null', 'https://other.synthetic.invalid', `${origin}, https://other.synthetic.invalid`])('strict POST rejects invalid browser origin %s before forwarding cookies', async (suppliedOrigin) => {
++    strict();
++    const response = await POST(incoming('POST', { ...parameters, approved: true }, suppliedOrigin));
++    expect(response.status).toBe(403);
++    expect(cookies).not.toHaveBeenCalled();
++    expect(axios.post).not.toHaveBeenCalled();
++  });
++
++  test('strict enrollment needs an exact configured HTTPS origin', async () => {
++    strict();
++    delete process.env.CORE_STRICT_OAUTH_WEB_ORIGIN;
++    expect((await GET(incoming('GET'))).status).toBe(503);
++    process.env.CORE_STRICT_OAUTH_WEB_ORIGIN = `${origin}/path`;
++    expect((await GET(incoming('GET'))).status).toBe(503);
++    expect(axios.get).not.toHaveBeenCalled();
++  });
++
++  test('strict cookies cannot be sent to a missing or mismatched upstream API base', async () => {
++    strict();
++    process.env.CORE_STRICT_OAUTH_API_BASE_URL = 'https://other.synthetic.invalid/mana';
++    expect((await GET(incoming('GET'))).status).toBe(503);
++    delete process.env.CORE_STRICT_OAUTH_API_BASE_URL;
++    expect((await GET(incoming('GET'))).status).toBe(503);
++    expect(cookies).not.toHaveBeenCalled();
++    expect(axios.get).not.toHaveBeenCalled();
++  });
++
++  test('strict proxy never follows redirects or relays a non-JSON authorization response', async () => {
++    strict();
++    axios.get.mockResolvedValue({ status: 302, data: { redirect: 'https://other.synthetic.invalid' } });
++    const redirected = await GET(incoming('GET'));
++    expect(redirected.status).toBe(502);
++    expect(axios.get.mock.calls[0][1].maxRedirects).toBe(0);
++    axios.get.mockResolvedValue({ status: 200, data: 'synthetic-private-html' });
++    const wrongBody = await GET(incoming('GET'));
++    expect(wrongBody.status).toBe(502);
++    expect(JSON.stringify(wrongBody.body)).not.toContain('synthetic-private-html');
++  });
++
++  test('public upstream 4xx response/status remains intact for legacy and strict clients', async () => {
++    const data = { error: 'interaction_required', error_description: 'Sign in required', loginRequired: true };
++    axios.get.mockResolvedValue({ status: 401, data });
++    expect(await GET(incoming('GET', { ...parameters, client_id: 'legacy' }))).toMatchObject({ status: 401, body: data });
++    strict();
++    expect(await GET(incoming('GET'))).toMatchObject({ status: 401, body: data });
++  });
++
++  test('strict unexpected upstream errors are sanitized; legacy error response retains its contract', async () => {
++    const problem = { message: 'synthetic-private-message', response: { status: 502, data: { error_description: 'synthetic-private-upstream-body' } } };
++    axios.get.mockRejectedValue(problem);
++    expect((await GET(incoming('GET', { ...parameters, client_id: 'legacy' }))).body).toEqual({ error: 'authorization_error', error_description: 'synthetic-private-upstream-body' });
++    strict();
++    const response = await GET(incoming('GET'));
++    expect(response.status).toBe(502);
++    expect(response.body).toEqual({ error: 'authorization_error', error_description: 'Failed to fetch authorization details' });
++  });
++
++  test('logs contain no token prefix, cookies, state, payload or raw exception', async () => {
++    await GET(incoming('GET', { ...parameters, client_id: 'legacy' }));
++    await POST(incoming('POST', { ...parameters, approved: true, note: 'synthetic-private-payload' }));
++    axios.get.mockRejectedValue({ message: 'synthetic-private-message', response: { status: 500, data: { error_description: 'synthetic-private-upstream-body' } } });
++    await GET(incoming('GET'));
++    const recorded = JSON.stringify([...log.mock.calls, ...errorLog.mock.calls]);
++    for (const value of ['synthetic-central', 'synthetic-state', 'synthetic-private-payload', 'synthetic-private-message', 'synthetic-private-upstream-body']) expect(recorded).not.toContain(value);
++  });
++
++  test('strict POST does not accept credentials or server context in the consent body', async () => {
++    strict();
++    const response = await POST(incoming('POST', { ...parameters, approved: true, client_secret: 'synthetic-unexpected-secret', strictAuthContext: { tokenVersion: 99 } }, origin));
++    expect(response.status).toBe(400);
++    expect(axios.post).not.toHaveBeenCalled();
++  });
++
++  test('strict duplicate OAuth query parameters fail closed', async () => {
++    strict();
++    const req = incoming('GET');
++    req.url += '&state=other';
++    expect((await GET(req)).status).toBe(400);
++    expect(axios.get).not.toHaveBeenCalled();
++  });
++
++  test('malformed enrollment configuration cannot mint strict provenance or disrupt a successful legacy request', async () => {
++    process.env.CORE_STRICT_OAUTH_CLIENT_IDS = '{invalid';
++    const response = await GET(incoming('GET', { ...parameters, client_id: 'legacy' }));
++    expect(response.status).toBe(200);
++    expect(axios.get.mock.calls[0][1].headers['X-OAuth-Request-Origin']).toBe('null');
++  });
++
++  test('malformed new enrollment settings preserve the legacy exception-response contract too', async () => {
++    process.env.CORE_STRICT_OAUTH_CLIENT_IDS = '{invalid';
++    axios.post.mockRejectedValue({ message: 'legacy-message', response: { status: 502, data: { error_description: 'legacy-description' } } });
++    const response = await POST(incoming('POST', { client_id: 'legacy', approved: true }));
++    expect(response.status).toBe(502);
++    expect(response.body).toEqual({ error: 'authorization_error', error_description: 'legacy-description' });
++  });
++});
+diff --git a/src/app/api/oauth/_lib/strict-proxy.js b/src/app/api/oauth/_lib/strict-proxy.js
+new file mode 100644
+index 00000000..fba4c499
+--- /dev/null
++++ b/src/app/api/oauth/_lib/strict-proxy.js
+@@ -0,0 +1,48 @@
++// Server-only enrollment configuration; no browser input can select an authority.
++const legacy = () => ({ strict: false, sanitizeErrors: false, origin: 'null' });
++const deny = (status, description) => ({ strict: true, sanitizeErrors: true, origin: 'null', error: { status, description } });
++
++export function resolveStrictProxyPolicy(request, clientId) {
++  const raw = process.env.CORE_STRICT_OAUTH_CLIENT_IDS;
++  if (!raw) return legacy();
++  let clients;
++  try {
++    clients = JSON.parse(raw);
++    if (!Array.isArray(clients) || clients.some((id) => typeof id !== 'string' || !id || id.trim() !== id)
++      || new Set(clients).size !== clients.length) throw new TypeError('Invalid enrollment');
++  } catch {
++    // No valid enrollment means no strict provenance. Keep legacy contracts intact.
++    return legacy();
++  }
++  if (typeof clientId !== 'string' || !clients.includes(clientId)) return legacy();
++  const expected = process.env.CORE_STRICT_OAUTH_WEB_ORIGIN;
++  const base = process.env.CORE_STRICT_OAUTH_API_BASE_URL;
++  try {
++    const origin = new URL(expected);
++    const api = new URL(base);
++    if (origin.protocol !== 'https:' || origin.origin !== expected || origin.username || origin.password
++      || api.protocol !== 'https:' || api.origin !== expected || api.pathname !== '/mana'
++      || api.username || api.password || api.search || api.hash || api.href !== base) return deny(503, 'Authorization is unavailable');
++    if (new URL(request.url).origin !== expected) return deny(403, 'Origin not allowed');
++    const supplied = request.headers?.get('origin');
++    if ((request.method === 'POST' && supplied !== expected) || (supplied && supplied !== expected)) return deny(403, 'Origin not allowed');
++    return { strict: true, sanitizeErrors: true, origin: expected, apiBaseUrl: base };
++  } catch {
++    return deny(503, 'Authorization is unavailable');
++  }
++}
++
++export function strictApprovalIsValid(body) {
++  const fields = ['response_type', 'client_id', 'redirect_uri', 'scope', 'state', 'code_challenge', 'code_challenge_method', 'provider', 'required_provider', 'prompt', 'approved'];
++  const required = ['client_id', 'redirect_uri', 'scope', 'state', 'code_challenge', 'code_challenge_method'];
++  return body && typeof body === 'object' && !Array.isArray(body)
++    && Object.keys(body).every((field) => fields.includes(field))
++    && typeof body.approved === 'boolean'
++    && (body.response_type === undefined || body.response_type === 'code')
++    && required.every((field) => typeof body[field] === 'string' && body[field].length > 0 && body[field].length <= 4096)
++    && Object.entries(body).every(([field, value]) => field === 'approved' || value == null || typeof value === 'string');
++}
++
++export function strictQueryIsUnambiguous(searchParams) {
++  return [...new Set(searchParams.keys())].every((key) => searchParams.getAll(key).length === 1);
++}
+diff --git a/src/app/api/oauth/authorize/route.js b/src/app/api/oauth/authorize/route.js
+index 8cc2acac..4362caa2 100644
+--- a/src/app/api/oauth/authorize/route.js
++++ b/src/app/api/oauth/authorize/route.js
+@@ -1,16 +1,53 @@
+ import { NextResponse } from 'next/server';
+ import axios from 'axios';
+ import { cookies } from 'next/headers';
++import { resolveStrictProxyPolicy, strictApprovalIsValid, strictQueryIsUnambiguous } from '../_lib/strict-proxy';
+ 
+-/**
+- * GET /api/oauth/authorize
+- * Proxy OAuth authorization requests to Service.Portal backend
+- */
++function responseOptions(status, policy) {
++  return policy.strict ? { status, headers: { 'Cache-Control': 'no-store' } } : { status };
++}
++
++function rejectPolicy(policy) {
++  return NextResponse.json({ error: 'authorization_error', error_description: policy.error.description }, responseOptions(policy.error.status, policy));
++}
++
++function upstreamResponse(response, policy) {
++  if (policy.strict && ((response.status >= 300 && response.status < 400)
++    || !response.data || typeof response.data !== 'object' || Array.isArray(response.data))) {
++    return NextResponse.json({ error: 'authorization_error', error_description: 'Authorization is unavailable' }, responseOptions(502, policy));
++  }
++  return NextResponse.json(response.data, responseOptions(response.status, policy));
++}
++
++function serviceHeaders(policy) {
++  const cookieStore = cookies();
++  const authToken = cookieStore.get('authToken');
++  const refreshToken = cookieStore.get('refreshToken');
++  const serviceCookies = [];
++  if (authToken?.value) serviceCookies.push(`authToken=${authToken.value}`);
++  if (refreshToken?.value) serviceCookies.push(`refreshToken=${refreshToken.value}`);
++  const cookieHeader = serviceCookies.join('; ');
++  return {
++    'Content-Type': 'application/json',
++    'X-OAuth-Request-Origin': policy.origin,
++    ...(cookieHeader && { Cookie: cookieHeader }),
++  };
++}
++
++function failure(error, method, policy) {
++  const fallback = method === 'GET' ? 'Failed to fetch authorization details' : 'Failed to authorize application';
++  const status = error.response?.status || 500;
++  // Preserve the event, but never log payloads, cookie/token prefixes or exceptions.
++  console.error(`OAuth Authorize ${method} error:`, { status: Number.isInteger(status) ? status : 500 });
++  const description = policy.sanitizeErrors ? fallback : error.response?.data?.error_description || error.message || fallback;
++  return NextResponse.json({ error: 'authorization_error', error_description: description }, responseOptions(status, policy));
++}
++
++/** GET /api/oauth/authorize — preserve the existing public parameter contract. */
+ export async function GET(request) {
++  let policy = { strict: false, sanitizeErrors: false, origin: 'null' };
+   try {
+     const { searchParams } = new URL(request.url);
+-
+-    // Extract OAuth parameters from query string
+     const params = {
+       response_type: searchParams.get('response_type'),
+       client_id: searchParams.get('client_id'),
+@@ -23,119 +60,38 @@ export async function GET(request) {
+       required_provider: searchParams.get('required_provider'),
+       prompt: searchParams.get('prompt'),
+     };
+-
+-    console.log('OAuth Authorize GET: Params:', params);
+-
+-    // Get cookies from the request
+-    const cookieStore = cookies();
+-    const authToken = cookieStore.get('authToken');
+-    const refreshToken = cookieStore.get('refreshToken');
+-
+-    console.log('OAuth Authorize GET: authToken:', authToken?.value?.substring(0, 20) + '...');
+-    console.log('OAuth Authorize GET: refreshToken:', !!refreshToken);
+-
+-    // Build cookie header to send to Service.Portal
+-    // Service.Portal checks for 'authToken' cookie
+-    const serviceCookies = [];
+-    if (authToken?.value) {
+-      serviceCookies.push(`authToken=${authToken.value}`);
+-    }
+-    if (refreshToken?.value) {
+-      serviceCookies.push(`refreshToken=${refreshToken.value}`);
+-    }
+-    const cookieHeader = serviceCookies.join('; ');
+-
+-    console.log('OAuth Authorize GET: Sending cookies to Service.Portal:', cookieHeader ? 'Yes' : 'No');
+-
+-    // Call Service.Portal backend (server-side only)
+-    const response = await axios.get(
+-      `${process.env.API_URL}/oauth/authorize`,
+-      {
+-        params,
+-        headers: {
+-          'Content-Type': 'application/json',
+-          // Send cookies to Service.Portal
+-          ...(cookieHeader && { 'Cookie': cookieHeader }),
+-        },
+-        validateStatus: (status) => status < 500, // Don't throw on 4xx errors
+-      }
+-    );
+-
+-    console.log('OAuth Authorize GET: Response status:', response.status);
+-
+-    // Forward the response from Service.Portal
+-    return NextResponse.json(response.data, {
+-      status: response.status,
++    policy = resolveStrictProxyPolicy(request, params.client_id);
++    if (policy.error) return rejectPolicy(policy);
++    if (policy.strict && !strictQueryIsUnambiguous(searchParams)) return NextResponse.json({ error: 'authorization_error', error_description: 'Invalid authorization request' }, responseOptions(400, policy));
++    const response = await axios.get(`${policy.strict ? policy.apiBaseUrl : process.env.API_URL}/oauth/authorize`, {
++      params,
++      headers: serviceHeaders(policy),
++      ...(policy.strict && { maxRedirects: 0 }),
++      validateStatus: (status) => status < 500,
+     });
++    console.log('OAuth Authorize GET: Response status:', response.status);
++    return upstreamResponse(response, policy);
+   } catch (error) {
+-    console.error('OAuth Authorize GET error:', error.message);
+-    console.error('OAuth Authorize GET error response:', error.response?.data);
+-    return NextResponse.json(
+-      {
+-        error: 'authorization_error',
+-        error_description: error.response?.data?.error_description || error.message || 'Failed to fetch authorization details'
+-      },
+-      { status: error.response?.status || 500 }
+-    );
++    return failure(error, 'GET', policy);
+   }
+ }
+ 
+-/**
+- * POST /api/oauth/authorize
+- * Proxy OAuth authorization approval/denial to Service.Portal backend
+- */
++/** POST /api/oauth/authorize — retain the established consent payload for legacy. */
+ export async function POST(request) {
++  let policy = { strict: false, sanitizeErrors: false, origin: 'null' };
+   try {
+     const body = await request.json();
+-
+-    console.log('OAuth Authorize POST: Body:', body);
+-
+-    // Get cookies to send to Service.Portal
+-    const cookieStore = cookies();
+-    const authToken = cookieStore.get('authToken');
+-    const refreshToken = cookieStore.get('refreshToken');
+-
+-    // Build cookie header
+-    const serviceCookies = [];
+-    if (authToken?.value) {
+-      serviceCookies.push(`authToken=${authToken.value}`);
+-    }
+-    if (refreshToken?.value) {
+-      serviceCookies.push(`refreshToken=${refreshToken.value}`);
+-    }
+-    const cookieHeader = serviceCookies.join('; ');
+-
+-    console.log('OAuth Authorize POST: Sending cookies to Service.Portal:', cookieHeader ? 'Yes' : 'No');
+-
+-    // Call Service.Portal backend (server-side only)
+-    const response = await axios.post(
+-      `${process.env.API_URL}/oauth/authorize`,
+-      body,
+-      {
+-        headers: {
+-          'Content-Type': 'application/json',
+-          // Send cookies to Service.Portal
+-          ...(cookieHeader && { 'Cookie': cookieHeader }),
+-        },
+-        validateStatus: (status) => status < 500, // Don't throw on 4xx errors
+-      }
+-    );
+-
+-    console.log('OAuth Authorize POST: Response status:', response.status);
+-
+-    // Forward the response from Service.Portal
+-    return NextResponse.json(response.data, {
+-      status: response.status,
++    policy = resolveStrictProxyPolicy(request, body?.client_id);
++    if (policy.error) return rejectPolicy(policy);
++    if (policy.strict && !strictApprovalIsValid(body)) return NextResponse.json({ error: 'authorization_error', error_description: 'Invalid authorization request' }, responseOptions(400, policy));
++    const response = await axios.post(`${policy.strict ? policy.apiBaseUrl : process.env.API_URL}/oauth/authorize`, body, {
++      headers: serviceHeaders(policy),
++      ...(policy.strict && { maxRedirects: 0 }),
++      validateStatus: (status) => status < 500,
+     });
++    console.log('OAuth Authorize POST: Response status:', response.status);
++    return upstreamResponse(response, policy);
+   } catch (error) {
+-    console.error('OAuth Authorize POST error:', error.message);
+-    console.error('OAuth Authorize POST error response:', error.response?.data);
+-    return NextResponse.json(
+-      {
+-        error: 'authorization_error',
+-        error_description: error.response?.data?.error_description || error.message || 'Failed to authorize application'
+-      },
+-      { status: error.response?.status || 500 }
+-    );
++    return failure(error, 'POST', policy);
+   }
+ }

@@ -1,0 +1,238 @@
+{
+  "observedDate": "2026-10-18",
+  "evidenceType": "OWNER_SUPPLIED_METADATA",
+  "database": "portaldb",
+  "environment": "Portal development connection as requested; not independently queried by agent",
+  "sourceAttachmentSha256": "7ac8e35e4fc645e557c454c3e12cb4bc7b10ab96312d700b08ae693961c0562f",
+  "collections": [
+    {
+      "collection": "oauthauthorizationcodes",
+      "indexes": [
+        {
+          "name": "_id_",
+          "key": {
+            "_id": 1
+          },
+          "unique": false,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        },
+        {
+          "name": "code_1",
+          "key": {
+            "code": 1
+          },
+          "unique": true,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        },
+        {
+          "name": "clientId_1",
+          "key": {
+            "clientId": 1
+          },
+          "unique": false,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        },
+        {
+          "name": "userId_1",
+          "key": {
+            "userId": 1
+          },
+          "unique": false,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        },
+        {
+          "name": "used_1",
+          "key": {
+            "used": 1
+          },
+          "unique": false,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        },
+        {
+          "name": "expiresAt_1",
+          "key": {
+            "expiresAt": 1
+          },
+          "unique": false,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        },
+        {
+          "name": "clientId_1_userId_1",
+          "key": {
+            "clientId": 1,
+            "userId": 1
+          },
+          "unique": false,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        }
+      ]
+    },
+    {
+      "collection": "oauthaccesstokens",
+      "indexes": [
+        {
+          "name": "_id_",
+          "key": {
+            "_id": 1
+          },
+          "unique": false,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        },
+        {
+          "name": "tokenHash_1",
+          "key": {
+            "tokenHash": 1
+          },
+          "unique": true,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        },
+        {
+          "name": "clientId_1",
+          "key": {
+            "clientId": 1
+          },
+          "unique": false,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        },
+        {
+          "name": "userId_1",
+          "key": {
+            "userId": 1
+          },
+          "unique": false,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        },
+        {
+          "name": "expiresAt_1",
+          "key": {
+            "expiresAt": 1
+          },
+          "unique": false,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        },
+        {
+          "name": "revoked_1",
+          "key": {
+            "revoked": 1
+          },
+          "unique": false,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        },
+        {
+          "name": "clientId_1_expiresAt_1",
+          "key": {
+            "clientId": 1,
+            "expiresAt": 1
+          },
+          "unique": false,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        }
+      ]
+    },
+    {
+      "collection": "oauthrefreshtokens",
+      "indexes": [
+        {
+          "name": "_id_",
+          "key": {
+            "_id": 1
+          },
+          "unique": false,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        },
+        {
+          "name": "token_1",
+          "key": {
+            "token": 1
+          },
+          "unique": true,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        },
+        {
+          "name": "clientId_1",
+          "key": {
+            "clientId": 1
+          },
+          "unique": false,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        },
+        {
+          "name": "userId_1",
+          "key": {
+            "userId": 1
+          },
+          "unique": false,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        },
+        {
+          "name": "expiresAt_1",
+          "key": {
+            "expiresAt": 1
+          },
+          "unique": false,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        },
+        {
+          "name": "revoked_1",
+          "key": {
+            "revoked": 1
+          },
+          "unique": false,
+          "sparse": false,
+          "hasPartialFilter": false,
+          "hasCollation": false
+        }
+      ]
+    }
+  ],
+  "assessment": {
+    "existingAuthorizationCodeUniqueness": "PASS",
+    "matchingIndex": "code_1",
+    "accessTokenHashUniqueness": "PRESENT: tokenHash_1, unique, full, no reported collation",
+    "refreshTokenUniqueness": "PRESENT: token_1, unique, full, no reported collation",
+    "strictCollectionsReadiness": "NOT_CHECKED_NOT_PREPARED",
+    "legacyFreshAutoIndexDefect": "SOURCE_DEFECT_REMAINS; supplied existing indexes do not repair source declarations",
+    "databaseMutations": "NONE",
+    "documentReads": "NONE",
+    "acceptance": "Existing code uniqueness prerequisite only; no deployed strict auth or full M1b acceptance"
+  },
+  "checkedRuntimeSourceSha256": "47820f419a3d94ee08dd49f97561b03c87fd952d8f8df5b893120bd731408263"
+}

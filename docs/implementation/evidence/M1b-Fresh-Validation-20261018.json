@@ -1,0 +1,132 @@
+{
+  "date": "2026-10-18",
+  "scope": "LOCAL_FRESH_DEPENDENCIES_ONLY_NOT_DEPLOYED",
+  "ownerInstall": {
+    "node": "v22.23.3",
+    "npm": "10.9.9",
+    "results": [
+      {
+        "target": "Portal",
+        "source": "e54028d0a3a9fa22fdac2acca1f84744df115225",
+        "path": "C:\\Users\\User\\AppData\\Local\\Temp\\VYNVORI-M1b-20261018\\portal-release-e54028d0",
+        "npmCiExit": 0,
+        "independentNodeModules": true,
+        "sourceAndLocksUnchanged": true,
+        "status": "PASS_INSTALL_ONLY"
+      },
+      {
+        "target": "Core",
+        "source": "2c7f0113dd0c2b1566ad88f69fb9a7cc675387fc",
+        "path": "C:\\Users\\User\\AppData\\Local\\Temp\\VYNVORI-M1b-20261018\\core-release-2c7f0113",
+        "npmCiExit": 0,
+        "independentNodeModules": true,
+        "sourceAndLocksUnchanged": true,
+        "status": "PASS_INSTALL_ONLY"
+      }
+    ],
+    "note": "Install receipt only; no tests, migration, registration, tag, push or deployment"
+  },
+  "portalFreshV8": {
+    "before": {
+      "suitesPassed": 114,
+      "suitesFailed": 30,
+      "testsPassed": 732,
+      "testsFailed": 19
+    },
+    "after": {
+      "suitesPassed": 114,
+      "suitesFailed": 30,
+      "testsPassed": 732,
+      "testsFailed": 19
+    },
+    "failedSuiteIdentitiesPreserved": true,
+    "failedAssertionIdentitiesPreserved": true,
+    "allPriorAssertionsPreserved": true
+  },
+  "portalV9AgainstBaseline": {
+    "before": {
+      "suitesPassed": 102,
+      "suitesFailed": 30,
+      "testsPassed": 587,
+      "testsFailed": 19
+    },
+    "after": {
+      "suitesPassed": 114,
+      "suitesFailed": 30,
+      "testsPassed": 748,
+      "testsFailed": 19
+    },
+    "failedSuiteIdentitiesPreserved": true,
+    "failedAssertionIdentitiesPreserved": true,
+    "allPriorAssertionsPreserved": true
+  },
+  "portalV9AgainstFreshV8": {
+    "before": {
+      "suitesPassed": 114,
+      "suitesFailed": 30,
+      "testsPassed": 732,
+      "testsFailed": 19
+    },
+    "after": {
+      "suitesPassed": 114,
+      "suitesFailed": 30,
+      "testsPassed": 748,
+      "testsFailed": 19
+    },
+    "failedSuiteIdentitiesPreserved": true,
+    "failedAssertionIdentitiesPreserved": true,
+    "allPriorAssertionsPreserved": true
+  },
+  "coreFresh": {
+    "before": {
+      "suitesPassed": 25,
+      "suitesFailed": 2,
+      "testsPassed": 176,
+      "testsFailed": 22
+    },
+    "after": {
+      "suitesPassed": 25,
+      "suitesFailed": 2,
+      "testsPassed": 176,
+      "testsFailed": 22
+    },
+    "failedSuiteIdentitiesPreserved": true,
+    "failedAssertionIdentitiesPreserved": true,
+    "allPriorAssertionsPreserved": true
+  },
+  "coreAgainstBaseline": {
+    "before": {
+      "suitesPassed": 24,
+      "suitesFailed": 2,
+      "testsPassed": 157,
+      "testsFailed": 22
+    },
+    "after": {
+      "suitesPassed": 25,
+      "suitesFailed": 2,
+      "testsPassed": 176,
+      "testsFailed": 22
+    },
+    "failedSuiteIdentitiesPreserved": true,
+    "failedAssertionIdentitiesPreserved": true,
+    "allPriorAssertionsPreserved": true
+  },
+  "rawEvidenceHashes": {
+    "fresh-install-owner-receipt.json": "3ac3c11223f75dc9a13f60aa6496c9c4113c63a724f8163ec9826b8eb316180f",
+    "portal-fresh-candidate-v8.json": "2a82cc6726a4a94e0328b55114344945a63608c5519f62a1624aac37103edd6a",
+    "portal-fresh-candidate-v9.json": "1d680194a7bb84b1a4a2d9f2c42f43055c1dd68cdef30380281ede0c5050afb2",
+    "core-fresh-candidate.json": "913b62f81755024fb6a3a89b779e459a60e054391b6f8ab87b4210460eef90b4",
+    "portal-contact-red.json": "367091e20d2948def302cb55f742b9830536c4c5685a62e4693239e928bccc0a"
+  },
+  "contactTests": {
+    "newPassingCases": 16,
+    "oauthPassingCases": 281,
+    "oauthSuites": 24,
+    "jointSourceCases": 3,
+    "lint": "PASS existing config; affected source/test allowlist",
+    "redPhase": "10 new authority failures before implementation; original 25 authority assertions passed"
+  },
+  "registration": "BLOCKED",
+  "deployment": "BLOCKED",
+  "m1b": "NOT_COMPLETE"
+}

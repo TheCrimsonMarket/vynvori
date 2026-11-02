@@ -1,0 +1,78 @@
+{
+  "date": "2026-10-18",
+  "status": "EXECUTED_PASS_LOCAL_IMAGE_PROBES_ONLY",
+  "ownerApproval": "APPROVED_LOCAL_BUILD_ONLY",
+  "script": "../artifacts/M1b-Build-Only-Validation-20261018.ps1",
+  "scriptSha256": "292c2f3496e7e6d7fdeee194a9c25070c7dbc4403e3799c45d3e178c703da5b4",
+  "probe": "../artifacts/M1b-Image-Runtime-Probe-20261018.cjs",
+  "probeSha256": "b14858d73447700405e9b9ddf06cbc5b175f76196d5ca382dba1ea2a4e9c2bb9",
+  "source": {
+    "Portal": "35a47c9d6d7b41adbed5cc6556a4e9bbe78269ba",
+    "Core": "30efb9e295ccdf4e6a51c3c3d8d2b05c6494381f"
+  },
+  "scope": "OWNER_LOCAL_IMAGE_BUILDS_AND_NETWORK_DISABLED_SYNTHETIC_PROBES_ONLY",
+  "build": "Core exit 0; Portal completed image verified/reused, original build exit not captured",
+  "imagePush": false,
+  "gitTag": false,
+  "deployment": false,
+  "databaseMutation": false,
+  "secretsGenerated": false,
+  "probeLimit": "Production dependency/module load, Portal strict default-off and synthetic JWT binding, Core compiled route presence/exports. Not full application, live auth, deployed legacy regression or M1b acceptance.",
+  "preparationVerifiedDate": "2026-10-19",
+  "checks": {
+    "probeSyntax": "PASS_NODE_CHECK",
+    "windowsPowerShellPreview": "PASS_READ_ONLY_WINDOWS_POWERSHELL_5_1",
+    "sourceHeadsAndTrees": "MATCH_VERIFIED_MERGED_COMMITS",
+    "privateConfigContents": "NOT_PRINTED",
+    "dockerBuild": "OWNER_EXECUTED_SEE_RESULT_CAVEAT",
+    "runtimeProbe": "PASS_BOTH_NODE_20_17_0_IMAGE_PROBES_ONLY"
+  },
+  "portalProbeEntrypoint": "Image production global tsx CLI; no app server started",
+  "authorization": {
+    "date": "2026-10-19",
+    "source": "Direct founder answer: Approve local build/probe validation only",
+    "executor": "Owner per parent AGENTS npm-install delegation",
+    "allowed": "Local Docker image builds using existing development inputs/private BuildKit npm configuration, network-disabled synthetic probes",
+    "excluded": [
+      "Image push/registry publication",
+      "Git release tags/pipelines",
+      "Registration/new live credentials",
+      "Storage/config/IAM/domain changes",
+      "Deployment/production activation"
+    ]
+  },
+  "priorScriptSha256": "077122ecfa250303bcf30ba0d84930b99d66e181d8fb4994b3f645e84a462091",
+  "ownerReportedPreflightFailure": "Buildx inspect rejected --format before output-directory creation/build; actual builder v0.37.1 supports plain inspect",
+  "builderCompatibilityCorrection": {
+    "date": "2026-10-19",
+    "installedBuildx": "v0.37.1",
+    "issue": "inspect --format unsupported; owner attempt stopped before output directory/build",
+    "fix": "Plain inspect with fail-closed Docker driver/default endpoint validation",
+    "actualReadOnlyPowerShell51Preflight": "PASS",
+    "requiredBuildCliOptions": "VERIFIED_FROM_INSTALLED_HELP",
+    "validBuilderFixture": "PASS",
+    "unsafeOrMalformedBuilderFixturesRejected": 4,
+    "imageBuild": "NOT_RUN_BY_AGENT",
+    "sourceAndProbeUnchanged": true,
+    "approval": "EXISTING_LOCAL_BUILD_ONLY_APPROVAL_RETAINED",
+    "retry": "Same owner-run command; no cleanup needed while evidence directory remains absent"
+  },
+  "nativeHelperSha256": "c5a592d6fb028fcb0dda5eaae365be8e0df3c7a7a7927ed1332afbefd2eea6eb",
+  "nativeStderrCorrection": {
+    "date": "2026-10-19",
+    "previousScriptSha256": "82be88dd308fbea224d0e2627f8a7cb5ade0eae766ca7e9cf520c79c89d06256",
+    "cause": "Windows PowerShell 5.1 Stop preference promotes native stderr progress to NativeCommandError despite completed image build",
+    "redReproduction": "PASS: harmless native exit-zero/stderr fixture reproduces exact NativeCommandError",
+    "greenRegression": "PASS: stdout/stderr separated; exit zero succeeds, exit seven preserved, seven difficult Windows arguments round-trip",
+    "processCapture": "System.Diagnostics.Process, shell disabled, hidden child, async byte streams, private CreateNew logs, 30-second heartbeat",
+    "resume": "Explicit owner -ResumeExisting; image ID/tag/source label required; no matching live worker; fresh attempt directory; retain old logs/IDs/receipts",
+    "recoveredPortalImage": "sha256:c64402c587ca92283bd78d15fd1e4834bc3ac27afb3fd49304194f6ea4c308b5",
+    "imageLabelMatchesSource": "35a47c9d6d7b41adbed5cc6556a4e9bbe78269ba",
+    "priorBuildExit": "NOT_CAPTURED_DUE_NATIVE_STDERR_EXCEPTION",
+    "existingApproval": "RETAINED_LOCAL_OWNER_BUILD_PROBE_ONLY",
+    "readOnlyResumePreflight": "PASS_WINDOWS_POWERSHELL_5_1_ACTUAL_DOCKER_METADATA; PORTAL_REUSE_VERIFIED_CORE_ABSENT",
+    "agentBuildOrImageProbe": "NOT_RUN",
+    "evidenceOverwriteNegative": "PASS_EXISTING_LOG_UNCHANGED_NO_CHILD_START"
+  },
+  "executionReceipt": "M1b-Local-Image-Validation-Result-20261019.json"
+}

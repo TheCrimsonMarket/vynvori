@@ -1,0 +1,107 @@
+{
+  "date": "2026-10-18",
+  "timezone": "Asia/Dhaka",
+  "scope": "Local Portal prerequisite candidate only; no M1b/live acceptance",
+  "vynvoriBase": "262489d8a5c367e579839806d7e8554a394dcd2a",
+  "portalBase": "dd6f673a11b2a2d34a688bb01729ea5a25f45d2e",
+  "candidateFiles": [
+    {
+      "path": "src/service/oauthStrictAccessVerifier.js",
+      "sha256": "5bdc6e149201fad6868bc547e95d7f22aa84d230649af5eae27711a18a8c5180"
+    },
+    {
+      "path": "src/__tests__/oauth-legacy-compatibility.test.js",
+      "sha256": "462f71a155a38d2260d6c9f5f98cbe8e77e0cebd1157675e64a7e05b86d09b16"
+    },
+    {
+      "path": "src/__tests__/oauth-strict-access-verifier.test.js",
+      "sha256": "452c15a4a3390d0515505a74b0828e18e8c54b3831f6d842dcff6e7b990b8475"
+    }
+  ],
+  "oauth": {
+    "baselineTests": 120,
+    "candidateSuites": 14,
+    "candidateTests": 165,
+    "failedTests": 0
+  },
+  "fullSuite": {
+    "candidateFailedTests": 19,
+    "baselinePassedSuites": 101,
+    "candidatePassedSuites": 103,
+    "releaseAcceptance": "BLOCKED_EXISTING_FAILURES_AND_INCOMPLETE_CONSUMER_COVERAGE",
+    "candidatePassedTests": 613,
+    "changedFailureSuites": [],
+    "baselineFailedTests": 19,
+    "existingFailedSuites": [
+      "account-update-comprehensive.test.js",
+      "giveawayPassportEntrySyncService.test.js",
+      "google-profile-email.test.js",
+      "handleWebhook.integration.test.js",
+      "listing-delete-authorization.test.js",
+      "paypal-approved-order.test.ts",
+      "paypal-capture-database.test.js",
+      "paypal-capture-referral.test.js",
+      "paypal-checkout-order.test.js",
+      "paypal-ipn-missing-product.test.js",
+      "paypal-ipn-recurring.test.js",
+      "paypal-ipn-subscription.test.js",
+      "paypal-sale-webhook.test.ts",
+      "paypal-subscription-debug.test.js",
+      "paypal-subscription-fixed.test.js",
+      "paypal-subscription-recurring.test.js",
+      "paypal-subscription.test.js",
+      "paypal-trial-subscription.test.js",
+      "paypal-webhook-handler.test.js",
+      "pricing-and-points-verification.test.js",
+      "stripe-checkout-session.test.js",
+      "stripe-debug.test.js",
+      "stripe-subscription-recurring.test.js",
+      "stripe-subscription.test.js",
+      "stripe-trial-subscription.test.js",
+      "subscription-utils-oto.test.js",
+      "subscriptionCountSocketService.test.js",
+      "subscriptionService.cancelTrial.test.js",
+      "trade-notification-wtb-similarity.test.js",
+      "user-service-connect-account.test.js"
+    ],
+    "candidateFailedSuites": 30,
+    "baselineFailedSuites": 30,
+    "baselinePassedTests": 568,
+    "changedFailureTests": []
+  },
+  "sdk": {
+    "passedTests": 45,
+    "localSource": "f60bde771cd6274e89162e4089830cb0998b6207",
+    "passedSuites": 21,
+    "publishedArtifactProvenance": "NOT_VERIFIED"
+  },
+  "lint": "PASS: three candidate files with existing config and node,jest environments",
+  "existingTrackedPortalBytes": "UNCHANGED: git diff --exit-code passed",
+  "liveCatalog": {
+    "authentication": "none",
+    "meaning": "Public ingress only; not deployed revision or auth proof",
+    "status": 200,
+    "url": "https://dev.portal.raum.au/mana/oauth/catalog"
+  },
+  "portalDeployedRevision": "OWNER_REPORTED_SOURCE_SHA_AND_POD_DIGEST; independent pipeline attestation unavailable",
+  "developmentIndexMetadataReceipt": "M1b-Portal-Development-Indexes-20261018.json",
+  "registration": "BLOCKED",
+  "deployment": "BLOCKED",
+  "rawLocalEvidence": "C:\\Users\\User\\AppData\\Local\\Temp\\VYNVORI-M1b-20261018",
+  "founderSuppliedDeployment": {
+    "namespace": "dev-raum-au",
+    "pod": "service-portal-0",
+    "workload": "service-portal",
+    "image": "cr.raum.au/service.portal:005.3258.000.000",
+    "imageID": "cr.raum.au/service.portal@sha256:22cb14daec819ab158c6dbf43325b83cff1d03f114eaf278ea41624a40a4bac7",
+    "readyReplicas": 1,
+    "currentRevision": "service-portal-68d4fd86dd",
+    "updateRevision": "service-portal-68d4fd86dd",
+    "source": "Founder dashboard screenshots and selected YAML metadata; not a live agent cluster query",
+    "tagConvention": "Nonzero final segment: development only. Final 000: development then production",
+    "localMatchingTag": "V005.3258.000.000",
+    "localTagCommit": "e54028d0a3a9fa22fdac2acca1f84744df115225",
+    "buildToDigestSourceAttestation": "OWNER_REPORTED_SOURCE_SHA; pipeline URL and independent attestation not supplied",
+    "ownerReportedBuildSourceCommit": "e54028d0a3a9fa22fdac2acca1f84744df115225"
+  }
+}

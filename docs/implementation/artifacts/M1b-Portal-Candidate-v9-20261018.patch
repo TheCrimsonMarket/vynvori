@@ -1,0 +1,2565 @@
+diff --git a/src/__tests__/oauth-legacy-compatibility.test.js b/src/__tests__/oauth-legacy-compatibility.test.js
+new file mode 100644
+index 00000000..3f356e21
+--- /dev/null
++++ b/src/__tests__/oauth-legacy-compatibility.test.js
+@@ -0,0 +1,74 @@
++// Characterization of existing behavior, not approval to reuse it for strict clients.
++import crypto from 'crypto';
++import jwt from 'jsonwebtoken';
++import { __models } from 'mongoose';
++import {
++  generateTokens, refreshAccessToken, verifyAccessToken, revokeToken,
++} from '../service/oauthService';
++
++jest.mock('mongoose', () => {
++  const models = {
++    oauthClient: { findOne: jest.fn() },
++    oauthAuthorizationCode: {},
++    oauthAccessToken: { create: jest.fn(), findOne: jest.fn() },
++    oauthRefreshToken: { create: jest.fn(), findOne: jest.fn() },
++    userBN: { findById: jest.fn() },
++    customer: {},
++  };
++  return { __esModule: true, __models: models, default: { model: (name) => models[name] || {} } };
++});
++
++describe('legacy OAuth compatibility baseline', () => {
++  const subject = '507f1f77bcf86cd799439011';
++  beforeEach(() => {
++    jest.resetAllMocks();
++    __models.userBN.findById.mockResolvedValue({ userName: 'Synthetic', displayName: 'Synthetic' });
++    __models.oauthAccessToken.create.mockResolvedValue({});
++    __models.oauthRefreshToken.create.mockResolvedValue({ token: 'synthetic-refresh' });
++  });
++
++  test.each([undefined, 'service.synthetic'])('preserves human token contract with audience %s', async (audience) => {
++    const result = await generateTokens(subject, 'synthetic-legacy', ['profile'], audience);
++    expect(Object.keys(result).sort()).toEqual(['access_token', 'expires_in', 'refresh_token', 'scope', 'token_type']);
++    const claims = jwt.verify(result.access_token, process.env.OAUTH_TOKEN_SECRET);
++    expect(claims.iss).toBeUndefined();
++    expect(claims.aud).toBe(audience);
++    expect(claims.exp - claims.iat).toBe(3600);
++    expect(claims).toMatchObject({
++      sub: subject, client_id: 'synthetic-legacy', type: 'access_token', scope: 'profile',
++    });
++  });
++
++  test('existing valid token without issuer or audience remains accepted by legacy verifier', async () => {
++    const token = jwt.sign({ sub: subject, client_id: 'synthetic-legacy', type: 'access_token' }, process.env.OAUTH_TOKEN_SECRET, { expiresIn: 120 });
++    __models.oauthAccessToken.findOne.mockResolvedValue({ isValid: () => true });
++    expect(await verifyAccessToken(token)).toMatchObject({ sub: subject });
++    expect(__models.oauthAccessToken.findOne).toHaveBeenCalledWith({ tokenHash: crypto.createHash('sha256').update(token).digest('hex') });
++  });
++
++  test.each(['revoked', 'missing', 'bad-signature', 'expired', 'wrong-type'])('legacy verifier still rejects %s', async (variant) => {
++    const token = jwt.sign({ sub: subject, type: variant === 'wrong-type' ? 'refresh_token' : 'access_token' }, variant === 'bad-signature' ? 'synthetic-wrong-key' : process.env.OAUTH_TOKEN_SECRET, { expiresIn: variant === 'expired' ? -1 : 120 });
++    __models.oauthAccessToken.findOne.mockResolvedValue(variant === 'missing' ? null : { isValid: () => variant !== 'revoked' });
++    expect(await verifyAccessToken(token)).toBeNull();
++  });
++
++  test('legacy refresh remains reusable and does not acquire one-use semantics', async () => {
++    const stored = {
++      userId: subject, scopes: ['profile'], isValid: () => true, use: jest.fn(), revoke: jest.fn(),
++    };
++    __models.oauthRefreshToken.findOne.mockResolvedValue(stored);
++    __models.oauthClient.findOne.mockReturnValue({ select: async () => ({ allowedGrants: ['authorization_code', 'refresh_token'], allowedScopes: ['profile'] }) });
++    expect((await refreshAccessToken('synthetic-old-refresh', 'synthetic-legacy')).refresh_token).toBe('synthetic-refresh');
++    expect((await refreshAccessToken('synthetic-old-refresh', 'synthetic-legacy')).refresh_token).toBe('synthetic-refresh');
++    expect(stored.use).toHaveBeenCalledTimes(2);
++    expect(stored.revoke).not.toHaveBeenCalled();
++  });
++
++  test('legacy revoke keeps its single-record behavior', async () => {
++    const stored = { revoke: jest.fn() };
++    __models.oauthRefreshToken.findOne.mockResolvedValue(stored);
++    expect(await revokeToken('synthetic-refresh', 'refresh_token')).toEqual({ success: true });
++    expect(stored.revoke).toHaveBeenCalledTimes(1);
++    expect(__models.oauthAccessToken.findOne).not.toHaveBeenCalled();
++  });
++});
+diff --git a/src/__tests__/oauth-strict-access-verifier.test.js b/src/__tests__/oauth-strict-access-verifier.test.js
+new file mode 100644
+index 00000000..24ddfb07
+--- /dev/null
++++ b/src/__tests__/oauth-strict-access-verifier.test.js
+@@ -0,0 +1,105 @@
++import crypto from 'crypto';
++import jwt from 'jsonwebtoken';
++import { createStrictAccessVerifier } from '../service/oauthStrictAccessVerifier';
++
++describe('isolated strict-client access verifier candidate', () => {
++  const signingKey = crypto.randomBytes(32);
++  const policy = {
++    issuer: 'urn:synthetic:authority', audience: 'urn:synthetic:vynvori', clientId: 'synthetic-strict', maxTokenAgeSeconds: 300,
++  };
++  const subject = '507f1f77bcf86cd799439011';
++  let readClient;
++  let readToken;
++  let verify;
++  const mint = (patch = {}, options = {}) => jwt.sign({
++    sub: subject, client_id: policy.clientId, iss: policy.issuer, aud: policy.audience, type: 'access_token', scope: 'profile', jti: crypto.randomUUID(), ...patch,
++  }, signingKey, { expiresIn: 120, ...options });
++  beforeEach(() => {
++    readClient = jest.fn(async () => ({
++      clientId: policy.clientId, active: true, strictIdentity: { enabled: true, issuer: policy.issuer, audience: policy.audience }, allowedGrants: ['authorization_code', 'refresh_token'], allowedScopes: ['profile'],
++    }));
++    readToken = jest.fn(async () => ({
++      userId: subject, clientId: policy.clientId, scopes: ['profile'], revoked: false, expiresAt: new Date(Date.now() + 120000),
++    }));
++    verify = createStrictAccessVerifier(policy, { signingKey, readClient, readToken });
++  });
++
++  test('returns only validated identity and binding, without credentials or profile data', async () => {
++    const token = mint({ email: 'synthetic@example.invalid', roles: ['admin'] });
++    const result = await verify(token);
++    expect(result).toEqual({
++      status: 'ok',
++      identity: {
++        issuer: policy.issuer, subject, clientId: policy.clientId, audience: policy.audience, expiresAt: expect.any(Number), verifiedAt: expect.any(Number),
++      },
++    });
++    expect(JSON.stringify(result)).not.toContain(token);
++    expect(JSON.stringify(result)).not.toContain('email');
++    expect(readClient).toHaveBeenCalledWith(policy.clientId);
++    expect(readToken).toHaveBeenCalledWith(crypto.createHash('sha256').update(token).digest('hex'));
++  });
++
++  test.each([
++    ['missing issuer', { iss: undefined }], ['wrong issuer', { iss: 'urn:other' }],
++    ['missing audience', { aud: undefined }], ['wrong audience', { aud: 'urn:other' }],
++    ['multiple audiences', { aud: [policy.audience, 'urn:other'] }],
++    ['wrong client', { client_id: 'other' }], ['missing client', { client_id: undefined }],
++    ['empty subject', { sub: '' }], ['service subject', { sub: 'service:synthetic' }],
++    ['wrong type', { type: 'refresh_token' }], ['missing jti', { jti: undefined }],
++    ['future issued-at', { iat: Math.floor(Date.now() / 1000) + 60 }],
++  ])('rejects %s before storage access', async (_name, patch) => {
++    expect(await verify(mint(patch))).toEqual({ status: 'unauthenticated' });
++    expect(readClient).not.toHaveBeenCalled();
++    expect(readToken).not.toHaveBeenCalled();
++  });
++
++  test.each([['expired', { expiresIn: -1 }], ['excess lifetime', { expiresIn: 1000 }], ['wrong algorithm', { algorithm: 'HS384' }], ['not active', { notBefore: 60 }], ['missing iat', { noTimestamp: true }]])('rejects %s token', async (_name, options) => {
++    expect(await verify(mint({}, options))).toEqual({ status: 'unauthenticated' });
++  });
++
++  test('rejects missing expiry', async () => {
++    const token = jwt.sign({
++      sub: subject, client_id: policy.clientId, iss: policy.issuer, aud: policy.audience, type: 'access_token', scope: 'profile', jti: crypto.randomUUID(),
++    }, signingKey);
++    expect(await verify(token)).toEqual({ status: 'unauthenticated' });
++  });
++
++  test('rejects forged signature and oversized/malformed input', async () => {
++    const forged = jwt.sign({ sub: subject }, crypto.randomBytes(32));
++    await Promise.all([forged, '', null, {}, 'x'.repeat(16385)].map(async (token) => {
++      expect(await verify(token)).toEqual({ status: 'unauthenticated' });
++    }));
++  });
++
++  test.each([
++    ['missing client', null], ['inactive', { active: false }], ['legacy downgrade', { strictIdentity: undefined }],
++    ['disabled strict policy', { strictIdentity: { enabled: false } }], ['changed scopes', { allowedScopes: [] }],
++    ['service client', { allowedGrants: ['client_credentials'] }],
++    ['changed issuer', { strictIdentity: { enabled: true, issuer: 'urn:other', audience: policy.audience } }],
++  ])('rejects %s registration', async (_name, patch) => {
++    const base = await readClient();
++    readClient.mockResolvedValue(patch === null ? null : { ...base, ...patch });
++    expect(await verify(mint())).toEqual({ status: 'unauthenticated' });
++  });
++
++  test.each([
++    ['missing', null], ['revoked', { revoked: true }], ['wrong subject', { userId: 'other' }],
++    ['wrong client', { clientId: 'other' }], ['expired record', { expiresAt: new Date(0) }],
++    ['scope mismatch', { scopes: ['profile', 'email'] }],
++  ])('rejects %s token record', async (_name, patch) => {
++    const base = await readToken();
++    readToken.mockResolvedValue(patch === null ? null : { ...base, ...patch });
++    expect(await verify(mint())).toEqual({ status: 'unauthenticated' });
++  });
++
++  test('storage outage is unavailable and contains no raw exception or credentials', async () => {
++    readToken.mockRejectedValue(new Error('synthetic sensitive upstream body'));
++    expect(await verify(mint())).toEqual({ status: 'unavailable' });
++  });
++
++  test('misconfigured policy or adapters cannot construct an enabled verifier', () => {
++    expect(() => createStrictAccessVerifier({ ...policy, issuer: '' }, { signingKey, readClient, readToken })).toThrow();
++    expect(() => createStrictAccessVerifier(policy, { signingKey: '', readClient, readToken })).toThrow();
++    expect(() => createStrictAccessVerifier(policy, { signingKey, readClient: null, readToken })).toThrow();
++  });
++});
+diff --git a/src/__tests__/oauth-strict-authority.test.js b/src/__tests__/oauth-strict-authority.test.js
+new file mode 100644
+index 00000000..10defcd5
+--- /dev/null
++++ b/src/__tests__/oauth-strict-authority.test.js
+@@ -0,0 +1,297 @@
++import crypto from 'crypto';
++import { MongoClient, ObjectId } from 'mongodb';
++import { MongoMemoryServer } from 'mongodb-memory-server';
++import jwt from 'jsonwebtoken';
++import { createStrictFamilyStore } from '../service/oauthStrictFamilyStore';
++import { createStrictAuthority } from '../service/oauthStrictAuthority';
++
++const integration = process.env.PORTAL_STRICT_TEST_MONGO === '1' ? describe : describe.skip;
++
++integration('isolated strict authority with real JWT and disposable MongoDB', () => {
++  let server;
++  let connection;
++  let families;
++  let codes;
++  let store;
++  let authority;
++  let registration;
++  let readSubjectState;
++  const subject = '507f1f77bcf86cd799439011';
++  const secret = crypto.randomBytes(32).toString('hex');
++  const signingKey = crypto.randomBytes(32);
++  const policy = {
++    issuer: 'urn:synthetic:authority', audience: 'urn:synthetic:product', clientId: 'synthetic-strict', redirectUri: 'https://synthetic.invalid/auth/callback', accessTtlSeconds: 120, familyTtlSeconds: 600, maxRotations: 5,
++  };
++
++  beforeAll(async () => {
++    if (!process.env.MONGOMS_SYSTEM_BINARY || process.env.MONGOMS_RUNTIME_DOWNLOAD !== 'false') throw new Error('Explicit existing binary and no downloads required');
++    server = await MongoMemoryServer.create({ binary: { systemBinary: process.env.MONGOMS_SYSTEM_BINARY }, instance: { dbName: 'm1b_synthetic_authority' } });
++    connection = await MongoClient.connect(server.getUri());
++    const db = connection.db('m1b_synthetic_authority');
++    families = db.collection('oauth_strict_families_v1');
++    codes = db.collection('synthetic_authorization_codes');
++  });
++  beforeEach(async () => {
++    await families.deleteMany({});
++    await codes.deleteMany({});
++    store = createStrictFamilyStore({ families, authorizationCodes: codes });
++    await store.ensureIndexes();
++    registration = {
++      clientId: policy.clientId, clientSecret: secret, active: true, audience: policy.audience, strictIdentity: { enabled: true, issuer: policy.issuer, audience: policy.audience }, pkcePolicy: 'required_s256', redirectUris: [policy.redirectUri], allowedGrants: ['authorization_code', 'refresh_token'], allowedScopes: ['profile'],
++    };
++    readSubjectState = jest.fn(async () => ({ active: true, tokenVersion: 0 }));
++    authority = createStrictAuthority(policy, {
++      signingKey, readClient: async () => registration, readSubjectState, store,
++    });
++  });
++  afterAll(async () => {
++    if (connection) await connection.close();
++    if (server) await server.stop();
++  });
++
++  async function input(patch = {}) {
++    const verifier = crypto.randomBytes(32).toString('base64url');
++    const code = crypto.randomBytes(32).toString('hex');
++    await codes.insertOne({
++      _id: new ObjectId(),
++      code,
++      clientId: policy.clientId,
++      userId: new ObjectId(subject),
++      scopes: ['profile'],
++      redirectUri: policy.redirectUri,
++      codeChallenge: crypto.createHash('sha256').update(verifier).digest('base64url'),
++      codeChallengeMethod: 'S256',
++      strictContext: {
++        issuer: policy.issuer, audience: policy.audience, clientId: policy.clientId, tokenVersion: 0,
++      },
++      used: false,
++      expiresAt: new Date(Date.now() + 60000),
++      ...patch,
++    });
++    return {
++      clientSecret: secret, code, codeVerifier: verifier, redirectUri: policy.redirectUri,
++    };
++  }
++  async function issued() {
++    const result = await authority.exchange(await input());
++    expect(result.status).toBe('ok');
++    return result.tokens;
++  }
++
++  async function contactFixture(scopes = ['profile', 'email']) {
++    registration.allowedScopes = ['profile', 'email'];
++    const readContactProfile = jest.fn(async () => ({
++      subject, email: 'synthetic@example.invalid', emailVerified: true, displayName: 'Synthetic', roles: ['admin'], privateField: 'excluded',
++    }));
++    authority = createStrictAuthority(policy, {
++      signingKey, readClient: async () => registration, readSubjectState, store, readContactProfile,
++    });
++    const result = await authority.exchange(await input({ scopes }));
++    expect(result.status).toBe('ok');
++    return { readContactProfile, token: result.tokens.access_token };
++  }
++
++  test('contact profile requires granted email scope and returns only current contact fields', async () => {
++    const { token, readContactProfile } = await contactFixture();
++    const result = await authority.contactProfile({ clientSecret: secret, token });
++    expect(result).toMatchObject({
++      status: 'ok',
++      identity: { issuer: policy.issuer, subject },
++      profile: {
++        email: 'synthetic@example.invalid', emailVerified: true, displayName: 'Synthetic',
++      },
++    });
++    expect(Object.keys(result.profile).sort()).toEqual(['displayName', 'email', 'emailVerified']);
++    expect(readContactProfile).toHaveBeenCalledWith(subject);
++    readContactProfile.mockResolvedValue({ subject, email: 'changed@example.invalid', emailVerified: false });
++    expect((await authority.contactProfile({ clientSecret: secret, token })).profile).toEqual({ email: 'changed@example.invalid', emailVerified: false });
++  });
++
++  test('registered email scope does not substitute for consented token scope', async () => {
++    const { token, readContactProfile } = await contactFixture(['profile']);
++    expect(await authority.contactProfile({ clientSecret: secret, token })).toEqual({ status: 'insufficient_scope' });
++    expect(readContactProfile).not.toHaveBeenCalled();
++  });
++
++  test.each([null, '', 'invalid', 'a@b.invalid\r\ninjected', 'a'.repeat(255)])('missing or unusable email yields contact setup without placeholder: %p', async (email) => {
++    const { token, readContactProfile } = await contactFixture();
++    readContactProfile.mockResolvedValue({ subject, email, emailVerified: true });
++    expect(await authority.contactProfile({ clientSecret: secret, token })).toEqual({ status: 'contact_required' });
++  });
++
++  test('contact lookup cannot change subject or fabricate verified email', async () => {
++    const { token, readContactProfile } = await contactFixture();
++    readContactProfile.mockResolvedValue({ subject: '507f1f77bcf86cd799439012', email: 'other@example.invalid', emailVerified: true });
++    expect(await authority.contactProfile({ clientSecret: secret, token })).toEqual({ status: 'unauthenticated' });
++    readContactProfile.mockResolvedValue({ subject, email: 'synthetic@example.invalid', emailVerified: 'true' });
++    expect((await authority.contactProfile({ clientSecret: secret, token })).profile.emailVerified).toBe(false);
++  });
++
++  test('bad client secret, revoked family or scope removal prevents contact reads', async () => {
++    const { token, readContactProfile } = await contactFixture();
++    expect(await authority.contactProfile({ clientSecret: 'wrong', token })).toEqual({ status: 'unauthenticated' });
++    registration.allowedScopes = ['profile'];
++    expect(await authority.contactProfile({ clientSecret: secret, token })).toEqual({ status: 'unauthenticated' });
++    registration.allowedScopes = ['profile', 'email'];
++    await authority.revoke({ clientSecret: secret, token });
++    expect(await authority.contactProfile({ clientSecret: secret, token })).toEqual({ status: 'unauthenticated' });
++    expect(readContactProfile).not.toHaveBeenCalled();
++  });
++
++  test('central revocation during contact lookup denies the response; storage failures are sanitized', async () => {
++    const { token, readContactProfile } = await contactFixture();
++    readContactProfile.mockRejectedValueOnce(new Error('synthetic-private-profile-error'));
++    expect(await authority.contactProfile({ clientSecret: secret, token })).toEqual({ status: 'unavailable' });
++    readContactProfile.mockImplementationOnce(async () => {
++      await authority.revoke({ clientSecret: secret, token });
++      return { subject, email: 'synthetic@example.invalid' };
++    });
++    expect(await authority.contactProfile({ clientSecret: secret, token })).toEqual({ status: 'unauthenticated' });
++  });
++
++  test('strict code exchange creates one private family and correctly bound token pair', async () => {
++    const tokens = await issued();
++    const claims = jwt.verify(tokens.access_token, signingKey, { issuer: policy.issuer, audience: policy.audience, algorithms: ['HS256'] });
++    expect(claims).toMatchObject({
++      sub: subject, client_id: policy.clientId, type: 'access_token', generation: 0,
++    });
++    expect(claims.exp - claims.iat).toBe(120);
++    expect(await authority.introspect({ clientSecret: secret, token: tokens.access_token })).toMatchObject({ status: 'ok', identity: { issuer: policy.issuer, subject, clientId: policy.clientId } });
++    const records = await families.find({}).toArray();
++    expect(records).toHaveLength(1);
++    expect(JSON.stringify(records)).not.toContain(tokens.access_token);
++    expect(JSON.stringify(records)).not.toContain(tokens.refresh_token);
++    expect(JSON.stringify(records)).not.toContain(secret);
++  });
++
++  test.each(['wrong-secret', 'wrong-callback', 'wrong-verifier', 'missing-verifier'])('rejects %s without consuming code', async (variant) => {
++    const request = await input();
++    if (variant === 'wrong-secret') request.clientSecret = 'wrong';
++    if (variant === 'wrong-callback') request.redirectUri = 'https://other.invalid/callback';
++    if (variant === 'wrong-verifier') request.codeVerifier = crypto.randomBytes(32).toString('base64url');
++    if (variant === 'missing-verifier') delete request.codeVerifier;
++    expect(await authority.exchange(request)).toEqual({ status: 'unauthenticated' });
++    expect((await codes.findOne({ code: request.code })).used).toBe(false);
++    expect(await families.countDocuments()).toBe(0);
++  });
++
++  test.each([{ scopes: ['profile', 'email'] }, { codeChallengeMethod: 'plain' }, { expiresAt: new Date(0) }, { used: true }])('rejects invalid code policy %j', async (patch) => {
++    expect(await authority.exchange(await input(patch))).toEqual({ status: 'unauthenticated' });
++    expect(await families.countDocuments()).toBe(0);
++  });
++
++  test('100 simultaneous exchanges have one family/token response', async () => {
++    const request = await input();
++    const results = await Promise.all(Array.from({ length: 100 }, () => authority.exchange(request)));
++    expect(results.filter((result) => result.status === 'ok')).toHaveLength(1);
++    expect(await families.countDocuments()).toBe(1);
++  });
++
++  test('refresh rotates once, invalidates old access and detects old-refresh replay', async () => {
++    const oldTokens = await issued();
++    const refreshed = await authority.refresh({ clientSecret: secret, refreshToken: oldTokens.refresh_token });
++    expect(refreshed.status).toBe('ok');
++    expect(refreshed.tokens.refresh_token).not.toBe(oldTokens.refresh_token);
++    expect(await authority.introspect({ clientSecret: secret, token: oldTokens.access_token })).toEqual({ status: 'unauthenticated' });
++    expect((await authority.introspect({ clientSecret: secret, token: refreshed.tokens.access_token })).status).toBe('ok');
++    expect(await authority.refresh({ clientSecret: secret, refreshToken: oldTokens.refresh_token })).toEqual({ status: 'reauth_required' });
++    expect(await authority.introspect({ clientSecret: secret, token: refreshed.tokens.access_token })).toEqual({ status: 'unauthenticated' });
++  });
++
++  test('100 parallel refreshes commit at most one rotation', async () => {
++    const tokens = await issued();
++    const results = await Promise.all(Array.from({ length: 100 }, () => authority.refresh({ clientSecret: secret, refreshToken: tokens.refresh_token })));
++    expect(results.filter((result) => result.status === 'ok')).toHaveLength(1);
++    expect((await families.findOne({})).generation).toBe(1);
++  });
++
++  test('revoke accepts refresh/access tokens and does not reveal unknown token existence', async () => {
++    const tokens = await issued();
++    expect(await authority.revoke({ clientSecret: secret, token: 'unknown-synthetic' })).toEqual({ status: 'ok' });
++    expect(await authority.revoke({ clientSecret: secret, token: tokens.access_token })).toEqual({ status: 'ok' });
++    expect(await authority.introspect({ clientSecret: secret, token: tokens.access_token })).toEqual({ status: 'unauthenticated' });
++    expect(await authority.refresh({ clientSecret: secret, refreshToken: tokens.refresh_token })).toEqual({ status: 'unauthenticated' });
++  });
++
++  test('wrong client credentials cannot introspect, refresh or revoke a family', async () => {
++    const tokens = await issued();
++    expect(await authority.introspect({ clientSecret: 'wrong', token: tokens.access_token })).toEqual({ status: 'unauthenticated' });
++    expect(await authority.refresh({ clientSecret: 'wrong', refreshToken: tokens.refresh_token })).toEqual({ status: 'unauthenticated' });
++    expect(await authority.revoke({ clientSecret: 'wrong', token: tokens.refresh_token })).toEqual({ status: 'unauthenticated' });
++    expect((await authority.introspect({ clientSecret: secret, token: tokens.access_token })).status).toBe('ok');
++  });
++
++  test('inactive subject or removed client enrollment denies every strict operation', async () => {
++    const tokens = await issued();
++    readSubjectState.mockResolvedValue(false);
++    expect(await authority.introspect({ clientSecret: secret, token: tokens.access_token })).toEqual({ status: 'unauthenticated' });
++    expect(await authority.refresh({ clientSecret: secret, refreshToken: tokens.refresh_token })).toEqual({ status: 'unauthenticated' });
++    registration.strictIdentity.enabled = false;
++    expect(await authority.exchange(await input())).toEqual({ status: 'unauthenticated' });
++  });
++
++  test('lost initial write acknowledgement reports unknown and cannot re-exchange the code', async () => {
++    const create = store.createFamily;
++    store.createFamily = async (record) => { await create(record); throw new Error('synthetic-lost-ack'); };
++    const request = await input();
++    expect(await authority.exchange(request)).toMatchObject({ status: 'outcome_unknown', operationId: expect.any(String) });
++    expect(await authority.exchange(request)).toEqual({ status: 'unauthenticated' });
++    expect(await families.countDocuments()).toBe(1);
++  });
++
++  test('lost rotation acknowledgement is unknown; old refresh replay never mints another pair', async () => {
++    const tokens = await issued();
++    const complete = store.completeRotation;
++    store.completeRotation = async (request) => { await complete(request); throw new Error('synthetic-lost-ack'); };
++    expect(await authority.refresh({ clientSecret: secret, refreshToken: tokens.refresh_token })).toMatchObject({ status: 'outcome_unknown' });
++    expect(await authority.refresh({ clientSecret: secret, refreshToken: tokens.refresh_token })).toEqual({ status: 'reauth_required' });
++    expect((await families.findOne({})).generation).toBe(1);
++  });
++
++  test('revocation during refresh prevents late token issuance', async () => {
++    const tokens = await issued();
++    const complete = store.completeRotation;
++    store.completeRotation = async (request) => { await store.revokeFamily(policy.clientId, request.familyId, new Date()); return complete(request); };
++    expect(await authority.refresh({ clientSecret: secret, refreshToken: tokens.refresh_token })).toEqual({ status: 'reauth_required' });
++    expect((await families.findOne({})).state).toBe('revoked');
++  });
++
++  test('revocation storage failure is unavailable rather than a false successful logout', async () => {
++    store.revokeByHash = async () => { throw new Error('synthetic-private-error'); };
++    expect(await authority.revoke({ clientSecret: secret, token: 'unknown-synthetic' })).toEqual({ status: 'unavailable' });
++  });
++
++  test('code issued before central token-version revocation cannot be exchanged', async () => {
++    const request = await input();
++    readSubjectState.mockResolvedValue({ active: true, tokenVersion: 1 });
++    expect(await authority.exchange(request)).toEqual({ status: 'unauthenticated' });
++    expect((await codes.findOne({ code: request.code })).used).toBe(false);
++  });
++
++  test('central token-version revocation denies existing access and refresh', async () => {
++    const tokens = await issued();
++    readSubjectState.mockResolvedValue({ active: true, tokenVersion: 1 });
++    expect(await authority.introspect({ clientSecret: secret, token: tokens.access_token })).toEqual({ status: 'unauthenticated' });
++    expect(await authority.refresh({ clientSecret: secret, refreshToken: tokens.refresh_token })).toEqual({ status: 'unauthenticated' });
++  });
++
++  test.each([
++    undefined,
++    { issuer: policy.issuer, audience: policy.audience, clientId: policy.clientId },
++    {
++      issuer: 'urn:other', audience: policy.audience, clientId: policy.clientId, tokenVersion: 0,
++    },
++  ])('missing or wrong strict authorization context fails closed: %j', async (strictContext) => {
++    expect(await authority.exchange(await input({ strictContext }))).toEqual({ status: 'unauthenticated' });
++    expect(await families.countDocuments()).toBe(0);
++  });
++
++  test('configuration needs explicit policy values, exact callback and a strong authority-only key', () => {
++    const deps = {
++      signingKey, readClient: async () => registration, readSubjectState, store,
++    };
++    expect(() => createStrictAuthority({ ...policy, accessTtlSeconds: undefined }, deps)).toThrow();
++    expect(() => createStrictAuthority({ ...policy, redirectUri: 'http://synthetic.invalid/callback' }, deps)).toThrow();
++    expect(() => createStrictAuthority(policy, { ...deps, signingKey: 'short' })).toThrow();
++  });
++});
+diff --git a/src/__tests__/oauth-strict-authorization-guard.test.js b/src/__tests__/oauth-strict-authorization-guard.test.js
+new file mode 100644
+index 00000000..2e7bee6d
+--- /dev/null
++++ b/src/__tests__/oauth-strict-authorization-guard.test.js
+@@ -0,0 +1,106 @@
++import crypto from 'crypto';
++import express from 'express';
++import cookieParser from 'cookie-parser';
++import request from 'supertest';
++import jwt from 'jsonwebtoken';
++import { createStrictAuthorizationGuard } from '../service/oauthStrictAuthorizationGuard';
++
++describe('strict authorization binds a current central session to code context', () => {
++  const key = crypto.randomBytes(32);
++  const subject = '507f1f77bcf86cd799439011';
++  const origin = 'https://synthetic.invalid';
++  const policy = {
++    clientId: 'synthetic-strict', issuer: origin, audience: 'urn:synthetic:product', redirectUri: 'https://product.invalid/callback',
++  };
++  const parameters = {
++    client_id: policy.clientId, redirect_uri: policy.redirectUri, response_type: 'code', state: crypto.randomBytes(32).toString('base64url'), code_challenge: crypto.randomBytes(32).toString('base64url'), code_challenge_method: 'S256',
++  };
++  let app;
++  let readSubjectState;
++  let readClient;
++  const mint = (patch = {}, options = {}) => jwt.sign({ _id: subject, tokenVersion: 0, ...patch }, key, { expiresIn: 300, ...options });
++  beforeEach(() => {
++    readSubjectState = jest.fn(async () => ({ active: true, tokenVersion: 0 }));
++    readClient = jest.fn(async () => ({
++      clientId: policy.clientId, active: true, audience: policy.audience, pkcePolicy: 'required_s256', redirectUris: [policy.redirectUri],
++    }));
++    app = express();
++    app.use(cookieParser());
++    app.use(express.json());
++    app.use((req, _res, next) => { req.user = { _id: subject }; next(); });
++    const guard = createStrictAuthorizationGuard({
++      resolvePolicy: async (id) => (id === policy.clientId ? policy : null), readClient, readSubjectState, refreshSigningKey: key, webOrigin: origin,
++    });
++    const handler = (req, res) => res.json({ context: req.strictAuthContext || null });
++    app.get('/authorize', guard, handler);
++    app.post('/authorize', guard, handler);
++  });
++  const get = (token = mint(), query = parameters) => request(app).get('/authorize').query(query).set('X-OAuth-Request-Origin', origin)
++    .set('Cookie', `refreshToken=${token}`);
++
++  test('creates immutable server context from verified refresh and current version', async () => {
++    const token = mint();
++    const response = await get(token);
++    expect(response.status).toBe(200);
++    expect(response.body.context).toEqual({
++      issuer: policy.issuer, audience: policy.audience, clientId: policy.clientId, tokenVersion: 0, authoritySessionHash: crypto.createHash('sha256').update(token).digest('hex'),
++    });
++    expect(JSON.stringify(response.body)).not.toContain(token);
++  });
++
++  test('legacy clients bypass strict dependencies and preserve their authorization path', async () => {
++    const response = await request(app).get('/authorize').query({ client_id: 'synthetic-legacy' });
++    expect(response.status).toBe(200);
++    expect(response.body).toEqual({ context: null });
++    expect(readSubjectState).not.toHaveBeenCalled();
++    expect(readClient).not.toHaveBeenCalled();
++  });
++
++  test.each([{ _id: 'other' }, { tokenVersion: 1 }, { tokenVersion: undefined }])('denies stale or mismatched central credentials: %j', async (claims) => {
++    expect((await get(mint(claims))).status).toBe(401);
++  });
++
++  test('central database version revocation denies an otherwise valid cookie', async () => {
++    readSubjectState.mockResolvedValue({ active: true, tokenVersion: 1 });
++    expect((await get()).status).toBe(401);
++  });
++
++  test.each([{ expiresIn: -1 }, { notBefore: 300 }, { algorithm: 'HS384' }, { noTimestamp: true }])('rejects invalid refresh token options %j', async (options) => {
++    expect((await get(mint({}, options))).status).toBe(401);
++  });
++
++  test.each([{ redirect_uri: 'https://other.invalid/callback' }, { code_challenge_method: 'plain' }, { state: '' }, { code_challenge: '' }])('rejects invalid transaction parameters %j', async (patch) => {
++    expect((await get(mint(), { ...parameters, ...patch })).status).toBe(400);
++  });
++
++  test('requires explicit same-origin proxy provenance and rejects hostile browser origin', async () => {
++    expect((await get().set('Origin', 'https://other.invalid')).status).toBe(403);
++    expect((await request(app).get('/authorize').query(parameters).set('Cookie', `refreshToken=${mint()}`)).status).toBe(403);
++  });
++
++  test('duplicate refresh cookies cannot choose an ambiguous session', async () => {
++    const token = mint();
++    expect((await get(token).set('Cookie', `refreshToken=${token}; refreshToken=${token}`)).status).toBe(401);
++  });
++
++  test('browser cannot replace server authorization context through a POST body', async () => {
++    const response = await request(app).post('/authorize').set('X-OAuth-Request-Origin', origin).set('Cookie', `refreshToken=${mint()}`)
++      .send({ ...parameters, strictAuthContext: { tokenVersion: 99 } });
++    expect(response.status).toBe(200);
++    expect(response.body.context.tokenVersion).toBe(0);
++  });
++
++  test('established consent POST omits response_type but cannot request another response type', async () => {
++    const { response_type: responseType, ...consent } = parameters;
++    expect(responseType).toBe('code');
++    const post = (body) => request(app).post('/authorize').set('X-OAuth-Request-Origin', origin).set('Cookie', `refreshToken=${mint()}`)
++      .send(body);
++    expect((await post({ ...consent, approved: true })).status).toBe(200);
++    expect((await post({ ...consent, response_type: 'token', approved: true })).status).toBe(400);
++  });
++
++  test('central state outage fails closed with a sanitized error', async () => {
++    readSubjectState.mockRejectedValue(new Error('synthetic-private-error'));
++    expect((await get()).body).toEqual({ error: 'temporarily_unavailable' });
++  });
++});
+diff --git a/src/__tests__/oauth-strict-bootstrap.test.js b/src/__tests__/oauth-strict-bootstrap.test.js
+new file mode 100644
+index 00000000..43a154f3
+--- /dev/null
++++ b/src/__tests__/oauth-strict-bootstrap.test.js
+@@ -0,0 +1,31 @@
++import express from 'express';
++import request from 'supertest';
++import mongoose from 'mongoose';
++import { initializeStrictOAuth } from '../service/oauthStrictBootstrap';
++
++jest.mock('mongoose', () => ({
++  __esModule: true,
++  default: { connection: { db: undefined }, model: jest.fn(() => { throw new Error('Unexpected model access'); }) },
++}));
++
++describe('strict Portal bootstrap preserves legacy default behavior', () => {
++  beforeEach(() => jest.clearAllMocks());
++  test('default-off bootstrap performs no model lookup and adds no endpoint', async () => {
++    const app = express();
++    const guard = initializeStrictOAuth(app, {});
++    app.get('/authorize', guard, (_req, res) => res.json({ legacy: true }));
++    expect((await request(app).get('/authorize')).body).toEqual({ legacy: true });
++    expect((await request(app).post('/oauth/strict/v1/token')).status).toBe(404);
++    expect(mongoose.model).not.toHaveBeenCalled();
++  });
++  test('malformed strict settings never crash legacy startup or touch models', async () => {
++    const app = express();
++    const guard = initializeStrictOAuth(app, { PORTAL_STRICT_OAUTH_ENABLED: 'true', PORTAL_STRICT_OAUTH_CONFIG: '{invalid' });
++    app.get('/authorize', guard, (_req, res) => res.json({ legacy: true }));
++    expect((await request(app).get('/authorize')).status).toBe(200);
++    expect(mongoose.model).not.toHaveBeenCalled();
++    const response = await request(app).post('/oauth/strict/v1/revoke').auth('synthetic', 'synthetic').type('form')
++      .send({ token: 'synthetic' });
++    expect(response.status).toBe(503);
++  });
++});
+diff --git a/src/__tests__/oauth-strict-code-context.test.js b/src/__tests__/oauth-strict-code-context.test.js
+new file mode 100644
+index 00000000..deb1e292
+--- /dev/null
++++ b/src/__tests__/oauth-strict-code-context.test.js
+@@ -0,0 +1,66 @@
++import { __models } from 'mongoose';
++import { createAuthorizationCode } from '../service/oauthService';
++import { authorizePost } from '../controllers/oauthController';
++
++jest.mock('mongoose', () => {
++  const models = {
++    oauthClient: { findOne: jest.fn() },
++    oauthAuthorizationCode: { create: jest.fn() },
++    oauthAccessToken: {},
++    oauthRefreshToken: {},
++    userBN: {},
++    customer: {},
++  };
++  return { __esModule: true, __models: models, default: { model: (name) => models[name] || {} } };
++});
++jest.mock('../service/userService', () => ({ __esModule: true }));
++
++describe('strict code context is an optional server-owned extension', () => {
++  const clientId = 'synthetic-client';
++  const subject = '507f1f77bcf86cd799439011';
++  const redirect = 'https://synthetic.invalid/callback';
++  const context = Object.freeze({
++    issuer: 'urn:synthetic:authority', audience: 'urn:synthetic:product', clientId, tokenVersion: 0, authoritySessionHash: 'a'.repeat(64),
++  });
++  const legacyArgs = () => [clientId, subject, redirect, ['profile'], 'synthetic-state', 'synthetic-challenge', 'S256'];
++  beforeEach(() => {
++    jest.resetAllMocks();
++    __models.oauthAuthorizationCode.create.mockImplementation(async (data) => ({ ...data, code: 'synthetic-issued-code' }));
++    __models.oauthClient.findOne.mockResolvedValue({
++      active: true, clientId, allowedGrants: ['authorization_code', 'refresh_token'], allowedScopes: ['profile'], validateRedirectUri: (uri) => uri === redirect, validateScope: (scopes) => scopes.every((scope) => scope === 'profile'), incrementRequests: async () => {},
++    });
++  });
++
++  test('legacy service call preserves the exact record shape without a strict field', async () => {
++    await createAuthorizationCode(...legacyArgs());
++    expect(__models.oauthAuthorizationCode.create.mock.calls[0][0]).toEqual({
++      clientId, userId: subject, redirectUri: redirect, scopes: ['profile'], state: 'synthetic-state', codeChallenge: 'synthetic-challenge', codeChallengeMethod: 'S256',
++    });
++  });
++
++  test('explicit strict service context is copied into the issued code', async () => {
++    await createAuthorizationCode(...legacyArgs(), context);
++    const record = __models.oauthAuthorizationCode.create.mock.calls[0][0];
++    expect(record.strictContext).toEqual(context);
++    expect(record.strictContext).not.toBe(context);
++  });
++
++  test.each([{ ...context, clientId: 'other' }, { ...context, tokenVersion: -1 }, { ...context, tokenVersion: undefined }, { ...context, authoritySessionHash: 'raw-secret' }])('invalid strict context is rejected before persistence', async (bad) => {
++    await expect(createAuthorizationCode(...legacyArgs(), bad)).rejects.toThrow();
++    expect(__models.oauthAuthorizationCode.create).not.toHaveBeenCalled();
++  });
++
++  test.each([false, true])('controller uses server context only; present=%s', async (serverContext) => {
++    const req = {
++      user: { _id: subject },
++      body: {
++        client_id: clientId, redirect_uri: redirect, scope: 'profile', state: 'synthetic-state', code_challenge: 'synthetic-challenge', code_challenge_method: 'S256', approved: true, strictAuthContext: { ...context, tokenVersion: 99 },
++      },
++    };
++    if (serverContext) req.strictAuthContext = context;
++    const res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
++    await authorizePost(req, res);
++    const record = __models.oauthAuthorizationCode.create.mock.calls[0][0];
++    expect(record.strictContext).toEqual(serverContext ? context : undefined);
++  });
++});
+diff --git a/src/__tests__/oauth-strict-code-schema.test.js b/src/__tests__/oauth-strict-code-schema.test.js
+new file mode 100644
+index 00000000..55c915c0
+--- /dev/null
++++ b/src/__tests__/oauth-strict-code-schema.test.js
+@@ -0,0 +1,23 @@
++import AuthorizationCode from '../models/oauthAuthorizationCodeModel';
++
++jest.unmock('mongoose');
++
++describe('additive strict authorization-code schema', () => {
++  const input = () => ({
++    clientId: 'synthetic', userId: '507f1f77bcf86cd799439011', redirectUri: 'https://synthetic.invalid/callback', scopes: ['profile'],
++  });
++  test('legacy documents have no strict-context default', () => {
++    const document = new AuthorizationCode(input());
++    expect(document.validateSync()).toBeUndefined();
++    expect(document.toObject().strictContext).toBeUndefined();
++  });
++  test('strict context survives model serialization and requires complete fields', () => {
++    const strictContext = {
++      issuer: 'urn:synthetic', audience: 'urn:synthetic:product', clientId: 'synthetic', tokenVersion: 0, authoritySessionHash: 'a'.repeat(64),
++    };
++    const document = new AuthorizationCode({ ...input(), strictContext });
++    expect(document.validateSync()).toBeUndefined();
++    expect(document.toObject().strictContext).toEqual(strictContext);
++    expect(new AuthorizationCode({ ...input(), strictContext: { tokenVersion: 0 } }).validateSync()).toBeDefined();
++  });
++});
+diff --git a/src/__tests__/oauth-strict-core-contract.test.js b/src/__tests__/oauth-strict-core-contract.test.js
+new file mode 100644
+index 00000000..459d907e
+--- /dev/null
++++ b/src/__tests__/oauth-strict-core-contract.test.js
+@@ -0,0 +1,185 @@
++// Optional two-repository integration. Next request context is stubbed; the
++// actual core handlers and Portal controllers/services/HTTP/MongoDB are exercised.
++import crypto from 'crypto';
++import path from 'path';
++import express from 'express';
++import cookieParser from 'cookie-parser';
++import request from 'supertest';
++import jwt from 'jsonwebtoken';
++import mongoose from 'mongoose';
++import { MongoMemoryServer } from 'mongodb-memory-server';
++import { prepareStrictOAuthStorage } from '../service/oauthStrictRuntime';
++import { createStrictAuthorizationPreflight, createStrictTransportPreflight } from '../routes/oauthStrictRoutes';
++
++jest.unmock('mongoose');
++jest.mock('../service/userService', () => ({ __esModule: true }));
++jest.mock('../controllers/oauthDeveloperController', () => new Proxy({ __esModule: true }, { get: (_target, name) => (name === '__esModule' ? true : (_req, res) => res.sendStatus(404)) }));
++jest.mock('../controllers/oauthServiceClientController', () => new Proxy({ __esModule: true }, { get: (_target, name) => (name === '__esModule' ? true : (_req, res) => res.sendStatus(404)) }));
++
++const integration = process.env.PORTAL_STRICT_TEST_MONGO === '1' && process.env.CORE_STRICT_PROXY_SOURCE_ROOT ? describe : describe.skip;
++integration('actual core authorizer proxy interoperates with strict Portal controllers', () => {
++  let server;
++  let app;
++  let core;
++  let accessCookie;
++  let refreshCookie;
++  let log;
++  let Client;
++  let User;
++  let Code;
++  const origin = 'https://central.synthetic.invalid';
++  const callback = 'https://product.synthetic.invalid/auth/tcm/callback';
++  const subject = '507f1f77bcf86cd799439011';
++  const clientId = 'synthetic-core-portal';
++  const secret = crypto.randomBytes(32).toString('hex');
++  const accessKey = crypto.randomBytes(32);
++  const refreshKey = crypto.randomBytes(32).toString('hex');
++  const state = crypto.randomBytes(32).toString('base64url');
++  const verifier = crypto.randomBytes(32).toString('base64url');
++  const keys = ['PORTAL_STRICT_OAUTH_ENABLED', 'PORTAL_STRICT_OAUTH_CONFIG', 'PORTAL_STRICT_OAUTH_SIGNING_KEY', 'REFRESH_TOKEN_SECRET', 'CORE_STRICT_OAUTH_CLIENT_IDS', 'CORE_STRICT_OAUTH_WEB_ORIGIN', 'CORE_STRICT_OAUTH_API_BASE_URL'];
++  const original = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
++
++  beforeAll(async () => {
++    if (!process.env.MONGOMS_SYSTEM_BINARY || process.env.MONGOMS_RUNTIME_DOWNLOAD !== 'false') throw new Error('Explicit cached binary and downloads disabled required');
++    server = await MongoMemoryServer.create({ binary: { systemBinary: process.env.MONGOMS_SYSTEM_BINARY }, instance: { dbName: 'm1b_core_portal_synthetic' } });
++    // Legacy schemas contain pre-existing boolean index directions rejected by
++    // MongoDB. This fixture does not claim to validate/repair legacy auto-DDL.
++    await mongoose.connect(server.getUri(), { dbName: 'm1b_core_portal_synthetic', autoIndex: false, autoCreate: false });
++    User = mongoose.model('userBN', new mongoose.Schema({
++      userName: String, tokenVersion: Number, email: String, emailVerified: Boolean, displayName: String,
++    }));
++    ['customer', 'DiscordGuildMembership', 'DiscordGuildSync'].forEach((name) => mongoose.model(name, new mongoose.Schema({})));
++    Client = jest.requireActual('../models/oauthClientModel').default;
++    Code = jest.requireActual('../models/oauthAuthorizationCodeModel').default;
++    jest.requireActual('../models/oauthAccessTokenModel');
++    jest.requireActual('../models/oauthRefreshTokenModel');
++    await Client.init();
++    await Code.init();
++    await Client.collection.createIndex({ clientId: 1 }, { unique: true });
++    await Code.collection.createIndex({ code: 1 }, { unique: true });
++    process.env.PORTAL_STRICT_OAUTH_ENABLED = 'true';
++    process.env.PORTAL_STRICT_OAUTH_CONFIG = JSON.stringify({
++      version: 1,
++      webOrigin: origin,
++      clients: [{
++        clientId, issuer: origin, audience: 'urn:synthetic:product', redirectUri: callback, accessTtlSeconds: 300, familyTtlSeconds: 28800, maxRotations: 96,
++      }],
++    });
++    process.env.PORTAL_STRICT_OAUTH_SIGNING_KEY = crypto.randomBytes(32).toString('hex');
++    process.env.REFRESH_TOKEN_SECRET = refreshKey;
++    process.env.CORE_STRICT_OAUTH_CLIENT_IDS = JSON.stringify([clientId]);
++    process.env.CORE_STRICT_OAUTH_WEB_ORIGIN = origin;
++    process.env.CORE_STRICT_OAUTH_API_BASE_URL = `${origin}/mana`;
++    await prepareStrictOAuthStorage(mongoose.connection.db, { expectedDatabaseName: 'm1b_core_portal_synthetic', acknowledgeAdditiveOnly: true });
++    app = express();
++    app.use(cookieParser());
++    app.use('/mana/oauth/authorize', createStrictAuthorizationPreflight());
++    app.use(['/oauth/strict/v1', '/mana/oauth/strict/v1'], createStrictTransportPreflight());
++    app.use(express.json());
++    app.use(express.urlencoded({ extended: true }));
++    app.use((req, _res, next) => {
++      try { req.user = jwt.verify(req.cookies.authToken || '', accessKey); } catch { req.user = undefined; }
++      next();
++    });
++    jest.requireActual('../routes/oauthRoutes').default(app, { loginRequired: (req, res, next) => (req.user ? next() : res.status(401).json({ error: 'login_required' })) });
++    const coreRoot = process.env.CORE_STRICT_PROXY_SOURCE_ROOT;
++    jest.doMock(require.resolve('next/server', { paths: [coreRoot] }), () => ({ NextResponse: { json: (body, options = {}) => ({ body, status: options.status || 200 }) } }));
++    jest.doMock(require.resolve('next/headers', { paths: [coreRoot] }), () => ({ cookies: () => ({ get: (name) => ({ value: name === 'authToken' ? accessCookie : refreshCookie }) }) }));
++    const bridge = async (method, url, body, options) => {
++      if (url !== `${origin}/mana/oauth/authorize` || options.maxRedirects !== 0) throw new Error('Unexpected proxy target');
++      let operation = request(app)[method]('/mana/oauth/authorize').set(options.headers).redirects(0);
++      if (method === 'get') operation = operation.query(Object.fromEntries(Object.entries(options.params).filter(([, value]) => value != null)));
++      else operation = operation.send(body);
++      const response = await operation;
++      if (!options.validateStatus(response.status)) {
++        const error = new Error('Synthetic upstream failure');
++        error.response = { status: response.status, data: response.body };
++        throw error;
++      }
++      return { status: response.status, data: response.body };
++    };
++    jest.doMock(require.resolve('axios', { paths: [coreRoot] }), () => ({ get: (url, options) => bridge('get', url, null, options), post: (url, body, options) => bridge('post', url, body, options) }));
++    core = jest.requireActual(path.join(coreRoot, 'src/app/api/oauth/authorize/route.js'));
++  });
++
++  beforeEach(async () => {
++    const collections = await mongoose.connection.db.listCollections({}, { nameOnly: true }).toArray();
++    await Promise.all(collections.map((item) => mongoose.connection.db.collection(item.name).deleteMany({})));
++    await User.create({
++      _id: subject, userName: 'Synthetic', tokenVersion: 0, email: 'synthetic@example.invalid', emailVerified: false, displayName: 'Synthetic',
++    });
++    await Client.create({
++      clientId, clientSecret: secret, name: 'Synthetic strict client', developerId: subject, redirectUris: [callback], allowedScopes: ['profile', 'email'], allowedProviders: ['credentials'], pkcePolicy: 'required_s256', active: true, verified: false,
++    });
++    accessCookie = jwt.sign({ _id: subject, userName: 'Synthetic' }, accessKey, { expiresIn: 3600 });
++    refreshCookie = jwt.sign({ _id: subject, tokenVersion: 0 }, refreshKey, { expiresIn: 3600 });
++    log = jest.spyOn(console, 'log').mockImplementation(() => {});
++  });
++  afterEach(() => log?.mockRestore());
++  afterAll(async () => {
++    await mongoose.disconnect();
++    if (server) await server.stop();
++    keys.forEach((key) => { if (original[key] === undefined) delete process.env[key]; else process.env[key] = original[key]; });
++  });
++  const params = () => ({
++    client_id: clientId, response_type: 'code', redirect_uri: callback, scope: 'profile', state, code_challenge: crypto.createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256', prompt: 'consent',
++  });
++  const incoming = (method, body, suppliedOrigin = origin) => ({
++    method, url: `${origin}/api/oauth/authorize?${new URLSearchParams(body).toString()}`, headers: { get: (name) => (name === 'origin' ? suppliedOrigin : null) }, json: async () => body,
++  });
++
++  test('real consent DTO without response_type yields one bound code and strict family, then honors persisted central revoke', async () => {
++    const consent = await core.GET(incoming('GET', params()));
++    expect(consent.status).toBe(200);
++    expect(consent.body.authParams.response_type).toBeUndefined();
++    const approved = await core.POST(incoming('POST', { ...consent.body.authParams, approved: true }));
++    expect(approved.status).toBe(200);
++    const returned = new URL(approved.body.redirectUrl);
++    expect(returned.origin).toBe(new URL(callback).origin);
++    expect(returned.searchParams.get('state')).toBe(state);
++    const issuedCode = returned.searchParams.get('code');
++    expect((await Code.findOne({ code: issuedCode }).lean()).strictContext).toMatchObject({ issuer: origin, clientId, tokenVersion: 0 });
++    const post = (operation, body) => request(app).post(`/mana/oauth/strict/v1/${operation}`).auth(clientId, secret).type('form')
++      .send(body);
++    const tokens = await post('token', {
++      grant_type: 'authorization_code', code: issuedCode, redirect_uri: callback, code_verifier: verifier,
++    });
++    expect(tokens.status).toBe(200);
++    expect((await post('introspect', { token: tokens.body.access_token })).body).toMatchObject({
++      active: true, iss: origin, aud: 'urn:synthetic:product', sub: subject,
++    });
++    await User.updateOne({ _id: subject }, { $inc: { tokenVersion: 1 } });
++    expect((await post('introspect', { token: tokens.body.access_token })).body).toEqual({ active: false });
++    expect((await post('token', { grant_type: 'refresh_token', refresh_token: tokens.body.refresh_token })).status).toBe(400);
++    expect((await Client.findOne({ clientId }).lean()).audience).toBe('');
++  });
++
++  test('hostile browser origin cannot reach actual Portal code issuance through core proxy', async () => {
++    const denied = await core.POST(incoming('POST', { ...params(), approved: true }, 'https://other.synthetic.invalid'));
++    expect(denied.status).toBe(403);
++    expect(await Code.countDocuments()).toBe(0);
++  });
++
++  test('real consented profile/email uses the lazy central adapter and current token-version checks', async () => {
++    const consent = await core.GET(incoming('GET', { ...params(), scope: 'profile email' }));
++    expect(consent.status).toBe(200);
++    const approved = await core.POST(incoming('POST', { ...consent.body.authParams, approved: true }));
++    expect(approved.status).toBe(200);
++    const post = (operation, body) => request(app).post(`/mana/oauth/strict/v1/${operation}`).auth(clientId, secret).type('form')
++      .send(body);
++    const tokens = await post('token', {
++      grant_type: 'authorization_code', code: new URL(approved.body.redirectUrl).searchParams.get('code'), redirect_uri: callback, code_verifier: verifier,
++    });
++    expect(tokens.status).toBe(200);
++    const contact = await post('profile', { token: tokens.body.access_token });
++    expect(contact.status).toBe(200);
++    expect(contact.body).toEqual({
++      iss: origin, sub: subject, client_id: clientId, aud: 'urn:synthetic:product', email: 'synthetic@example.invalid', email_verified: false, name: 'Synthetic',
++    });
++    await User.updateOne({ _id: subject }, { $set: { email: 'changed@example.invalid', emailVerified: true } });
++    expect((await post('profile', { token: tokens.body.access_token })).body).toMatchObject({ sub: subject, email: 'changed@example.invalid', email_verified: true });
++    await User.updateOne({ _id: subject }, { $inc: { tokenVersion: 1 } });
++    expect((await post('profile', { token: tokens.body.access_token })).status).toBe(401);
++    expect((await Client.findOne({ clientId }).lean()).audience).toBe('');
++  });
++});
+diff --git a/src/__tests__/oauth-strict-family-store.test.js b/src/__tests__/oauth-strict-family-store.test.js
+new file mode 100644
+index 00000000..56b878e8
+--- /dev/null
++++ b/src/__tests__/oauth-strict-family-store.test.js
+@@ -0,0 +1,145 @@
++import { MongoClient, ObjectId } from 'mongodb';
++import { MongoMemoryServer } from 'mongodb-memory-server';
++import { createStrictFamilyStore } from '../service/oauthStrictFamilyStore';
++
++const integration = process.env.PORTAL_STRICT_TEST_MONGO === '1' ? describe : describe.skip;
++
++integration('strict OAuth family persistence on disposable real MongoDB', () => {
++  let server;
++  let client;
++  let db;
++  let store;
++  let families;
++  let codes;
++  const clientId = 'synthetic-strict';
++  const subject = '507f1f77bcf86cd799439011';
++  const future = () => new Date(Date.now() + 60000);
++  const base = () => ({
++    _id: 'synthetic-family',
++    authorizationCodeId: 'synthetic-code-id',
++    clientId,
++    userId: subject,
++    issuer: 'urn:synthetic:authority',
++    audience: 'urn:synthetic:product',
++    scopes: ['profile'],
++    generation: 0,
++    state: 'active',
++    currentRefreshHash: 'synthetic-hash-old',
++    spentRefreshHashes: [],
++    refreshExpiresAt: future(),
++    currentAccessHash: 'synthetic-hash-access',
++    accessExpiresAt: future(),
++    createdAt: new Date(),
++    updatedAt: new Date(),
++  });
++
++  beforeAll(async () => {
++    if (!process.env.MONGOMS_SYSTEM_BINARY || process.env.MONGOMS_RUNTIME_DOWNLOAD !== 'false') {
++      throw new Error('Explicit existing MongoDB binary and downloads-disabled setting required');
++    }
++    server = await MongoMemoryServer.create({ binary: { systemBinary: process.env.MONGOMS_SYSTEM_BINARY }, instance: { dbName: 'm1b_synthetic_strict' } });
++    client = await MongoClient.connect(server.getUri());
++    db = client.db('m1b_synthetic_strict');
++    families = db.collection('oauth_strict_families_v1');
++    codes = db.collection('synthetic_authorization_codes');
++    store = createStrictFamilyStore({ families, authorizationCodes: codes });
++    await store.ensureIndexes();
++  });
++
++  beforeEach(async () => {
++    await families.deleteMany({});
++    await codes.deleteMany({});
++  });
++  afterAll(async () => {
++    if (client) await client.close();
++    if (server) await server.stop();
++  });
++
++  test('100 concurrent code claims have one business effect with exact callback and S256 binding', async () => {
++    const code = {
++      _id: new ObjectId(), code: 'synthetic-code', clientId, userId: new ObjectId(subject), scopes: ['profile'], redirectUri: 'https://synthetic.invalid/callback', codeChallenge: 'synthetic-challenge', codeChallengeMethod: 'S256', used: false, expiresAt: future(),
++    };
++    await codes.insertOne(code);
++    const claimed = await Promise.all(Array.from({ length: 100 }, () => store.consumeCode(code, new Date())));
++    expect(claimed.filter(Boolean)).toHaveLength(1);
++    expect((await codes.findOne({ _id: code._id })).used).toBe(true);
++  });
++
++  test.each(['redirectUri', 'codeChallenge', 'clientId', 'scopes'])('changed %s prevents code consumption', async (field) => {
++    const code = {
++      _id: new ObjectId(), code: 'synthetic-code', clientId, scopes: ['profile'], redirectUri: 'https://synthetic.invalid/callback', codeChallenge: 'synthetic-challenge', codeChallengeMethod: 'S256', used: false, expiresAt: future(),
++    };
++    await codes.insertOne(code);
++    const changed = { ...code, [field]: field === 'scopes' ? ['profile', 'email'] : 'changed' };
++    expect(await store.consumeCode(changed, new Date())).toBe(false);
++    expect((await codes.findOne({ _id: code._id })).used).toBe(false);
++  });
++
++  test('100 parallel refresh claims have one winner and hide old access while rotating', async () => {
++    await store.createFamily(base());
++    const claims = await Promise.all(Array.from({ length: 100 }, (_, i) => store.claimRotation({
++      familyId: 'synthetic-family', clientId, generation: 0, refreshHash: 'synthetic-hash-old', rotationId: `synthetic-rotation-${i}`, now: new Date(), maxRotations: 5,
++    })));
++    expect(claims.filter(Boolean)).toHaveLength(1);
++    expect(await store.readAccessRecord(clientId, 'synthetic-hash-access', new Date())).toBeNull();
++    const claim = claims.find(Boolean);
++    const committed = await store.completeRotation({
++      familyId: claim._id, clientId, generation: claim.generation, rotationId: claim.rotationId, refreshHash: 'synthetic-hash-new', accessHash: 'synthetic-new-access', accessExpiresAt: future(), now: new Date(),
++    });
++    expect(committed).toBe(true);
++    expect((await store.findRefreshFamily(clientId, 'synthetic-hash-old')).spentRefreshHashes).toContain('synthetic-hash-old');
++    expect(await store.readAccessRecord(clientId, 'synthetic-hash-access', new Date())).toBeNull();
++    expect(await store.readAccessRecord(clientId, 'synthetic-new-access', new Date())).toMatchObject({ userId: subject, clientId, revoked: false });
++  });
++
++  test('revocation fences a late refresh commit and keeps access denied', async () => {
++    await store.createFamily(base());
++    const claim = await store.claimRotation({
++      familyId: 'synthetic-family', clientId, generation: 0, refreshHash: 'synthetic-hash-old', rotationId: 'synthetic-rotation', now: new Date(), maxRotations: 5,
++    });
++    expect(await store.revokeFamily(clientId, claim._id, new Date())).toBe(true);
++    expect(await store.completeRotation({
++      familyId: claim._id, clientId, generation: claim.generation, rotationId: claim.rotationId, refreshHash: 'synthetic-hash-new', accessHash: 'synthetic-new-access', accessExpiresAt: future(), now: new Date(),
++    })).toBe(false);
++    expect((await families.findOne({ _id: claim._id })).state).toBe('revoked');
++  });
++
++  test('client ownership gates all reads, claims and revocation', async () => {
++    await store.createFamily(base());
++    expect(await store.findRefreshFamily('other', 'synthetic-hash-old')).toBeNull();
++    expect(await store.readAccessRecord('other', 'synthetic-hash-access', new Date())).toBeNull();
++    expect(await store.revokeFamily('other', 'synthetic-family', new Date())).toBe(false);
++    expect(await store.claimRotation({
++      familyId: 'synthetic-family', clientId: 'other', generation: 0, refreshHash: 'synthetic-hash-old', rotationId: 'other', now: new Date(), maxRotations: 5,
++    })).toBeNull();
++  });
++
++  test('unique code lineage prevents a second family for the same consumed code', async () => {
++    await store.createFamily(base());
++    await expect(store.createFamily({ ...base(), _id: 'another-family' })).rejects.toMatchObject({ code: 11000 });
++    expect(await families.countDocuments()).toBe(1);
++  });
++
++  test('expired families and exhausted rotation budgets fail closed', async () => {
++    await store.createFamily({ ...base(), refreshExpiresAt: new Date(0) });
++    expect(await store.readAccessRecord(clientId, 'synthetic-hash-access', new Date())).toBeNull();
++    expect(await store.claimRotation({
++      familyId: 'synthetic-family', clientId, generation: 0, refreshHash: 'synthetic-hash-old', rotationId: 'synthetic-rotation', now: new Date(), maxRotations: 5,
++    })).toBeNull();
++    await families.updateOne({ _id: 'synthetic-family' }, { $set: { refreshExpiresAt: future(), generation: 5 } });
++    expect(await store.claimRotation({
++      familyId: 'synthetic-family', clientId, generation: 5, refreshHash: 'synthetic-hash-old', rotationId: 'synthetic-rotation', now: new Date(), maxRotations: 5,
++    })).toBeNull();
++  });
++
++  test('revocation can match a prior refresh hash but cannot touch another client', async () => {
++    await store.createFamily({ ...base(), spentRefreshHashes: ['synthetic-spent-hash'] });
++    expect(await store.revokeByHash('other', 'synthetic-spent-hash', new Date())).toBe(false);
++    expect(await store.revokeByHash(clientId, 'synthetic-spent-hash', new Date())).toBe(true);
++    expect(await store.readAccessRecord(clientId, 'synthetic-hash-access', new Date())).toBeNull();
++  });
++
++  test('constructing a store never creates indexes and refuses legacy family collections', () => {
++    expect(() => createStrictFamilyStore({ families: db.collection('oauthaccesstokens'), authorizationCodes: codes })).toThrow();
++  });
++});
+diff --git a/src/__tests__/oauth-strict-route-registration.test.js b/src/__tests__/oauth-strict-route-registration.test.js
+new file mode 100644
+index 00000000..ec336646
+--- /dev/null
++++ b/src/__tests__/oauth-strict-route-registration.test.js
+@@ -0,0 +1,70 @@
++import express from 'express';
++import request from 'supertest';
++import oauthRoutes from '../routes/oauthRoutes';
++
++jest.mock('mongoose', () => ({ __esModule: true, default: { model: jest.fn() } }));
++jest.mock('../controllers/oauthController', () => new Proxy({ __esModule: true }, {
++  get: (target, name) => (name === '__esModule' ? true : (_req, res) => res.json({ legacy: true })),
++}));
++jest.mock('../controllers/oauthDeveloperController', () => new Proxy({ __esModule: true }, {
++  get: (target, name) => (name === '__esModule' ? true : (_req, res) => res.json({ legacy: true })),
++}));
++jest.mock('../controllers/oauthServiceClientController', () => new Proxy({ __esModule: true }, {
++  get: (target, name) => (name === '__esModule' ? true : (_req, res) => res.json({ legacy: true })),
++}));
++
++describe('actual OAuth route registration keeps strict activation default-off', () => {
++  const keys = ['PORTAL_STRICT_OAUTH_ENABLED', 'PORTAL_STRICT_OAUTH_CONFIG', 'PORTAL_STRICT_OAUTH_SIGNING_KEY'];
++  const original = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
++  beforeEach(() => keys.forEach((key) => { delete process.env[key]; }));
++  afterAll(() => keys.forEach((key) => {
++    if (original[key] === undefined) delete process.env[key];
++    else process.env[key] = original[key];
++  }));
++  function app() {
++    const instance = express();
++    instance.use(express.json());
++    oauthRoutes(instance, { loginRequired: (_req, _res, next) => next() });
++    return instance;
++  }
++  test('existing authorize/token/aliases remain usable with no strict flag', async () => {
++    const instance = app();
++    expect((await request(instance).get('/oauth/authorize').query({ client_id: 'legacy' })).body).toEqual({ legacy: true });
++    expect((await request(instance).post('/oauth/token').send({ grant_type: 'refresh_token' })).body).toEqual({ legacy: true });
++    expect((await request(instance).post('/mana/oauth/revoke').send({ token: 'synthetic' })).body).toEqual({ legacy: true });
++    expect((await request(instance).post('/oauth/strict/v1/token')).status).toBe(404);
++    expect((await request(instance).get('/mana/oauth/authorize')).status).toBe(404);
++  });
++  test('invalid enabled strict settings keep legacy authorize available and expose only strict unavailability', async () => {
++    process.env.PORTAL_STRICT_OAUTH_ENABLED = 'true';
++    process.env.PORTAL_STRICT_OAUTH_CONFIG = '{invalid';
++    const instance = app();
++    expect((await request(instance).get('/oauth/authorize').query({ client_id: 'legacy' })).status).toBe(200);
++    const response = await request(instance).post('/oauth/strict/v1/revoke').auth('synthetic', 'synthetic').type('form')
++      .send({ token: 'synthetic' });
++    expect(response.status).toBe(503);
++    expect((await request(instance).get('/mana/oauth/authorize').query({ client_id: 'synthetic' })).status).toBe(503);
++  });
++
++  test('new public authorizer alias never exposes the legacy cohort when strict mode is configured', async () => {
++    process.env.PORTAL_STRICT_OAUTH_ENABLED = 'true';
++    process.env.PORTAL_STRICT_OAUTH_CONFIG = JSON.stringify({
++      version: 1,
++      webOrigin: 'https://synthetic.invalid',
++      clients: [{
++        clientId: 'synthetic-strict', issuer: 'https://synthetic.invalid', audience: 'urn:synthetic', redirectUri: 'https://product.invalid/callback', accessTtlSeconds: 300, familyTtlSeconds: 28800, maxRotations: 96,
++      }],
++    });
++    process.env.PORTAL_STRICT_OAUTH_SIGNING_KEY = 'synthetic-key-material-at-least-32-characters';
++    const previousRefresh = process.env.REFRESH_TOKEN_SECRET;
++    process.env.REFRESH_TOKEN_SECRET = 'synthetic-central-refresh-key-material';
++    try {
++      const instance = app();
++      expect((await request(instance).get('/mana/oauth/authorize').query({ client_id: 'legacy' })).status).toBe(404);
++      expect((await request(instance).get('/oauth/authorize').query({ client_id: 'legacy' })).status).toBe(200);
++    } finally {
++      if (previousRefresh === undefined) delete process.env.REFRESH_TOKEN_SECRET;
++      else process.env.REFRESH_TOKEN_SECRET = previousRefresh;
++    }
++  });
++});
+diff --git a/src/__tests__/oauth-strict-routes.test.js b/src/__tests__/oauth-strict-routes.test.js
+new file mode 100644
+index 00000000..016e661e
+--- /dev/null
++++ b/src/__tests__/oauth-strict-routes.test.js
+@@ -0,0 +1,189 @@
++import express from 'express';
++import request from 'supertest';
++import { registerStrictOAuthRoutes, createStrictTransportPreflight, createStrictAuthorizationPreflight } from '../routes/oauthStrictRoutes';
++
++describe('isolated strict OAuth server transport', () => {
++  let app;
++  let authority;
++  let resolveAuthority;
++  let allowRequest;
++  const credentials = Buffer.from('synthetic-client:synthetic-secret').toString('base64');
++  beforeEach(() => {
++    app = express();
++    app.post('/oauth/token', (_req, res) => res.json({ legacy: true }));
++    authority = {
++      authenticateClient: jest.fn(async () => ({ status: 'ok' })),
++      exchange: jest.fn(async () => ({
++        status: 'ok',
++        tokens: {
++          access_token: 'synthetic-access', refresh_token: 'synthetic-refresh', token_type: 'Bearer', expires_in: 120, scope: 'profile',
++        },
++      })),
++      refresh: jest.fn(async () => ({ status: 'reauth_required' })),
++      introspect: jest.fn(async () => ({
++        status: 'ok',
++        identity: {
++          issuer: 'urn:synthetic', subject: 'synthetic-sub', clientId: 'synthetic-client', audience: 'urn:synthetic:product', expiresAt: 123000, verifiedAt: 100000,
++        },
++      })),
++      revoke: jest.fn(async () => ({ status: 'ok' })),
++      contactProfile: jest.fn(async () => ({
++        status: 'ok',
++        identity: {
++          issuer: 'urn:synthetic', subject: 'synthetic-sub', clientId: 'synthetic-client', audience: 'urn:synthetic:product',
++        },
++        profile: {
++          email: 'synthetic@example.invalid', emailVerified: false, displayName: 'Synthetic', roles: ['admin'], privateField: 'excluded',
++        },
++      })),
++    };
++    resolveAuthority = jest.fn(async () => authority);
++    allowRequest = jest.fn(async () => true);
++    registerStrictOAuthRoutes(app, { resolveAuthority, allowRequest });
++  });
++  const post = (path, body) => request(app).post(`/oauth/strict/v1/${path}`).set('Authorization', `Basic ${credentials}`).type('form')
++    .send(body);
++
++  test('exchanges through strict authority without affecting the legacy endpoint', async () => {
++    const response = await post('token', {
++      grant_type: 'authorization_code', code: 'synthetic-code', redirect_uri: 'https://synthetic.invalid/callback', code_verifier: 'synthetic-verifier',
++    });
++    expect(response.status).toBe(200);
++    expect(response.body.access_token).toBe('synthetic-access');
++    expect(response.headers['cache-control']).toBe('no-store');
++    expect(authority.exchange).toHaveBeenCalledWith({
++      clientSecret: 'synthetic-secret', code: 'synthetic-code', redirectUri: 'https://synthetic.invalid/callback', codeVerifier: 'synthetic-verifier',
++    });
++    expect((await request(app).post('/oauth/token')).body).toEqual({ legacy: true });
++  });
++
++  test('mana alias uses the same server boundary', async () => {
++    const response = await request(app).post('/mana/oauth/strict/v1/revoke').set('Authorization', `Basic ${credentials}`).type('form')
++      .send({ token: 'synthetic' });
++    expect(response.status).toBe(200);
++    expect(response.body).toEqual({});
++  });
++
++  test.each(['Origin', 'Cookie'])('rejects browser %s headers before calling an authority', async (header) => {
++    const response = await post('revoke', { token: 'synthetic' }).set(header, header === 'Origin' ? 'https://synthetic.invalid' : 'synthetic=value');
++    expect(response.status).toBe(401);
++    expect(resolveAuthority).not.toHaveBeenCalled();
++  });
++
++  test('does not accept body credentials, issuer/audience overrides or repeated parameters', async () => {
++    const bodies = ['token=synthetic&client_secret=synthetic', 'token=synthetic&issuer=urn:other', 'token=synthetic&token=other'];
++    const responses = await Promise.all(bodies.map((body) => post('revoke', body)));
++    expect(responses.map((response) => response.status)).toEqual([400, 400, 400]);
++    expect(authority.revoke).not.toHaveBeenCalled();
++  });
++
++  test.each(['Bearer synthetic', 'Basic !!!', 'Basic c3ludGhldGlj', ''])('rejects invalid authorization %s', async (authorization) => {
++    const response = await request(app).post('/oauth/strict/v1/revoke').set('Authorization', authorization).type('form')
++      .send({ token: 'synthetic' });
++    expect(response.status).toBe(401);
++    expect(resolveAuthority).not.toHaveBeenCalled();
++  });
++
++  test('rejects duplicate authorization headers', async () => {
++    const response = await request(app).post('/oauth/strict/v1/revoke').set('Authorization', [`Basic ${credentials}`, `Basic ${credentials}`]).type('form')
++      .send({ token: 'synthetic' });
++    expect(response.status).toBe(401);
++    expect(authority.revoke).not.toHaveBeenCalled();
++  });
++
++  test('rejects JSON and excessive form bodies without leaking parser diagnostics', async () => {
++    expect((await request(app).post('/oauth/strict/v1/revoke').set('Authorization', `Basic ${credentials}`).send({ token: 'synthetic' })).status).toBe(415);
++    const response = await post('revoke', { token: 'x'.repeat(25000) });
++    expect(response.status).toBe(413);
++    expect(response.body).toEqual({ error: 'invalid_request' });
++  });
++
++  test('invalid client is 401; rate-limit denial is 429 and never executes the operation', async () => {
++    authority.authenticateClient.mockResolvedValue({ status: 'unauthenticated' });
++    expect((await post('revoke', { token: 'synthetic' })).status).toBe(401);
++    allowRequest.mockResolvedValue(false);
++    expect((await post('revoke', { token: 'synthetic' })).status).toBe(429);
++    expect(authority.revoke).not.toHaveBeenCalled();
++  });
++
++  test('introspection exposes only sanitized authority binding', async () => {
++    const response = await post('introspect', { token: 'synthetic' });
++    expect(response.body).toEqual({
++      active: true, iss: 'urn:synthetic', sub: 'synthetic-sub', client_id: 'synthetic-client', aud: 'urn:synthetic:product', exp: 123, verified_at: 100,
++    });
++    authority.introspect.mockResolvedValue({ status: 'unauthenticated' });
++    expect((await post('introspect', { token: 'synthetic' })).body).toEqual({ active: false });
++  });
++
++  test('unknown rotation result requires reauth and is never returned as a generic retryable success', async () => {
++    authority.refresh.mockResolvedValue({ status: 'outcome_unknown', operationId: 'synthetic-operation' });
++    const response = await post('token', { grant_type: 'refresh_token', refresh_token: 'synthetic' });
++    expect(response.status).toBe(503);
++    expect(response.body).toEqual({ error: 'outcome_unknown', operation_id: 'synthetic-operation', reauth_required: true });
++  });
++
++  test('upstream failures are sanitized and failed revocation is not successful logout', async () => {
++    authority.revoke.mockResolvedValue({ status: 'unavailable' });
++    expect((await post('revoke', { token: 'synthetic' })).status).toBe(503);
++    resolveAuthority.mockRejectedValue(new Error('synthetic-private-error'));
++    expect((await post('revoke', { token: 'synthetic' })).body).toEqual({ error: 'temporarily_unavailable' });
++  });
++
++  test('configuration cannot silently omit authority or rate-limit enforcement', () => {
++    expect(() => registerStrictOAuthRoutes(express(), { resolveAuthority })).toThrow();
++  });
++
++  test('server-only profile transport whitelists contact fields and preserves issuer/subject binding', async () => {
++    const response = await post('profile', { token: 'synthetic' });
++    expect(response.status).toBe(200);
++    expect(response.headers['cache-control']).toBe('no-store');
++    expect(response.body).toEqual({
++      iss: 'urn:synthetic', sub: 'synthetic-sub', client_id: 'synthetic-client', aud: 'urn:synthetic:product', email: 'synthetic@example.invalid', email_verified: false, name: 'Synthetic',
++    });
++    expect(authority.contactProfile).toHaveBeenCalledWith({ clientSecret: 'synthetic-secret', token: 'synthetic' });
++    expect((await post('profile', { token: 'synthetic' }).set('Origin', 'https://synthetic.invalid')).status).toBe(401);
++    expect((await post('profile', { token: 'synthetic', subject: 'other' })).status).toBe(400);
++  });
++
++  test.each([
++    ['insufficient_scope', 403], ['contact_required', 409], ['unauthenticated', 401], ['unavailable', 503],
++  ])('profile %s is an explicit failure with no contact fields', async (status, expected) => {
++    authority.contactProfile.mockResolvedValue({ status });
++    const response = await post('profile', { token: 'synthetic' });
++    expect(response.status).toBe(expected);
++    expect(Object.keys(response.body)).toEqual(['error']);
++    expect(response.headers['cache-control']).toBe('no-store');
++  });
++
++  test('strict preflight enforces its cap before Portal global parsers without restricting legacy paths', async () => {
++    const instance = express();
++    instance.use(['/oauth/strict/v1', '/mana/oauth/strict/v1'], createStrictTransportPreflight());
++    instance.use(express.urlencoded({ extended: true, limit: '100kb' }));
++    instance.use(express.json({ limit: '10mb' }));
++    registerStrictOAuthRoutes(instance, { resolveAuthority, allowRequest });
++    instance.post('/legacy', (_req, res) => res.json({ legacy: true }));
++    const payload = { token: 'x'.repeat(25000) };
++    const strict = await request(instance).post('/oauth/strict/v1/revoke').auth('synthetic', 'synthetic').type('form')
++      .send(payload);
++    expect(strict.status).toBe(413);
++    expect(strict.body).toEqual({ error: 'invalid_request' });
++    expect(authority.revoke).not.toHaveBeenCalled();
++    const legacy = await request(instance).post('/legacy').type('form').send(payload);
++    expect(legacy.status).toBe(200);
++    expect(legacy.body).toEqual({ legacy: true });
++  });
++
++  test('strict authorizer preflight supports the existing JSON consent shape and bounds only its new alias', async () => {
++    const instance = express();
++    instance.use('/mana/oauth/authorize', createStrictAuthorizationPreflight());
++    instance.use(express.json({ limit: '10mb' }));
++    instance.get('/mana/oauth/authorize', (_req, res) => res.json({ ready: true }));
++    instance.post('/mana/oauth/authorize', (req, res) => res.json({ approved: req.body.approved }));
++    instance.post('/legacy', (_req, res) => res.json({ legacy: true }));
++    expect((await request(instance).get('/mana/oauth/authorize')).status).toBe(200);
++    expect((await request(instance).post('/mana/oauth/authorize').send({ approved: true })).body).toEqual({ approved: true });
++    expect((await request(instance).post('/mana/oauth/authorize').send({ value: 'x'.repeat(25000) })).status).toBe(413);
++    expect((await request(instance).post('/mana/oauth/authorize').type('form').send({ approved: 'true' })).status).toBe(415);
++    expect((await request(instance).post('/legacy').send({ value: 'x'.repeat(25000) })).status).toBe(200);
++  });
++});
+diff --git a/src/__tests__/oauth-strict-runtime.test.js b/src/__tests__/oauth-strict-runtime.test.js
+new file mode 100644
+index 00000000..d3e1b583
+--- /dev/null
++++ b/src/__tests__/oauth-strict-runtime.test.js
+@@ -0,0 +1,155 @@
++import crypto from 'crypto';
++import express from 'express';
++import cookieParser from 'cookie-parser';
++import jwt from 'jsonwebtoken';
++import request from 'supertest';
++import { MongoClient, ObjectId } from 'mongodb';
++import { MongoMemoryServer } from 'mongodb-memory-server';
++import { createStrictOAuthRuntime, prepareStrictOAuthStorage } from '../service/oauthStrictRuntime';
++import { registerStrictOAuthRoutes } from '../routes/oauthStrictRoutes';
++
++describe('strict runtime is default-off and isolated from legacy availability', () => {
++  test('disabled feature never touches configuration, secrets or database adapters', () => {
++    const getDatabase = jest.fn(() => { throw new Error('must not call'); });
++    expect(createStrictOAuthRuntime({ environment: {}, getDatabase })).toBeNull();
++    expect(getDatabase).not.toHaveBeenCalled();
++  });
++  test('invalid enabled configuration leaves legacy requests usable and strict requests unavailable', async () => {
++    const runtime = createStrictOAuthRuntime({ environment: { PORTAL_STRICT_OAUTH_ENABLED: 'true', PORTAL_STRICT_OAUTH_CONFIG: '{invalid' } });
++    const app = express();
++    app.get('/legacy', runtime.authorizationGuard, (_req, res) => res.json({ legacy: true }));
++    registerStrictOAuthRoutes(app, runtime);
++    expect((await request(app).get('/legacy')).body).toEqual({ legacy: true });
++    const response = await request(app).post('/oauth/strict/v1/revoke').auth('synthetic', 'synthetic').type('form')
++      .send({ token: 'synthetic' });
++    expect(response.status).toBe(503);
++    expect(response.body).toEqual({ error: 'temporarily_unavailable' });
++  });
++});
++
++const integration = process.env.PORTAL_STRICT_TEST_MONGO === '1' ? describe : describe.skip;
++integration('strict runtime readiness and rate limits on real disposable MongoDB', () => {
++  let server;
++  let connection;
++  let db;
++  let runtime;
++  let readClient;
++  const key = crypto.randomBytes(32);
++  const policy = {
++    clientId: 'synthetic-strict', issuer: 'https://synthetic.invalid', audience: 'urn:synthetic', redirectUri: 'https://product.invalid/callback', accessTtlSeconds: 300, familyTtlSeconds: 28800, maxRotations: 96,
++  };
++  const environment = { PORTAL_STRICT_OAUTH_ENABLED: 'true', PORTAL_STRICT_OAUTH_CONFIG: JSON.stringify({ version: 1, webOrigin: 'https://synthetic.invalid', clients: [policy] }), PORTAL_STRICT_OAUTH_SIGNING_KEY: key.toString('hex') };
++  const build = () => createStrictOAuthRuntime({
++    environment, getDatabase: () => db, getAuthorizationCodes: () => db.collection('synthetic_codes'), readClient, readSubjectState: async () => ({ active: true, tokenVersion: 0 }), refreshSigningKey: key,
++  });
++  beforeAll(async () => {
++    if (!process.env.MONGOMS_SYSTEM_BINARY || process.env.MONGOMS_RUNTIME_DOWNLOAD !== 'false') throw new Error('Explicit binary and no downloads required');
++    server = await MongoMemoryServer.create({ binary: { systemBinary: process.env.MONGOMS_SYSTEM_BINARY }, instance: { dbName: 'm1b_synthetic_runtime' } });
++    connection = await MongoClient.connect(server.getUri());
++    db = connection.db('m1b_synthetic_runtime');
++  });
++  beforeEach(async () => {
++    await db.dropDatabase();
++    readClient = jest.fn(async () => ({
++      clientId: policy.clientId, clientSecret: 'synthetic-secret', active: true, audience: policy.audience, pkcePolicy: 'required_s256', redirectUris: [policy.redirectUri], allowedGrants: ['authorization_code', 'refresh_token'], allowedScopes: ['profile'], rateLimitPerHour: 3,
++    }));
++    runtime = build();
++  });
++  afterAll(async () => {
++    if (connection) await connection.close();
++    if (server) await server.stop();
++  });
++  async function prepareFixture() {
++    // The real Portal code schema declares this existing legacy constraint.
++    // It is separate from operator preparation of new strict-only collections.
++    await db.collection('synthetic_codes').createIndex({ code: 1 }, { unique: true });
++    await prepareStrictOAuthStorage(db, { expectedDatabaseName: db.databaseName, acknowledgeAdditiveOnly: true });
++  }
++  test('request paths cannot create storage or silently repair missing indexes', async () => {
++    await expect(runtime.resolveAuthority(policy.clientId)).rejects.toThrow();
++    expect(await db.listCollections({}, { nameOnly: true }).toArray()).toHaveLength(0);
++  });
++  test('operator preparation is explicitly targeted, additive and idempotent', async () => {
++    await expect(prepareStrictOAuthStorage(db, { expectedDatabaseName: 'wrong', acknowledgeAdditiveOnly: true })).rejects.toThrow();
++    await prepareFixture();
++    await prepareFixture();
++    expect(await runtime.resolveAuthority(policy.clientId)).toBeDefined();
++    expect(await db.collection('oauth_strict_families_v1').countDocuments()).toBe(0);
++  });
++  test('100 concurrent requests cannot exceed the registered client hourly budget', async () => {
++    await prepareFixture();
++    const allowed = await Promise.all(Array.from({ length: 100 }, () => runtime.allowRequest({ clientId: policy.clientId })));
++    expect(allowed.filter(Boolean)).toHaveLength(3);
++    expect(await db.collection('oauth_strict_rate_windows_v1').countDocuments()).toBe(1);
++    expect(readClient).toHaveBeenCalled();
++  });
++  test('unknown clients cannot cause rate-window writes or gain an authority', async () => {
++    expect(await runtime.resolveAuthority('unknown')).toBeNull();
++    expect(await runtime.allowRequest({ clientId: 'unknown' })).toBe(true);
++    expect(readClient).not.toHaveBeenCalled();
++    expect(await db.listCollections({}, { nameOnly: true }).toArray()).toHaveLength(0);
++  });
++  test('missing signing secrets fail strict requests closed without initialization writes', async () => {
++    const unavailable = createStrictOAuthRuntime({ environment: { ...environment, PORTAL_STRICT_OAUTH_SIGNING_KEY: '' }, getDatabase: () => db });
++    await expect(unavailable.resolveAuthority(policy.clientId)).rejects.toThrow();
++    expect(await db.listCollections({}, { nameOnly: true }).toArray()).toHaveLength(0);
++  });
++
++  test('missing or weakened existing code uniqueness blocks strict activation without repair', async () => {
++    await prepareStrictOAuthStorage(db, { expectedDatabaseName: db.databaseName, acknowledgeAdditiveOnly: true });
++    await expect(runtime.resolveAuthority(policy.clientId)).rejects.toThrow();
++    expect((await db.listCollections({}, { nameOnly: true }).toArray()).map((item) => item.name)).not.toContain('synthetic_codes');
++    await db.collection('synthetic_codes').createIndex({ code: 1 }, { unique: true, sparse: true });
++    await expect(runtime.resolveAuthority(policy.clientId)).rejects.toThrow('Strict authorization-code uniqueness not prepared');
++    expect((await db.collection('synthetic_codes').listIndexes().toArray()).find((index) => index.name === 'code_1').sparse).toBe(true);
++  });
++
++  test('complete local HTTP flow binds central session, code, strict tokens and revocation', async () => {
++    const registered = await readClient();
++    registered.rateLimitPerHour = 1000;
++    registered.audience = ''; // Existing interactive registration remains unchanged.
++    readClient.mockResolvedValue(registered);
++    await prepareFixture();
++    const instance = express();
++    instance.use(cookieParser());
++    instance.use(express.json());
++    const subject = '507f1f77bcf86cd799439011';
++    const verifier = crypto.randomBytes(32).toString('base64url');
++    const code = crypto.randomBytes(32).toString('hex');
++    instance.get('/authorize', (req, _res, next) => { req.user = { _id: subject }; next(); }, runtime.authorizationGuard, async (req, res) => {
++      await db.collection('synthetic_codes').insertOne({
++        _id: new ObjectId(), code, clientId: policy.clientId, userId: new ObjectId(subject), scopes: ['profile'], redirectUri: policy.redirectUri, codeChallenge: req.query.code_challenge, codeChallengeMethod: 'S256', strictContext: req.strictAuthContext, used: false, expiresAt: new Date(Date.now() + 60000),
++      });
++      res.json({ code });
++    });
++    registerStrictOAuthRoutes(instance, runtime);
++    const centralRefresh = jwt.sign({ _id: subject, tokenVersion: 0 }, key, { expiresIn: 300 });
++    const authorized = await request(instance).get('/authorize').set('X-OAuth-Request-Origin', 'https://synthetic.invalid').set('Cookie', `refreshToken=${centralRefresh}`)
++      .query({
++        client_id: policy.clientId, redirect_uri: policy.redirectUri, response_type: 'code', state: crypto.randomBytes(32).toString('base64url'), code_challenge: crypto.createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256',
++      });
++    expect(authorized.status).toBe(200);
++    const post = (operation, body) => request(instance).post(`/oauth/strict/v1/${operation}`).auth(policy.clientId, 'synthetic-secret').type('form')
++      .send(body);
++    const issued = await post('token', {
++      grant_type: 'authorization_code', code, redirect_uri: policy.redirectUri, code_verifier: verifier,
++    });
++    expect(issued.status).toBe(200);
++    const active = await post('introspect', { token: issued.body.access_token });
++    expect(active.body).toMatchObject({
++      active: true, iss: policy.issuer, aud: policy.audience, sub: subject,
++    });
++    const rotated = await post('token', { grant_type: 'refresh_token', refresh_token: issued.body.refresh_token });
++    expect(rotated.status).toBe(200);
++    expect((await post('introspect', { token: issued.body.access_token })).body).toEqual({ active: false });
++    expect((await post('revoke', { token: rotated.body.refresh_token })).status).toBe(200);
++    expect((await post('introspect', { token: rotated.body.access_token })).body).toEqual({ active: false });
++    expect(registered.audience).toBe('');
++    registered.rateLimitPerHour = 1;
++    const limitedAuthorization = await request(instance).get('/authorize').set('X-OAuth-Request-Origin', 'https://synthetic.invalid').set('Cookie', `refreshToken=${centralRefresh}`)
++      .query({
++        client_id: policy.clientId, redirect_uri: policy.redirectUri, response_type: 'code', state: crypto.randomBytes(32).toString('base64url'), code_challenge: crypto.createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256',
++      });
++    expect(limitedAuthorization.status).toBe(429);
++  });
++});
+diff --git a/src/controllers/oauthController.js b/src/controllers/oauthController.js
+index a6ee4b60..e6b003f4 100644
+--- a/src/controllers/oauthController.js
++++ b/src/controllers/oauthController.js
+@@ -374,7 +374,8 @@ export async function authorizeGet(req, res) {
+         resolvedScope,
+         state,
+         code_challenge,
+-        code_challenge_method
++        code_challenge_method,
++        ...(req.strictAuthContext ? [req.strictAuthContext] : [])
+       );
+ 
+       await client.incrementRequests();
+@@ -941,7 +942,8 @@ export async function authorizePost(req, res) {
+       resolvedScope,
+       state,
+       code_challenge,
+-      code_challenge_method
++      code_challenge_method,
++      ...(req.strictAuthContext ? [req.strictAuthContext] : [])
+     );
+ 
+     // Increment client usage
+diff --git a/src/models/oauthAuthorizationCodeModel.js b/src/models/oauthAuthorizationCodeModel.js
+index 9e7076f4..af307a12 100644
+--- a/src/models/oauthAuthorizationCodeModel.js
++++ b/src/models/oauthAuthorizationCodeModel.js
+@@ -54,6 +54,18 @@ const oauthAuthorizationCodeSchema = new mongoose.Schema(
+     state: {
+       type: String,
+     },
++    // Optional server-owned context for explicitly enrolled strict clients.
++    // No default or backfill: legacy authorization-code documents stay unchanged.
++    strictContext: {
++      type: new mongoose.Schema({
++        issuer: { type: String, required: true },
++        audience: { type: String, required: true },
++        clientId: { type: String, required: true },
++        tokenVersion: { type: Number, required: true, min: 0 },
++        authoritySessionHash: { type: String, required: true, match: /^[a-f0-9]{64}$/ },
++      }, { _id: false }),
++      default: undefined,
++    },
+   },
+   {
+     timestamps: true,
+diff --git a/src/routes/oauthRoutes.js b/src/routes/oauthRoutes.js
+index 42f9dc4f..f30721b8 100644
+--- a/src/routes/oauthRoutes.js
++++ b/src/routes/oauthRoutes.js
+@@ -1,16 +1,22 @@
+ import * as oauthController from '../controllers/oauthController';
+ import * as oauthDeveloperController from '../controllers/oauthDeveloperController';
+ import * as oauthServiceClientController from '../controllers/oauthServiceClientController';
++import { initializeStrictOAuth } from '../service/oauthStrictBootstrap';
+ 
+ /**
+  * OAuth 2.0 Authorization Server Routes
+  */
+ export default function oauthRoutes(app, userController) {
++  const strictAuthorizationGuard = initializeStrictOAuth(app, process.env, {
++    loginRequired: userController.loginRequired,
++    get: oauthController.authorizeGet,
++    post: oauthController.authorizePost,
++  });
+   // Authorization endpoint (consent screen)
+   app
+     .route('/oauth/authorize')
+-    .get(userController.loginRequired, oauthController.authorizeGet)
+-    .post(userController.loginRequired, oauthController.authorizePost);
++    .get(userController.loginRequired, strictAuthorizationGuard, oauthController.authorizeGet)
++    .post(userController.loginRequired, strictAuthorizationGuard, oauthController.authorizePost);
+ 
+   app
+     .route('/oauth/authorize/google')
+diff --git a/src/routes/oauthStrictRoutes.js b/src/routes/oauthStrictRoutes.js
+new file mode 100644
+index 00000000..5cc5a690
+--- /dev/null
++++ b/src/routes/oauthStrictRoutes.js
+@@ -0,0 +1,148 @@
++import express from 'express';
++
++// Mount before shared Portal parsers, only on strict prefixes when enabled.
++export function createStrictTransportPreflight() {
++  const parser = express.Router();
++  parser.use((req, res, next) => {
++    res.set('Cache-Control', 'no-store');
++    res.set('Pragma', 'no-cache');
++    if (!req.is('application/x-www-form-urlencoded')) return res.status(415).json({ error: 'invalid_request' });
++    return next();
++  });
++  parser.use(express.urlencoded({ extended: false, limit: '24kb', parameterLimit: 8 }));
++  parser.use((err, _req, res, next) => {
++    if (res.headersSent) return next(err);
++    return res.status(err?.type === 'entity.too.large' ? 413 : 400).json({ error: 'invalid_request' });
++  });
++  return parser;
++}
++
++// Browser authorization is proxied as JSON with central cookies, unlike the
++// form/Basic token transport. Apply its cap only to the new strict-only alias.
++export function createStrictAuthorizationPreflight() {
++  const parser = express.Router();
++  parser.use((req, res, next) => {
++    res.set('Cache-Control', 'no-store');
++    if (req.method !== 'POST') return next();
++    if (!req.is('application/json')) return res.status(415).json({ error: 'invalid_request' });
++    return next();
++  });
++  parser.use(express.json({ limit: '24kb' }));
++  parser.use((err, _req, res, next) => {
++    if (res.headersSent) return next(err);
++    return res.status(err?.type === 'entity.too.large' ? 413 : 400).json({ error: 'invalid_request' });
++  });
++  return parser;
++}
++
++// Additive route registrar, not mounted by existing Portal code.
++// Every credential and operation stays on a separately configured strict client.
++export function registerStrictOAuthRoutes(app, { resolveAuthority, allowRequest } = {}) {
++  if (typeof resolveAuthority !== 'function' || typeof allowRequest !== 'function') {
++    throw new TypeError('Strict routes require explicit authority and rate-limit adapters');
++  }
++  const router = express.Router();
++  router.use((_req, res, next) => {
++    res.set('Cache-Control', 'no-store');
++    res.set('Pragma', 'no-cache');
++    next();
++  });
++  router.use(express.urlencoded({ extended: false, limit: '24kb', parameterLimit: 8 }));
++
++  function credentials(req) {
++    if (req.get('Origin') || req.get('Cookie')) return null;
++    const headers = req.rawHeaders.filter((_, index) => index % 2 === 0);
++    if (headers.filter((header) => header.toLowerCase() === 'authorization').length !== 1) return null;
++    const authorization = req.get('Authorization');
++    if (typeof authorization !== 'string' || !/^Basic [A-Za-z0-9+/]+={0,2}$/.test(authorization) || authorization.length > 8192) return null;
++    const encoded = authorization.slice(6);
++    const decoded = Buffer.from(encoded, 'base64');
++    if (decoded.toString('base64') !== encoded) return null;
++    const value = decoded.toString('utf8');
++    const separator = value.indexOf(':');
++    if (separator < 1) return null;
++    try {
++      const decode = (part) => decodeURIComponent(part.replace(/\+/g, ' '));
++      const clientId = decode(value.slice(0, separator));
++      const clientSecret = decode(value.slice(separator + 1));
++      if (!clientId || clientId.length > 256 || !clientSecret || clientSecret.length > 4096
++        || Array.from(clientId + clientSecret).some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) return null;
++      return { clientId, clientSecret };
++    } catch {
++      return null;
++    }
++  }
++
++  const error = (res, status, code) => res.status(status).json({ error: code });
++  function handler(operation) {
++    return async (req, res) => {
++      try {
++        if (!req.is('application/x-www-form-urlencoded')) return error(res, 415, 'invalid_request');
++        const auth = credentials(req);
++        if (!auth) return error(res, 401, 'invalid_client');
++        if (!await allowRequest({ clientId: auth.clientId, operation, request: req })) return error(res, 429, 'temporarily_unavailable');
++        const authority = await resolveAuthority(auth.clientId);
++        if (!authority) return error(res, 401, 'invalid_client');
++        const authenticated = await authority.authenticateClient(auth.clientSecret);
++        if (authenticated.status === 'unavailable') return error(res, 503, 'temporarily_unavailable');
++        if (authenticated.status !== 'ok') return error(res, 401, 'invalid_client');
++        const { body } = req;
++        if (!body || typeof body !== 'object' || Array.isArray(body)
++          || Object.values(body).some((value) => typeof value !== 'string')) return error(res, 400, 'invalid_request');
++        let result;
++        if (operation === 'token') {
++          if (body.grant_type === 'authorization_code') {
++            if (Object.keys(body).some((field) => !['grant_type', 'code', 'redirect_uri', 'code_verifier'].includes(field))) return error(res, 400, 'invalid_request');
++            result = await authority.exchange({
++              clientSecret: auth.clientSecret, code: body.code, redirectUri: body.redirect_uri, codeVerifier: body.code_verifier,
++            });
++          } else if (body.grant_type === 'refresh_token') {
++            if (Object.keys(body).some((field) => !['grant_type', 'refresh_token'].includes(field))) return error(res, 400, 'invalid_request');
++            result = await authority.refresh({ clientSecret: auth.clientSecret, refreshToken: body.refresh_token });
++          } else return error(res, 400, 'unsupported_grant_type');
++        } else {
++          if (Object.keys(body).some((field) => !['token'].includes(field)) || !body.token) return error(res, 400, 'invalid_request');
++          result = await authority[operation]({ clientSecret: auth.clientSecret, token: body.token });
++        }
++        if (result.status === 'unavailable') return error(res, 503, 'temporarily_unavailable');
++        if (result.status === 'outcome_unknown') return res.status(503).json({ error: 'outcome_unknown', operation_id: result.operationId, reauth_required: true });
++        if (operation === 'introspect') {
++          if (result.status !== 'ok') return res.json({ active: false });
++          const { identity } = result;
++          return res.json({
++            active: true, iss: identity.issuer, sub: identity.subject, client_id: identity.clientId, aud: identity.audience, exp: Math.floor(identity.expiresAt / 1000), verified_at: Math.floor(identity.verifiedAt / 1000),
++          });
++        }
++        if (operation === 'contactProfile') {
++          if (result.status === 'insufficient_scope') return error(res, 403, 'insufficient_scope');
++          if (result.status === 'contact_required') return error(res, 409, 'contact_required');
++          if (result.status !== 'ok') return error(res, 401, 'invalid_token');
++          const { identity, profile } = result;
++          return res.json({
++            iss: identity.issuer,
++            sub: identity.subject,
++            client_id: identity.clientId,
++            aud: identity.audience,
++            email: profile.email,
++            email_verified: profile.emailVerified === true,
++            ...(profile.displayName ? { name: profile.displayName } : {}),
++          });
++        }
++        if (result.status !== 'ok') return error(res, 400, operation === 'token' ? 'invalid_grant' : 'invalid_request');
++        return res.json(operation === 'token' ? result.tokens : {});
++      } catch {
++        return error(res, 503, 'temporarily_unavailable');
++      }
++    };
++  }
++  router.post('/token', handler('token'));
++  router.post('/introspect', handler('introspect'));
++  router.post('/profile', handler('contactProfile'));
++  router.post('/revoke', handler('revoke'));
++  router.use((err, _req, res, next) => {
++    if (res.headersSent) return next(err);
++    return error(res, err?.type === 'entity.too.large' ? 413 : 400, 'invalid_request');
++  });
++  app.use('/oauth/strict/v1', router);
++  app.use('/mana/oauth/strict/v1', router);
++}
+diff --git a/src/service/appService.ts b/src/service/appService.ts
+index 23475ae4..85646865 100644
+--- a/src/service/appService.ts
++++ b/src/service/appService.ts
+@@ -4,6 +4,7 @@ import jsonwebtoken from 'jsonwebtoken';
+ import cors from 'cors';
+ import cookieParser from 'cookie-parser';
+ import session from 'express-session';
++import { createStrictTransportPreflight, createStrictAuthorizationPreflight } from '../routes/oauthStrictRoutes';
+ import mongoose from 'mongoose';
+ import routes from '../routes/routes';
+ import logger from '../util/winston';
+@@ -188,6 +189,10 @@ app.use(cors(corsOptions));
+ app.options('*', cors(corsOptions));
+ 
+ app.use(cookieParser()); // Parse cookies before authentication
++if (process.env.PORTAL_STRICT_OAUTH_ENABLED !== undefined && process.env.PORTAL_STRICT_OAUTH_ENABLED !== 'false') {
++  app.use(['/oauth/strict/v1', '/mana/oauth/strict/v1'], createStrictTransportPreflight());
++  app.use('/mana/oauth/authorize', createStrictAuthorizationPreflight());
++}
+ app.use(bodyParser.urlencoded({ extended: true }));
+ app.use(bodyParser.json({
+   limit: '10mb',
+diff --git a/src/service/oauthService.js b/src/service/oauthService.js
+index 2b87fd26..e5cd58ba 100644
+--- a/src/service/oauthService.js
++++ b/src/service/oauthService.js
+@@ -455,7 +455,7 @@ export async function validateClient(clientId, clientSecret = null) {
+ /**
+  * Create authorization code
+  */
+-export async function createAuthorizationCode(clientId, userId, redirectUri, scopes, state, codeChallenge = null, codeChallengeMethod = null) {
++export async function createAuthorizationCode(clientId, userId, redirectUri, scopes, state, codeChallenge = null, codeChallengeMethod = null, strictContext = null) {
+   try {
+     // Build authorization code data - only include PKCE fields if provided
+     const authCodeData = {
+@@ -474,6 +474,23 @@ export async function createAuthorizationCode(clientId, userId, redirectUri, sco
+       authCodeData.codeChallengeMethod = codeChallengeMethod;
+     }
+ 
++    if (strictContext !== null) {
++      if (!strictContext || typeof strictContext !== 'object'
++        || strictContext.clientId !== clientId || typeof strictContext.issuer !== 'string' || !strictContext.issuer
++        || typeof strictContext.audience !== 'string' || !strictContext.audience
++        || !Number.isSafeInteger(strictContext.tokenVersion) || strictContext.tokenVersion < 0
++        || typeof strictContext.authoritySessionHash !== 'string' || !/^[a-f0-9]{64}$/.test(strictContext.authoritySessionHash)) {
++        throw new TypeError('Invalid server-owned strict authorization context');
++      }
++      authCodeData.strictContext = {
++        issuer: strictContext.issuer,
++        audience: strictContext.audience,
++        clientId,
++        tokenVersion: strictContext.tokenVersion,
++        authoritySessionHash: strictContext.authoritySessionHash,
++      };
++    }
++
+     const authCode = await dbOAuthAuthorizationCode.create(authCodeData);
+ 
+     logger.info(`oauthService => createAuthorizationCode: Created for user ${userId} and client ${clientId}`);
+diff --git a/src/service/oauthStrictAccessVerifier.js b/src/service/oauthStrictAccessVerifier.js
+new file mode 100644
+index 00000000..36d8db54
+--- /dev/null
++++ b/src/service/oauthStrictAccessVerifier.js
+@@ -0,0 +1,83 @@
++import crypto from 'crypto';
++import jwt from 'jsonwebtoken';
++
++// Candidate authority-side primitive only. No route or legacy verifier imports it.
++// Dependencies and expected binding must come from trusted server configuration.
++export function createStrictAccessVerifier(policy, { signingKey, readClient, readToken } = {}) {
++  const validString = (value) => typeof value === 'string' && value.length > 0 && value.trim() === value;
++  if (!policy || ![policy.issuer, policy.audience, policy.clientId].every(validString)
++    || !Number.isSafeInteger(policy.maxTokenAgeSeconds) || policy.maxTokenAgeSeconds <= 0
++    || (!Buffer.isBuffer(signingKey) && typeof signingKey !== 'string') || !signingKey.length
++    || typeof readClient !== 'function' || typeof readToken !== 'function') {
++    throw new TypeError('Strict identity verifier requires complete trusted configuration');
++  }
++  // Copy the policy so mutation of a shared configuration object cannot change a verifier.
++  const {
++    issuer, audience, clientId, maxTokenAgeSeconds,
++  } = policy;
++  const key = Buffer.from(signingKey);
++  const deny = () => ({ status: 'unauthenticated' });
++
++  return async function verifyStrictAccess(token, requiredScopes = []) {
++    if (!Array.isArray(requiredScopes) || requiredScopes.some((scope) => !validString(scope))) return deny();
++    if (typeof token !== 'string' || !token.length || token.length > 16384) return deny();
++    let claims;
++    try {
++      claims = jwt.verify(token, key, {
++        algorithms: ['HS256'], issuer, audience, maxAge: maxTokenAgeSeconds,
++      });
++    } catch {
++      return deny();
++    }
++    const now = Math.floor(Date.now() / 1000);
++    if (!claims || typeof claims !== 'object' || claims.iss !== issuer || claims.aud !== audience
++      || claims.client_id !== clientId || claims.type !== 'access_token'
++      || !validString(claims.sub) || !/^[a-fA-F0-9]{24}$/.test(claims.sub)
++      || !validString(claims.jti) || !validString(claims.scope)
++      || !Number.isSafeInteger(claims.iat) || !Number.isSafeInteger(claims.exp)
++      || claims.iat > now || claims.exp <= now || claims.exp <= claims.iat
++      || claims.exp - claims.iat > maxTokenAgeSeconds) return deny();
++    const scopes = claims.scope.split(' ');
++    if (scopes.some((scope) => !scope) || new Set(scopes).size !== scopes.length) return deny();
++
++    try {
++      const client = await readClient(clientId);
++      const strict = client?.strictIdentity;
++      const grants = client?.allowedGrants;
++      if (!client || client.clientId !== clientId || client.active !== true
++        || strict?.enabled !== true || strict.issuer !== issuer || strict.audience !== audience
++        || !Array.isArray(grants) || grants.length !== 2
++        || !grants.includes('authorization_code') || !grants.includes('refresh_token')
++        || !Array.isArray(client.allowedScopes)
++        || scopes.some((scope) => !client.allowedScopes.includes(scope))) return deny();
++
++      const hash = crypto.createHash('sha256').update(token).digest('hex');
++      const record = await readToken(hash);
++      const expiry = record?.expiresAt instanceof Date ? record.expiresAt.getTime() : NaN;
++      const currentTime = Date.now();
++      if (!record || record.revoked !== false || record.revokedAt
++        || record.clientId !== clientId || String(record.userId) !== claims.sub
++        || !Number.isFinite(expiry) || expiry <= currentTime || claims.exp * 1000 <= currentTime
++        || currentTime >= (claims.iat + maxTokenAgeSeconds) * 1000
++        || !Array.isArray(record.scopes) || record.scopes.length !== scopes.length
++        || new Set(record.scopes).size !== scopes.length
++        || scopes.some((scope) => !record.scopes.includes(scope))) return deny();
++
++      if (requiredScopes.some((scope) => !scopes.includes(scope))) return { status: 'insufficient_scope' };
++      return {
++        status: 'ok',
++        identity: {
++          issuer,
++          subject: claims.sub,
++          clientId,
++          audience,
++          expiresAt: Math.min(claims.exp * 1000, expiry),
++          verifiedAt: currentTime,
++        },
++      };
++    } catch {
++      // Never expose token, raw database errors or profile/role data.
++      return { status: 'unavailable' };
++    }
++  };
++}
+diff --git a/src/service/oauthStrictAuthority.js b/src/service/oauthStrictAuthority.js
+new file mode 100644
+index 00000000..40c3a429
+--- /dev/null
++++ b/src/service/oauthStrictAuthority.js
+@@ -0,0 +1,243 @@
++import crypto from 'crypto';
++import jwt from 'jsonwebtoken';
++import { createStrictAccessVerifier } from './oauthStrictAccessVerifier';
++
++// Isolated candidate. Only a future authenticated server transport may call it.
++// No environment defaults, registration, model changes or legacy fallbacks.
++export function createStrictAuthority(policy, {
++  signingKey, readClient, readSubjectState, store, readContactProfile,
++} = {}) {
++  const text = (value) => typeof value === 'string' && value.length > 0 && value.trim() === value;
++  const containsControl = (value) => Array.from(value).some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
++  const positiveInteger = (value) => Number.isSafeInteger(value) && value > 0 && Number.isSafeInteger(value * 1000);
++  if (!policy || ![policy.issuer, policy.audience, policy.clientId, policy.redirectUri].every(text)
++    || ![policy.accessTtlSeconds, policy.familyTtlSeconds, policy.maxRotations].every(positiveInteger)
++    || policy.familyTtlSeconds < policy.accessTtlSeconds
++    || typeof readClient !== 'function' || typeof readSubjectState !== 'function'
++    || !signingKey || Buffer.byteLength(signingKey) < 32 || !store) {
++    throw new TypeError('Strict authority requires complete trusted configuration and persistence');
++  }
++  const config = Object.freeze({ ...policy });
++  const callback = new URL(config.redirectUri);
++  if (callback.protocol !== 'https:' || callback.username || callback.password || callback.hash || callback.search
++    || callback.href !== config.redirectUri) throw new TypeError('Strict callback must be an exact HTTPS URL');
++  const key = Buffer.from(signingKey);
++  const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
++  const denied = () => ({ status: 'unauthenticated' });
++  const reauth = () => ({ status: 'reauth_required' });
++  const unknown = (id) => ({ status: 'outcome_unknown', operationId: id });
++
++  async function authenticate(secret) {
++    if (!text(secret) || secret.length > 4096) return null;
++    const client = await readClient(config.clientId);
++    const strict = client?.strictIdentity;
++    if (!client || client.clientId !== config.clientId || client.active !== true
++      || !text(client.clientSecret) || !crypto.timingSafeEqual(Buffer.from(hash(secret), 'hex'), Buffer.from(hash(client.clientSecret), 'hex'))
++      || strict?.enabled !== true || strict.issuer !== config.issuer || strict.audience !== config.audience
++      || client.pkcePolicy !== 'required_s256' || client.audience !== config.audience
++      || !Array.isArray(client.redirectUris) || !client.redirectUris.includes(config.redirectUri)
++      || !Array.isArray(client.allowedGrants) || client.allowedGrants.length !== 2
++      || !client.allowedGrants.includes('authorization_code') || !client.allowedGrants.includes('refresh_token')
++      || !Array.isArray(client.allowedScopes) || !client.allowedScopes.includes('profile')) return null;
++    return client;
++  }
++
++  async function subjectMatches(subject, tokenVersion) {
++    if (!Number.isSafeInteger(tokenVersion) || tokenVersion < 0) return false;
++    const state = await readSubjectState(subject);
++    return state?.active === true && state.tokenVersion === tokenVersion;
++  }
++
++  function permittedScopes(scopes, client) {
++    return Array.isArray(scopes) && scopes.length > 0 && scopes.includes('profile')
++      && new Set(scopes).size === scopes.length
++      && scopes.every((scope) => text(scope) && !/\s/.test(scope) && client.allowedScopes.includes(scope));
++  }
++
++  function mint(subject, scopes, familyId, generation, familyExpiry) {
++    const now = Math.floor(Date.now() / 1000);
++    const lifetime = Math.min(config.accessTtlSeconds, Math.floor(familyExpiry.getTime() / 1000) - now);
++    if (lifetime <= 0) return null;
++    const accessToken = jwt.sign({
++      iss: config.issuer,
++      aud: config.audience,
++      sub: subject,
++      client_id: config.clientId,
++      type: 'access_token',
++      scope: scopes.join(' '),
++      jti: crypto.randomUUID(),
++      sid: familyId,
++      generation,
++      iat: now,
++      exp: now + lifetime,
++    }, key, { algorithm: 'HS256' });
++    const refreshToken = crypto.randomBytes(32).toString('base64url');
++    return {
++      response: {
++        access_token: accessToken, refresh_token: refreshToken, token_type: 'Bearer', expires_in: lifetime, scope: scopes.join(' '),
++      },
++      accessHash: hash(accessToken),
++      refreshHash: hash(refreshToken),
++      accessExpiresAt: new Date((now + lifetime) * 1000),
++    };
++  }
++
++  const verifyAccess = createStrictAccessVerifier({
++    issuer: config.issuer, audience: config.audience, clientId: config.clientId, maxTokenAgeSeconds: config.accessTtlSeconds,
++  }, {
++    signingKey: key,
++    readClient,
++    readToken: async (value) => {
++      const record = await store.readAccessRecord(config.clientId, value, new Date());
++      if (!record || !await subjectMatches(record.userId, record.subjectTokenVersion)) return null;
++      return record;
++    },
++  });
++
++  return {
++    async authenticateClient(clientSecret) {
++      try {
++        return await authenticate(clientSecret) ? { status: 'ok' } : denied();
++      } catch {
++        return { status: 'unavailable' };
++      }
++    },
++
++    async exchange({
++      clientSecret, code, redirectUri, codeVerifier,
++    } = {}) {
++      let consumed = false;
++      const familyId = crypto.randomUUID();
++      try {
++        const client = await authenticate(clientSecret);
++        if (!client || !text(code) || !/^[a-f0-9]{64}$/.test(code)
++          || redirectUri !== config.redirectUri || typeof codeVerifier !== 'string'
++          || !/^[A-Za-z0-9._~-]{43,128}$/.test(codeVerifier)) return denied();
++        const record = await store.readCode(config.clientId, code);
++        const now = new Date();
++        const subject = String(record?.userId || '');
++        const challenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
++        if (!record || record.clientId !== config.clientId || record.used !== false
++          || !(record.expiresAt instanceof Date) || record.expiresAt <= now
++          || record.redirectUri !== config.redirectUri || record.codeChallengeMethod !== 'S256'
++          || record.codeChallenge !== challenge || !/^[a-fA-F0-9]{24}$/.test(subject)
++          || !permittedScopes(record.scopes, client)
++          || record.strictContext?.issuer !== config.issuer || record.strictContext?.audience !== config.audience
++          || record.strictContext?.clientId !== config.clientId
++          || !await subjectMatches(subject, record.strictContext?.tokenVersion)) return denied();
++        // From this point a transport failure can leave a consumed code; never auto-retry.
++        consumed = true;
++        if (!await store.consumeCode(record, now)) return denied();
++        const refreshExpiresAt = new Date(now.getTime() + config.familyTtlSeconds * 1000);
++        if (!Number.isFinite(refreshExpiresAt.getTime())) return unknown(familyId);
++        const minted = mint(subject, record.scopes, familyId, 0, refreshExpiresAt);
++        if (!minted) return reauth();
++        await store.createFamily({
++          _id: familyId,
++          authorizationCodeId: String(record._id),
++          clientId: config.clientId,
++          userId: subject,
++          subjectTokenVersion: record.strictContext.tokenVersion,
++          issuer: config.issuer,
++          audience: config.audience,
++          scopes: record.scopes,
++          generation: 0,
++          state: 'active',
++          currentRefreshHash: minted.refreshHash,
++          spentRefreshHashes: [],
++          refreshExpiresAt,
++          currentAccessHash: minted.accessHash,
++          accessExpiresAt: minted.accessExpiresAt,
++          createdAt: now,
++          updatedAt: now,
++        });
++        return { status: 'ok', tokens: minted.response };
++      } catch {
++        return consumed ? unknown(familyId) : { status: 'unavailable' };
++      }
++    },
++
++    async refresh({ clientSecret, refreshToken } = {}) {
++      let rotationFamilyId = null;
++      try {
++        const client = await authenticate(clientSecret);
++        if (!client || typeof refreshToken !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(refreshToken)) return denied();
++        const refreshHash = hash(refreshToken);
++        const family = await store.findRefreshFamily(config.clientId, refreshHash);
++        const now = new Date();
++        if (!family || family.clientId !== config.clientId || family.issuer !== config.issuer || family.audience !== config.audience
++          || family.state === 'revoked' || !(family.refreshExpiresAt instanceof Date) || family.refreshExpiresAt <= now
++          || !permittedScopes(family.scopes, client) || !await subjectMatches(family.userId, family.subjectTokenVersion)) return denied();
++        if (family.currentRefreshHash !== refreshHash) {
++          await store.revokeFamily(config.clientId, family._id, now);
++          return reauth();
++        }
++        if (family.state === 'rotating') return unknown(family._id);
++        if (family.state !== 'active') return denied();
++        if (family.generation >= config.maxRotations) return reauth();
++        rotationFamilyId = family._id;
++        const rotationId = crypto.randomUUID();
++        const claim = await store.claimRotation({
++          familyId: family._id, clientId: config.clientId, generation: family.generation, refreshHash, rotationId, now, maxRotations: config.maxRotations,
++        });
++        if (!claim) return reauth();
++        const minted = mint(family.userId, family.scopes, family._id, claim.generation, family.refreshExpiresAt);
++        if (!minted) return reauth();
++        const committed = await store.completeRotation({
++          familyId: family._id, clientId: config.clientId, generation: claim.generation, rotationId, refreshHash: minted.refreshHash, accessHash: minted.accessHash, accessExpiresAt: minted.accessExpiresAt, now: new Date(),
++        });
++        if (!committed) return reauth();
++        return { status: 'ok', tokens: minted.response };
++      } catch {
++        return rotationFamilyId ? unknown(rotationFamilyId) : { status: 'unavailable' };
++      }
++    },
++
++    async introspect({ clientSecret, token } = {}) {
++      try {
++        if (!await authenticate(clientSecret)) return denied();
++        const result = await verifyAccess(token);
++        if (result.status !== 'ok') return result;
++        if (Date.now() >= result.identity.expiresAt) return denied();
++        return result;
++      } catch {
++        return { status: 'unavailable' };
++      }
++    },
++
++    async contactProfile({ clientSecret, token } = {}) {
++      try {
++        if (!await authenticate(clientSecret)) return denied();
++        const result = await verifyAccess(token, ['profile', 'email']);
++        if (result.status !== 'ok') return result;
++        if (typeof readContactProfile !== 'function') return { status: 'unavailable' };
++        const contact = await readContactProfile(result.identity.subject);
++        if (!contact || contact.subject !== result.identity.subject) return denied();
++        const { email } = contact;
++        if (typeof email !== 'string' || email.length > 254 || containsControl(email) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { status: 'contact_required' };
++        // Recheck current enrollment, family and central state after profile I/O.
++        const current = await verifyAccess(token, ['profile', 'email']);
++        if (current.status !== 'ok') return current;
++        const profile = { email, emailVerified: contact.emailVerified === true };
++        if (typeof contact.displayName === 'string' && contact.displayName.trim().length > 0
++          && contact.displayName.length <= 200 && !containsControl(contact.displayName)) profile.displayName = contact.displayName.trim();
++        // Email/name are mutable contact data, never identity or role grants.
++        return { status: 'ok', identity: current.identity, profile };
++      } catch {
++        return { status: 'unavailable' };
++      }
++    },
++
++    async revoke({ clientSecret, token } = {}) {
++      try {
++        if (!await authenticate(clientSecret)) return denied();
++        if (typeof token !== 'string' || !token.length || token.length > 16384) return denied();
++        await store.revokeByHash(config.clientId, hash(token), new Date());
++        // Uniform success for a token absent from this authenticated client's families.
++        return { status: 'ok' };
++      } catch {
++        return { status: 'unavailable' };
++      }
++    },
++  };
++}
+diff --git a/src/service/oauthStrictAuthorizationGuard.js b/src/service/oauthStrictAuthorizationGuard.js
+new file mode 100644
+index 00000000..aae7ae53
+--- /dev/null
++++ b/src/service/oauthStrictAuthorizationGuard.js
+@@ -0,0 +1,66 @@
++import crypto from 'crypto';
++import jwt from 'jsonwebtoken';
++
++// Installed only by an explicitly enabled strict runtime. Unknown clients retain
++// the legacy path; a strict client cannot obtain strict context through fallback.
++export function createStrictAuthorizationGuard({
++  resolvePolicy, readClient, readSubjectState, refreshSigningKey, webOrigin,
++} = {}) {
++  if (![resolvePolicy, readClient, readSubjectState].every((value) => typeof value === 'function')
++    || !refreshSigningKey || !webOrigin || new URL(webOrigin).origin !== webOrigin
++    || !webOrigin.startsWith('https://')) throw new TypeError('Strict authorization requires trusted central session adapters');
++  const key = Buffer.from(refreshSigningKey);
++  return async function strictAuthorizationGuard(req, res, next) {
++    try {
++      const parameters = req.method === 'GET' ? req.query : req.body;
++      const clientId = parameters?.client_id;
++      if (typeof clientId !== 'string') return next();
++      const policy = await resolvePolicy(clientId);
++      if (!policy) return next();
++      const fail = (status, code) => res.status(status).set('Cache-Control', 'no-store').json({ error: code });
++      const forwardedOrigin = req.get('X-OAuth-Request-Origin');
++      if (forwardedOrigin !== webOrigin || (req.get('Origin') && req.get('Origin') !== webOrigin)) return fail(403, 'invalid_request');
++      if (policy.clientId !== clientId || !policy.issuer || !policy.audience || policy.redirectUri !== parameters.redirect_uri
++        || (req.method === 'GET' && parameters.response_type !== 'code')
++        || (req.method === 'POST' && parameters.response_type !== undefined && parameters.response_type !== 'code')
++        || typeof parameters.state !== 'string'
++        || !/^[A-Za-z0-9_-]{32,256}$/.test(parameters.state)
++        || parameters.code_challenge_method !== 'S256' || typeof parameters.code_challenge !== 'string'
++        || !/^[A-Za-z0-9_-]{43}$/.test(parameters.code_challenge)) return fail(400, 'invalid_request');
++      const rawCookies = req.get('Cookie') || '';
++      if (rawCookies.split(';').filter((part) => part.trim().startsWith('refreshToken=')).length !== 1) return fail(401, 'login_required');
++      const refreshToken = req.cookies?.refreshToken;
++      if (typeof refreshToken !== 'string' || refreshToken.length > 16384) return fail(401, 'login_required');
++      let session;
++      try {
++        session = jwt.verify(refreshToken, key, { algorithms: ['HS256'] });
++      } catch {
++        return fail(401, 'login_required');
++      }
++      const subject = String(req.user?._id || '');
++      const now = Math.floor(Date.now() / 1000);
++      if (!/^[a-fA-F0-9]{24}$/.test(subject) || session._id !== subject
++        || !Number.isSafeInteger(session.tokenVersion) || session.tokenVersion < 0
++        || !Number.isSafeInteger(session.exp) || !Number.isSafeInteger(session.iat)
++        || session.exp <= now || session.iat > now || session.exp <= session.iat) return fail(401, 'login_required');
++      const client = await readClient(clientId);
++      const state = await readSubjectState(subject);
++      if (!client || client.clientId !== clientId || client.active !== true || client.audience !== policy.audience
++        || client.pkcePolicy !== 'required_s256' || !Array.isArray(client.redirectUris)
++        || !client.redirectUris.includes(policy.redirectUri) || state?.active !== true
++        || state.tokenVersion !== session.tokenVersion || Date.now() >= session.exp * 1000) return fail(401, 'login_required');
++      const context = Object.freeze({
++        issuer: policy.issuer,
++        audience: policy.audience,
++        clientId,
++        tokenVersion: session.tokenVersion,
++        authoritySessionHash: crypto.createHash('sha256').update(refreshToken).digest('hex'),
++      });
++      Object.defineProperty(req, 'strictAuthContext', { value: context, writable: false });
++      res.set('Cache-Control', 'no-store');
++      return next();
++    } catch {
++      return res.status(503).set('Cache-Control', 'no-store').json({ error: 'temporarily_unavailable' });
++    }
++  };
++}
+diff --git a/src/service/oauthStrictBootstrap.js b/src/service/oauthStrictBootstrap.js
+new file mode 100644
+index 00000000..e2e18dc9
+--- /dev/null
++++ b/src/service/oauthStrictBootstrap.js
+@@ -0,0 +1,41 @@
++import mongoose from 'mongoose';
++import { createStrictOAuthRuntime } from './oauthStrictRuntime';
++import { registerStrictOAuthRoutes } from '../routes/oauthStrictRoutes';
++
++// No database access or strict routes when the feature is absent/false.
++// No install, enrollment, index repair, secret generation or DDL at startup.
++export function initializeStrictOAuth(app, environment = process.env, authorization = null) {
++  const runtime = createStrictOAuthRuntime({
++    environment,
++    getDatabase: () => mongoose.connection.db,
++    getAuthorizationCodes: (db) => db.collection(mongoose.model('oauthAuthorizationCode').collection.name),
++    readClient: (clientId) => mongoose.model('oauthClient').findOne({ clientId }).select('clientId clientSecret active audience pkcePolicy redirectUris allowedGrants allowedScopes rateLimitPerHour').lean(),
++    readSubjectState: async (subject) => {
++      const user = await mongoose.model('userBN').findById(subject).select('_id tokenVersion').lean();
++      if (!user || !Number.isSafeInteger(user.tokenVersion) || user.tokenVersion < 0) return null;
++      return { active: true, tokenVersion: user.tokenVersion };
++    },
++    readContactProfile: async (subject) => {
++      const user = await mongoose.model('userBN').findById(subject).select('_id email emailVerified displayName').lean();
++      return user ? {
++        subject: String(user._id), email: user.email, emailVerified: user.emailVerified, displayName: user.displayName,
++      } : null;
++    },
++    refreshSigningKey: environment.REFRESH_TOKEN_SECRET,
++  });
++  if (!runtime) return (_req, _res, next) => next();
++  registerStrictOAuthRoutes(app, runtime);
++  if (authorization && [authorization.loginRequired, authorization.get, authorization.post].every((handler) => typeof handler === 'function')) {
++    const enrolledOnly = (req, res, next) => {
++      res.set('Cache-Control', 'no-store');
++      if (!runtime.diagnostic.configurationValid) return res.status(503).json({ error: 'temporarily_unavailable' });
++      const clientId = (req.method === 'GET' ? req.query : req.body)?.client_id;
++      if (!runtime.isEnrolled(clientId)) return res.status(404).json({ error: 'invalid_client' });
++      return next();
++    };
++    app.route('/mana/oauth/authorize')
++      .get(enrolledOnly, authorization.loginRequired, runtime.authorizationGuard, authorization.get)
++      .post(enrolledOnly, authorization.loginRequired, runtime.authorizationGuard, authorization.post);
++  }
++  return runtime.authorizationGuard;
++}
+diff --git a/src/service/oauthStrictFamilyStore.js b/src/service/oauthStrictFamilyStore.js
+new file mode 100644
+index 00000000..18d6510f
+--- /dev/null
++++ b/src/service/oauthStrictFamilyStore.js
+@@ -0,0 +1,125 @@
++// Native MongoDB 5.8.1 adapter. Constructing it performs no database mutation.
++// Live collection/index provisioning requires a separately reviewed migration.
++export function createStrictFamilyStore({ families, authorizationCodes } = {}) {
++  if (families?.collectionName !== 'oauth_strict_families_v1'
++    || !authorizationCodes || authorizationCodes === families) {
++    throw new TypeError('Strict families require their own collection and explicit authorization-code adapter');
++  }
++  const options = { returnDocument: 'after', includeResultMetadata: false, upsert: false };
++  const owned = (clientId, familyId) => ({ _id: familyId, clientId });
++
++  return {
++    // Explicit operator/test step only; never invoked from a request path.
++    async ensureIndexes() {
++      await families.createIndex({ authorizationCodeId: 1 }, { unique: true, name: 'strict_unique_code_lineage' });
++      await families.createIndex({ clientId: 1, currentRefreshHash: 1 }, { unique: true, name: 'strict_unique_current_refresh' });
++      await families.createIndex({ clientId: 1, currentAccessHash: 1 }, { unique: true, name: 'strict_unique_current_access' });
++      await families.createIndex({ clientId: 1, spentRefreshHashes: 1 }, { name: 'strict_spent_refresh_lookup' });
++    },
++
++    async readCode(clientId, code) {
++      return authorizationCodes.findOne({ clientId, code });
++    },
++
++    async consumeCode(code, now) {
++      const result = await authorizationCodes.updateOne({
++        _id: code._id,
++        code: code.code,
++        clientId: code.clientId,
++        userId: code.userId,
++        strictContext: code.strictContext,
++        redirectUri: code.redirectUri,
++        codeChallenge: code.codeChallenge,
++        codeChallengeMethod: 'S256',
++        scopes: code.scopes,
++        used: false,
++        expiresAt: { $gt: now },
++      }, { $set: { used: true } });
++      return result.modifiedCount === 1;
++    },
++
++    async createFamily(family) {
++      await families.insertOne(family);
++    },
++
++    async findRefreshFamily(clientId, hash) {
++      return families.findOne({
++        clientId,
++        $or: [{ currentRefreshHash: hash }, { spentRefreshHashes: hash }],
++      });
++    },
++
++    async readAccessRecord(clientId, hash, now) {
++      const record = await families.findOne({
++        clientId,
++        currentAccessHash: hash,
++        state: 'active',
++        refreshExpiresAt: { $gt: now },
++        accessExpiresAt: { $gt: now },
++      });
++      if (!record) return null;
++      return {
++        clientId: record.clientId,
++        userId: record.userId,
++        subjectTokenVersion: record.subjectTokenVersion,
++        scopes: record.scopes,
++        revoked: false,
++        expiresAt: new Date(Math.min(record.accessExpiresAt.getTime(), record.refreshExpiresAt.getTime())),
++      };
++    },
++
++    async claimRotation({
++      familyId, clientId, generation, refreshHash, rotationId, now, maxRotations,
++    }) {
++      if (!Number.isSafeInteger(maxRotations) || maxRotations <= 0
++        || !Number.isSafeInteger(generation) || generation < 0 || generation >= maxRotations) return null;
++      return families.findOneAndUpdate({
++        ...owned(clientId, familyId),
++        state: 'active',
++        generation,
++        currentRefreshHash: refreshHash,
++        refreshExpiresAt: { $gt: now },
++      }, {
++        $set: {
++          state: 'rotating', rotationId, rotationStartedAt: now, updatedAt: now,
++        },
++        $inc: { generation: 1 },
++        $push: { spentRefreshHashes: refreshHash },
++      }, options);
++    },
++
++    async completeRotation({
++      familyId, clientId, generation, rotationId, refreshHash, accessHash, accessExpiresAt, now,
++    }) {
++      const result = await families.updateOne({
++        ...owned(clientId, familyId),
++        state: 'rotating',
++        generation,
++        rotationId,
++        refreshExpiresAt: { $gt: now },
++      }, {
++        $set: {
++          state: 'active', currentRefreshHash: refreshHash, currentAccessHash: accessHash, accessExpiresAt, updatedAt: now,
++        },
++        $unset: { rotationId: '', rotationStartedAt: '' },
++      });
++      return result.modifiedCount === 1;
++    },
++
++    async revokeFamily(clientId, familyId, now) {
++      const result = await families.updateOne({ ...owned(clientId, familyId), state: { $ne: 'revoked' } }, {
++        $set: { state: 'revoked', revokedAt: now, updatedAt: now },
++      });
++      return result.modifiedCount === 1;
++    },
++
++    async revokeByHash(clientId, hash, now) {
++      const result = await families.updateOne({
++        clientId,
++        state: { $ne: 'revoked' },
++        $or: [{ currentRefreshHash: hash }, { spentRefreshHashes: hash }, { currentAccessHash: hash }],
++      }, { $set: { state: 'revoked', revokedAt: now, updatedAt: now } });
++      return result.modifiedCount === 1;
++    },
++  };
++}
+diff --git a/src/service/oauthStrictRuntime.js b/src/service/oauthStrictRuntime.js
+new file mode 100644
+index 00000000..a8919ae4
+--- /dev/null
++++ b/src/service/oauthStrictRuntime.js
+@@ -0,0 +1,163 @@
++import { createStrictAuthority } from './oauthStrictAuthority';
++import { createStrictAuthorizationGuard } from './oauthStrictAuthorizationGuard';
++import { createStrictFamilyStore } from './oauthStrictFamilyStore';
++
++const FAMILY_COLLECTION = 'oauth_strict_families_v1';
++const RATE_COLLECTION = 'oauth_strict_rate_windows_v1';
++const fields = ['clientId', 'issuer', 'audience', 'redirectUri', 'accessTtlSeconds', 'familyTtlSeconds', 'maxRotations'];
++const validText = (value) => typeof value === 'string' && value.length > 0 && value.length <= 2048 && value.trim() === value;
++
++function parseConfiguration(raw) {
++  if (typeof raw !== 'string' || raw.length > 65536) throw new TypeError('Invalid strict configuration');
++  const config = JSON.parse(raw);
++  if (!config || config.version !== 1 || Object.keys(config).some((field) => !['version', 'webOrigin', 'clients'].includes(field))
++    || !validText(config.webOrigin) || !config.webOrigin.startsWith('https://') || new URL(config.webOrigin).origin !== config.webOrigin
++    || !Array.isArray(config.clients) || !config.clients.length) throw new TypeError('Invalid strict configuration');
++  const policies = new Map();
++  config.clients.forEach((policy) => {
++    if (!policy || Object.keys(policy).length !== fields.length || Object.keys(policy).some((field) => !fields.includes(field))
++      || ![policy.clientId, policy.issuer, policy.audience, policy.redirectUri].every(validText)
++      || ![policy.accessTtlSeconds, policy.familyTtlSeconds, policy.maxRotations].every((value) => Number.isSafeInteger(value) && value > 0)
++      || policy.familyTtlSeconds < policy.accessTtlSeconds || policy.maxRotations > 4096
++      || !Number.isFinite(new Date(Date.now() + policy.familyTtlSeconds * 1000).getTime())
++      || policies.has(policy.clientId)) throw new TypeError('Invalid strict client configuration');
++    const callback = new URL(policy.redirectUri);
++    if (callback.protocol !== 'https:' || callback.href !== policy.redirectUri || callback.username || callback.password || callback.search || callback.hash) throw new TypeError('Invalid strict callback');
++    policies.set(policy.clientId, Object.freeze({ ...policy }));
++  });
++  return { webOrigin: config.webOrigin, policies };
++}
++
++function unavailableRuntime(policies = new Map()) {
++  return {
++    diagnostic: Object.freeze({ enabled: true, configurationValid: false }),
++    isEnrolled: (clientId) => policies.has(clientId),
++    authorizationGuard(req, res, next) {
++      const clientId = (req.method === 'GET' ? req.query : req.body)?.client_id;
++      if (!policies.has(clientId)) return next();
++      return res.status(503).set('Cache-Control', 'no-store').json({ error: 'temporarily_unavailable' });
++    },
++    async resolveAuthority() { throw new Error('Strict identity runtime unavailable'); },
++    async allowRequest() { throw new Error('Strict identity runtime unavailable'); },
++  };
++}
++
++// Constructor is read-only; it never creates collections/indexes or modifies clients.
++export function createStrictOAuthRuntime({
++  environment = {}, getDatabase, getAuthorizationCodes, readClient, readSubjectState, refreshSigningKey, readContactProfile,
++} = {}) {
++  if (environment.PORTAL_STRICT_OAUTH_ENABLED === undefined || environment.PORTAL_STRICT_OAUTH_ENABLED === 'false') return null;
++  let configuration;
++  try {
++    configuration = parseConfiguration(environment.PORTAL_STRICT_OAUTH_CONFIG);
++    if (environment.PORTAL_STRICT_OAUTH_ENABLED !== 'true') return unavailableRuntime(configuration.policies);
++    if (![getDatabase, getAuthorizationCodes, readClient, readSubjectState].every((value) => typeof value === 'function')
++      || typeof environment.PORTAL_STRICT_OAUTH_SIGNING_KEY !== 'string' || Buffer.byteLength(environment.PORTAL_STRICT_OAUTH_SIGNING_KEY) < 32
++      || !refreshSigningKey) return unavailableRuntime(configuration.policies);
++  } catch {
++    return unavailableRuntime(configuration?.policies);
++  }
++  const { policies, webOrigin } = configuration;
++  const signingKey = environment.PORTAL_STRICT_OAUTH_SIGNING_KEY;
++  let readyPromise;
++  const authorities = new Map();
++  async function ready() {
++    if (!readyPromise) {
++      readyPromise = (async () => {
++        const db = await getDatabase();
++        if (!db) throw new Error('Strict database unavailable');
++        const families = db.collection(FAMILY_COLLECTION);
++        const indexes = await families.listIndexes().toArray();
++        const required = [
++          ['strict_unique_code_lineage', { authorizationCodeId: 1 }, true],
++          ['strict_unique_current_refresh', { clientId: 1, currentRefreshHash: 1 }, true],
++          ['strict_unique_current_access', { clientId: 1, currentAccessHash: 1 }, true],
++          ['strict_spent_refresh_lookup', { clientId: 1, spentRefreshHashes: 1 }, false],
++        ];
++        if (required.some(([name, key, unique]) => !indexes.some((index) => index.name === name && JSON.stringify(index.key) === JSON.stringify(key) && Boolean(index.unique) === unique && !index.sparse && !index.partialFilterExpression && !index.collation))) throw new Error('Strict storage indexes not prepared');
++        const windows = db.collection(RATE_COLLECTION);
++        if (!(await windows.listIndexes().toArray()).some((index) => index.name === '_id_')) throw new Error('Strict rate storage not prepared');
++        const authorizationCodes = await getAuthorizationCodes(db);
++        const codeIndexes = await authorizationCodes.listIndexes().toArray();
++        if (!codeIndexes.some((index) => JSON.stringify(index.key) === JSON.stringify({ code: 1 })
++          && index.unique === true && !index.sparse && !index.partialFilterExpression && !index.collation)) {
++          throw new Error('Strict authorization-code uniqueness not prepared');
++        }
++        return { store: createStrictFamilyStore({ families, authorizationCodes }), windows };
++      })().catch((error) => { readyPromise = undefined; throw error; });
++    }
++    return readyPromise;
++  }
++  async function enrolledClient(clientId) {
++    const policy = policies.get(clientId);
++    if (!policy) return null;
++    const client = await readClient(clientId);
++    if (!client) return null;
++    if (client.audience && client.audience !== policy.audience) return null;
++    // Strict enrollment supplies an audience without changing the legacy record.
++    return { ...client, audience: policy.audience, strictIdentity: { enabled: true, issuer: policy.issuer, audience: policy.audience } };
++  }
++  const guard = createStrictAuthorizationGuard({
++    resolvePolicy: async (clientId) => policies.get(clientId), readClient: enrolledClient, readSubjectState, refreshSigningKey, webOrigin,
++  });
++  const runtime = {
++    diagnostic: Object.freeze({ enabled: true, configurationValid: true }),
++    isEnrolled: (clientId) => policies.has(clientId),
++    async authorizationGuard(req, res, next) {
++      const clientId = (req.method === 'GET' ? req.query : req.body)?.client_id;
++      if (!policies.has(clientId)) return next();
++      try {
++        await ready();
++        return guard(req, res, async () => {
++          try {
++            if (!await runtime.allowRequest({ clientId })) return res.status(429).set('Cache-Control', 'no-store').json({ error: 'temporarily_unavailable' });
++            return next();
++          } catch {
++            return res.status(503).set('Cache-Control', 'no-store').json({ error: 'temporarily_unavailable' });
++          }
++        });
++      } catch {
++        return res.status(503).set('Cache-Control', 'no-store').json({ error: 'temporarily_unavailable' });
++      }
++    },
++    async resolveAuthority(clientId) {
++      if (!policies.has(clientId)) return null;
++      const { store } = await ready();
++      if (!authorities.has(clientId)) {
++        authorities.set(clientId, createStrictAuthority(policies.get(clientId), {
++          signingKey, readClient: () => enrolledClient(clientId), readSubjectState, refreshSigningKey, store, readContactProfile,
++        }));
++      }
++      return authorities.get(clientId);
++    },
++    async allowRequest({ clientId }) {
++      if (!policies.has(clientId)) return true; // Unknown IDs never cause persistence.
++      const { windows } = await ready();
++      const client = await enrolledClient(clientId);
++      if (!client || client.active !== true || !Number.isSafeInteger(client.rateLimitPerHour) || client.rateLimitPerHour <= 0) return false;
++      const now = new Date();
++      const inWindow = { $and: [{ $lte: ['$windowStartedAt', now] }, { $gt: [{ $add: [{ $ifNull: ['$windowStartedAt', new Date(0)] }, 3600000] }, now] }] };
++      const update = [{ $set: { windowStartedAt: { $cond: [inWindow, '$windowStartedAt', now] }, count: { $cond: [inWindow, { $add: ['$count', 1] }, 1] }, updatedAt: now } }];
++      let record;
++      try {
++        record = await windows.findOneAndUpdate({ _id: clientId }, update, { upsert: true, returnDocument: 'after', includeResultMetadata: false });
++      } catch (error) {
++        if (error.code !== 11000) throw error;
++        // A known duplicate-upsert race has no increment effect; retry once as update-only.
++        record = await windows.findOneAndUpdate({ _id: clientId }, update, { upsert: false, returnDocument: 'after', includeResultMetadata: false });
++      }
++      return Boolean(record && record.count <= client.rateLimitPerHour);
++    },
++  };
++  return runtime;
++}
++
++// Explicit operator-only additive migration. Never invoked from bootstrap/HTTP.
++export async function prepareStrictOAuthStorage(db, { expectedDatabaseName, acknowledgeAdditiveOnly } = {}) {
++  if (!expectedDatabaseName || db?.databaseName !== expectedDatabaseName || acknowledgeAdditiveOnly !== true) throw new TypeError('Exact database and additive preparation acknowledgement required');
++  const existing = new Set((await db.listCollections({}, { nameOnly: true }).toArray()).map((item) => item.name));
++  if (!existing.has(FAMILY_COLLECTION)) await db.createCollection(FAMILY_COLLECTION);
++  if (!existing.has(RATE_COLLECTION)) await db.createCollection(RATE_COLLECTION);
++  const store = createStrictFamilyStore({ families: db.collection(FAMILY_COLLECTION), authorizationCodes: db.collection('unused_operator_adapter') });
++  await store.ensureIndexes();
++}
