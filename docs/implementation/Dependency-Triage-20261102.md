@@ -81,6 +81,10 @@ Not run: the native Medusa HTTP probe (`scripts/test-m1b-native-medusa.mjs`, sin
 
 The remaining waiver candidates for the seal-replacement policy are `glob`, `minimatch`, `deepmerge` (production) and `esbuild` (dev).
 
+## Status update — seal replaced by dated waiver (2026-11-02)
+
+Founder approved item 5 with the exact four advisories above and a 45-day expiry (`2026-12-17T23:59:59Z`). Implemented as a separate gate; see [ADR-0020](ADR-0020-Dated-Dependency-Advisory-Waiver.md). `npm run security:audit` now reports `ACCEPTED_WITH_DATED_WAIVER` and exits 0.
+
 ## Not done in this triage
 
 No `npm ci`, build, test or Medusa/web run against the trial lockfiles. Runtime compatibility of zod 4.6.x under Medusa 2.21.2 and of Next 16.4.3 is unverified. Vercel and Medusa deployment state were not checked, because this session has no cloud access.
