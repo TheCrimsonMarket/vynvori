@@ -11,6 +11,16 @@ test("local and production defaults disable every operational feature", () => {
   }
   assert.equal(parseServerConfig({}).environment, "development");
 });
+test("identity enrollment is limited to a pinned isolated staging preview", () => {
+  const staging = { VYNVORI_IDENTITY_CENTRAL_SSO: "true", M1B_DEPLOYMENT: "staging", VERCEL: "1", VERCEL_ENV: "preview", M1B_APP_ORIGIN: "https://staging.vynvori.com", M1B_ISOLATED_STAGING_PROJECT_ID: "prj_synthetic_private", VERCEL_PROJECT_ID: "prj_synthetic_private" };
+  const config = parseServerConfig(staging);
+  assert.equal(config.features["identity.central_sso"], true);
+  assert.ok(Object.entries(config.features).every(([key, value]) => key === "identity.central_sso" || value === false));
+  assert.equal(publicConfig.features["identity.central_sso"], false);
+  assert.ok(!JSON.stringify(config).includes("prj_synthetic_private"));
+  for (const patch of [{ VERCEL_ENV: "production" }, { VERCEL_ENV: "development" }, { VERCEL_PROJECT_ID: "prj_public_other" }, { M1B_APP_ORIGIN: "https://www.vynvori.com" }, { M1B_DEPLOYMENT: "production" }, { M1B_ISOLATED_STAGING_PROJECT_ID: "" }]) assert.throws(() => parseServerConfig({ ...staging, ...patch }), /activation is unavailable/);
+  assert.throws(() => parseServerConfig({ ...staging, VYNVORI_PAYMENTS_LIVE: "true" }), /activation is unavailable/);
+});
 test("every activation attempt and malformed boolean fails closed", () => {
   for (const feature of Object.keys(publicConfig.features)) {
     const key = `VYNVORI_${feature.replaceAll(".", "_").toUpperCase()}`;

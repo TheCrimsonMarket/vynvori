@@ -1,5 +1,17 @@
 # 20 — Traceability and acceptance matrix
 
+## M1b local implementation checkpoint — 2026-10-19
+
+Migration continuation:45test entries PASS on disposable PostgreSQL18.6, including atomic checksum migration, replay, physical/history drift, restricted-runtime negatives and native backup/restore with matching schema/history digests. The existing M2 migration journal/command is unchanged. Live Neon backup/migration/grants and operational acceptance remain NOT_RUN. [Migration evidence and limits](../implementation/evidence/M1b-Identity-Migrations-20261019.json).
+
+Connected continuation: nine local browser/BFF/native-Medusa checks PASS, including PKCE/cookies, duplicate callback rejection, two-account/guest ownership, rotation, revocation and a committed-but-lost refresh response. Normal fresh `npm ci`,117checks, lint and complete typecheck PASS. Authority and test TLS are synthetic/local; live Portal/IAM/enabled Next staging acceptance remains NOT_RUN. Unfiltered npm audits remain nonzero; the existing M2 source/lock seal still rejects the new M1b overlay. No exception, operational activation or complete acceptance row is approved by these results. [Current review/evidence/remaining work](../implementation/M1b-Local-Validation-Review-20261019.md).
+
+Revocation continuation:117combined unit/config checks and33disposablePostgreSQL scenarios PASS after adding bounded pending-revocation reconciliation. Root lint, complete typecheck and optimized web build PASS. Periodic/live invocation remains NOT_RUN. Full regression/CI remains **BLOCKED** by the existing M2 approval fingerprint rejecting the changed M1b lockfile; no policy was weakened. [Current revocation evidence and exact limits](../implementation/evidence/M1b-Revocation-Reconciliation-20261019.json). ACC-03/ACC-22/full M1b remain IN_PROGRESS.
+
+ACC-03 and the authentication subset of ACC-22 are **IN_PROGRESS; local evidence only**. Durable issuer/subject sessions, single-use callback/refresh fencing, native customer mapping, encrypted customer credentials and owned profile/order/cart reads are implemented with default-off enrollment.110unit/config checks,26disposable creativePostgreSQL scenarios, actual native Medusa HTTP/signature/ownership/revocation checks, affected typechecks, root lint and optimized Next build PASS. Eleven disabled web routes and desktop/mobile default rendering PASS; eight account component browser scenarios PASS with synthetic BFF responses. [Reproducible receipt and boundaries](../implementation/evidence/M1b-Customer-Owned-Reads-20261019.json).
+
+Full enabled OAuth browser acceptance, pending-revocation reconciliation, actual private-platform IAM, live target migration/grant/rollback review, fresh dependency validation/remote CI and separately authorized staging activation remain open. These local results do not mark ACC-03, ACC-22, full M1b or any production gate PASSED. Historical rows below retain their original baseline status; this dated checkpoint records the executed local progress without implying deployment.
+
 Use statuses `NOT_STARTED`, `NOT_RUN`, `IN_PROGRESS`, `PASSED`, `FAILED`, `BLOCKED`. **All rows currently NOT_STARTED or BLOCKED:** this documentation does not imply code exists. For each completed requirement record PR/commit, test evidence, migration/deploy link, reviewer and date.
 
 | ID | Area | Acceptance evidence | Current status |

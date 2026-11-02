@@ -9,6 +9,7 @@ import { evaluate, snapshot, digest, sha256, validatePolicy } from "./audit-poli
 import { collectLocalState, evaluateLocal, validateLocalInputs, contextAllowed, POLICY_PATH } from "./pr5-local-policy.mjs";
 import { verifyLocalImage } from "./pr5-runtime-check.mjs";
 import { collectStagingState, validateStagingAudits, evaluateStaging } from "./staging-policy.mjs";
+import { M1B_IMPLEMENTATION_COMMIT, M1B_POLICY_DIGEST, M1B_POLICY_PATH, collectApprovedM1bState, validateM1bInputs, evaluateM1b } from "./m1b-source-policy.mjs";
 
 // Rendered only in the separately committed activation step; never by this runner.
 export const PR5_IMPLEMENTATION_COMMIT = "dfa716c53adf83c613bb4aca459b1b5580fdcaf5";
@@ -42,7 +43,7 @@ export function summarizeAudit(stdout, state) {
   } catch { return { parsed: false, totals: null, records: [] }; }
 }
 
-async function runAudit(productionOnly = true) {
+export async function runAudit(productionOnly = true) {
   const npmCli = process.env.npm_execpath;
   if (!npmCli || !path.isAbsolute(npmCli) || !npmCli.endsWith("npm-cli.js")) throw new Error("RUN_THROUGH_NPM");
   const registry = await exec(process.execPath, [npmCli, "config", "get", "registry"], { cwd: root, timeout: 10000, maxBuffer: 4096, windowsHide: true });
@@ -78,7 +79,7 @@ async function main() {
   let result;
   let policy;
   let state;
-  let historicalResult, localPolicy, localState, image;
+  let historicalResult, localPolicy, localState, image, m1bPolicy, m1bState;
   let allAudit = { stdout: "", stderr: "", exitCode: null, signal: null, executionError: true };
   // Always attempt the full unfiltered audit before checking the exception fingerprint.
   try { audit = await runAudit(); } catch { result = { accepted: false, status: "REJECTED", code: "AUDIT_EXECUTION_FAILURE" }; }
@@ -109,6 +110,16 @@ async function main() {
         state: localState, production: audit, all: allAudit, image, env: process.env });
     }
   } catch (error) { result = { accepted: false, status: "REJECTED", code: error.message }; }
+  if (!result.accepted && (M1B_IMPLEMENTATION_COMMIT !== "UNACTIVATED" || M1B_POLICY_DIGEST !== "UNACTIVATED")) {
+    try {
+      m1bPolicy = JSON.parse(await fs.readFile(path.join(root, M1B_POLICY_PATH), "utf8"));
+      m1bState = await collectApprovedM1bState(root, m1bPolicy, process.env);
+      const input = { policy: m1bPolicy, state: m1bState, production: audit, all: allAudit, env: process.env };
+      validateM1bInputs(input);
+      image = await verifyLocalImage(root, evidence, m1bPolicy.runtime);
+      result = evaluateM1b({ ...input, image });
+    } catch (error) { result = { accepted: false, status: "REJECTED", code: error.message }; }
+  }
   const raw = { stdout: audit.stdout, stderr: audit.stderr, allStdout: allAudit.stdout, allStderr: allAudit.stderr };
   // A protected local copy preserves execution-error evidence. Only scanned output is publishable.
   const privateDir = await fs.mkdtemp(path.join(os.tmpdir(), "VYNVORI-audit-private-"));
@@ -130,10 +141,12 @@ async function main() {
       signal: allAudit.signal, stdoutSha256: sha256(allAudit.stdout), summary: clean ? summarizeAudit(allAudit.stdout, localState ? { installed: localState.installed } : state) : null },
     localApproval: localPolicy ? { policySha256: digest(localPolicy), implementationCommit: PR5_IMPLEMENTATION_COMMIT,
       sourceCommit: localState?.commit, sourceTree: localState?.tree, imageId: image?.imageId, archiveSha256: image?.archiveSha256 } : null,
+    m1bApproval: m1bPolicy ? { policySha256: digest(m1bPolicy), implementationCommit: M1B_IMPLEMENTATION_COMMIT, sourceCommit: m1bState?.commit, imageId: image?.imageId } : null,
   };
   await fs.writeFile(path.join(evidence, "evaluation.json"), JSON.stringify(report, null, 2) + "\n");
   if (policy) await fs.writeFile(path.join(evidence, "policy.json"), JSON.stringify(policy, null, 2) + "\n");
   if (localPolicy) await fs.writeFile(path.join(evidence, "pr5-local-policy.json"), JSON.stringify(localPolicy, null, 2) + "\n");
+  if (m1bPolicy) await fs.writeFile(path.join(evidence, "m1b-source-ci-policy.json"), JSON.stringify(m1bPolicy, null, 2) + "\n");
   console.log(`Original unfiltered npm audit exit=${audit.exitCode}; findings=${result.counts?.total ?? "unavailable"}; effective security gate=${result.status}${result.code ? ` (${result.code})` : ""}`);
   console.log(`Security evidence: ${evidence}`);
   if (!result.accepted) process.exitCode = 1;

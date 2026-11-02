@@ -21,3 +21,14 @@ design/reference/*
 !design/reference/package.json
 apps/web/tests/
 packages/shared/tests/
+packages/commerce/tests/
+packages/db/tests/
+packages/db/auth-migrations/
+packages/db/migrations/
+packages/db/src/migrate.ts
+packages/db/src/migrate-identity.ts
+packages/db/src/identity-migrations.ts
+apps/medusa/*
+!apps/medusa/package.json
+services/image-processing/*
+!services/image-processing/package.json

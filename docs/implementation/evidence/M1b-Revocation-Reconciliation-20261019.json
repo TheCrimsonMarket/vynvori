@@ -1,0 +1,86 @@
+{
+  "date": "2026-10-19",
+  "status": "PASS_LOCAL_BOUNDED_REVOCATION_RECONCILIATION",
+  "head": "262489d8a5c367e579839806d7e8554a394dcd2a",
+  "files": {
+    "packages/db/auth-migrations/0004_revocation_reconciliation.sql": "a07d1852a2de24b6315ebcf6f4ae092c3d9585cdc5d2da324430649f74ef9766",
+    "packages/db/src/auth-state.ts": "271ad50c280cfb0f21da97f27b264d0021d9de55f1887058e88415f4da6b5fd6",
+    "packages/db/tests/auth-state.test.ts": "94eaeadc417eec8e964baf5e4a6333a781d52badede20b1f349b6bd15b7af012",
+    "packages/commerce/src/revocation-reconciliation.ts": "d3313720d6130f3ca256e0696e3ac5b069f00dcdcc21dd349d96100c7c0c2b23",
+    "packages/commerce/src/auth-sessions.ts": "db2e2f87a8b419f15774cc92121c2d8960ed9d26b9244f3ea1f76eda1d2f1e8b",
+    "packages/commerce/src/identity.ts": "752812a690376dcf59a78c8559fb92f724f83192ac63cea1f285c983eb9156e2",
+    "packages/commerce/tests/revocation-reconciliation.test.ts": "afaf989cf13a903e34e4b716c192f993507a7c322e29cb3f92cee1a3feb853b0",
+    "apps/web/src/server/auth-runtime.ts": "b973619f70e1947756627a4db5338e3bf33001079135ed174200a8f6f4a09a5a",
+    "scripts/test-m1b-identity-state.mjs": "bb29586c2587bde807b7a59fce401bc19b80b238f129124876bfd5718b9cbb05"
+  },
+  "portalContract": {
+    "liveTest": "NOT_RUN",
+    "commit": "35a47c9d6d7b41adbed5cc6556a4e9bbe78269ba",
+    "revocation": "Authenticated uniform success; current/spent refresh and current access hashes scoped to client",
+    "verification": "git show exact reviewed authority/family-store sources"
+  },
+  "combinedUnitTests": {
+    "pass": 117,
+    "fail": 0
+  },
+  "creativePostgres": {
+    "fail": 0,
+    "scope": "DISPOSABLE_LOOPBACK_ONLY",
+    "cleanup": "REMOVED_VERIFIED_LABEL",
+    "scenariosPass": 33,
+    "nodeEntriesPass": 34,
+    "skipped": 0,
+    "imageId": "sha256:97ff59a4e30e08d1c11bdcd9455e7832368c0572b576c9092cde2df4ae5552a3",
+    "version": "16.12"
+  },
+  "limits": {
+    "batchMaximum": 5,
+    "backoffMaximumSeconds": 3600,
+    "backoffMinimumSeconds": 60,
+    "maximumQueueAttempts": 8,
+    "leaseSeconds": 30,
+    "refreshOrCreation": false
+  },
+  "checks": {
+    "remoteCi": "NOT_RUN",
+    "securityPolicy": "FAIL_LOCK_FINGERPRINT_MISMATCH",
+    "rootTypecheck": "PASS",
+    "rootLint": "PASS",
+    "stagingSource": {
+      "error": "LOCK_FINGERPRINT_MISMATCH",
+      "skip": 1,
+      "pass": 15,
+      "fail": 1
+    },
+    "worker": {
+      "pass": 2,
+      "fail": 0
+    },
+    "nextBuild": "PASS",
+    "m0": "PASS",
+    "npmTest": "NOT_GREEN",
+    "reference": "PASS",
+    "m2Unit": {
+      "skip": 2,
+      "pass": 109,
+      "fail": 0
+    },
+    "lifecycle": {
+      "permissionCorrectRerunFail": 0,
+      "platformSkips": 2,
+      "permissionCorrectRerunPass": 5,
+      "initial": "SANDBOX_TASKKILL_ACCESS_DENIED",
+      "fixtureCleanup": "VERIFIED_EXACT_TEST_PROCESS_IDS_AND_PARENT_THEN_TERMINATED"
+    }
+  },
+  "policyChanged": false,
+  "freshNpmCi": "NOT_RUN",
+  "enabledEndToEndOAuthBrowser": "NOT_RUN",
+  "scheduler": "NOT_ENROLLED",
+  "liveInvocation": false,
+  "liveMigration": false,
+  "liveRegistration": false,
+  "deployment": false,
+  "sourcePublication": false,
+  "fullM1b": "IN_PROGRESS"
+}

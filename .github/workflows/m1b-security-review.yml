@@ -1,0 +1,35 @@
+name: M1b security evidence (not approval)
+on:
+  pull_request:
+    paths: ['apps/**', 'packages/**', 'services/**', 'scripts/**', 'security/**', 'deploy/**', '.github/workflows/**', 'package*.json', 'vercel.json', '.vercelignore', '.env.example']
+permissions:
+  contents: read
+concurrency:
+  group: m1b-security-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  collect-unapproved-proposal:
+    if: github.head_ref == 'codex/m1b-central-identity'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PR5_SECURITY_SCOPE: local-synthetic-only
+      M1B_SECURITY_SCOPE: m1b-github-ci-source-only
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.3'
+          cache: npm
+      - run: npm ci
+      - run: npm run security:review:m1b
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: m1b-unapproved-security-review-${{ github.sha }}
+          path: ${{ runner.temp }}/VYNVORI-M1b-security-review-*/publish/*.json
+          if-no-files-found: error
+          retention-days: 7

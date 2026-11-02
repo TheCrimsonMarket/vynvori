@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-19",
+  "status": "DRAFT_SOURCE_ONLY_PUBLICATION_COMPLETE_FOLLOWUP_LOCAL_VALIDATION_PASS",
+  "pr": "https://github.com/TheCrimsonMarket/vynvori/pull/10",
+  "draft": true,
+  "base": "262489d8a5c367e579839806d7e8554a394dcd2a",
+  "approvedFileCount": 123,
+  "approvedSourceDigest": "8f7755edf2edceab6a84fe676cbeb18c5a1c9005f589ad929a4935f9082af175",
+  "sourceCommit": "dd35e8808c89d0d43b4e8abc0c5bada00c06e3c8",
+  "guardCommit": "b4570a27ccc3eb82af1e399b7f43b79c60716362",
+  "guardFiles": [
+    "vercel.json",
+    "apps/web/vercel.json"
+  ],
+  "automaticDeployments": "EXACT_REVIEW_BRANCH_DISABLED",
+  "vercelBranchDeploymentQuery": "ZERO_RESULTS_OBSERVED",
+  "excludedProgressAndEarlierArtifacts": "PRESERVED_UNSTAGED",
+  "followupFiles": {
+    "apps/medusa/src/api/middlewares.ts": "12cb51fb123743fd2585b652cb9071617819fedbfa8b8c92d91d186766b6e1c3",
+    "apps/medusa/tests/private-boundary.test.ts": "2b1e3a5f2280a32cf7e4d3432ef13106c0306313cbb19d8fed17025e254b3002",
+    "apps/medusa/scripts/m1b-native-probe.cjs": "26234a51dde79b3de86f144a3aa8458b4aff1b66fc8da4ddb8d8b4c7746da7e7",
+    "scripts/tests/reviewed-security-baseline.mjs": "e5da79683d42c6f7fe216664a16fd16a4ba97fa1f394e4059d85a243f26e8a9e",
+    "scripts/tests/security-policy.test.mjs": "bbae949e40af4938d670e80679c4d8ac8f868370099ff4683d92b8cd133809e1",
+    "scripts/tests/medusa-staging.test.mjs": "c783711659deb46c2141d7c4537637f377a8b7415557d4a38a938963f54653e9"
+  },
+  "fullLocalNpmTest": "PASS",
+  "nativeHttp": "PASS_CLOSED_CUSTOMER_ROUTE_401_CACHED_TOKEN_DENIED",
+  "nativeResultDirectory": "C:\\Users\\User\\AppData\\Local\\Temp\\VYNVORI-M1b-20261019\\medusa-source-build-d7c733d0-920f-4671-a88b-387742e7b0d7",
+  "medusaUnitPass": 22,
+  "medusaTypecheck": "PASS",
+  "affectedLint": "PASS",
+  "oldM2PolicyAndEvaluator": "UNCHANGED_STILL_REJECT_M1B",
+  "initialCi": {
+    "foundation": 39215089566,
+    "conclusion": "INITIAL_FAILURES_RECORDED_AND_CAUSAL_FOLLOWUPS_PREPARED",
+    "container": 39215089565,
+    "m0": 39215089568
+  },
+  "riskExceptionActivated": false,
+  "merge": false,
+  "registration": false,
+  "deployment": false,
+  "fullM1b": "IN_PROGRESS"
+}

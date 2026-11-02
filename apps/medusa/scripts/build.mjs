@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { randomBytes } from "node:crypto";
+import { checkAuthSource } from "./check-auth-source.mjs";
+await checkAuthSource();
 const require = createRequire(import.meta.url);
 // Compiler-only defaults: never used by start/dev/migrate; compiled config reads runtime env.
 const env = process.env.M2_ENV ? { ...process.env } : {

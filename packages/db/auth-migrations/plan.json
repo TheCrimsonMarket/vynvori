@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "purpose": "vynvori-identity-staging",
+  "target": { "database": "vynvori_creative_staging", "host": "ep-patient-dust-b8dmxyrl.c-14.us-east-1.aws.neon.tech", "migrationRole": "vynvori_staging_app" },
+  "journalSchema": "vynvori_identity_migrations",
+  "migrations": [
+    { "file": "0001_identity_state.sql", "when": 1792368000000, "sha256": "84ae0f55201f44dd134750e718eeaf146289fcccbb5fa1f77da8a477ee3aedd4" },
+    { "file": "0002_commerce_mappings.sql", "when": 1792368000001, "sha256": "5c2ee871466d4ea49841098284af043345500de89db1457c371c54e2c351593b" },
+    { "file": "0003_customer_credentials.sql", "when": 1792368000002, "sha256": "2e23bb5aecf384766582feaeb6f6d5e318aa4f8d0e6d07e3c50d112fb04b2fa8" },
+    { "file": "0004_revocation_reconciliation.sql", "when": 1792368000003, "sha256": "a07d1852a2de24b6315ebcf6f4ae092c3d9585cdc5d2da324430649f74ef9766" }
+  ]
+}

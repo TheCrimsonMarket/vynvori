@@ -1,0 +1,25 @@
+# ADR 0015 — bounded pending-revocation reconciliation
+
+2026-10-19. Local implementation only; live migration, grants, invocation and scheduler enrollment are not authorized or performed.
+
+## Decision
+
+Add a server-only explicit batch for pending central revocations and locally expired/abandoned sessions. A batch claims at most five rows, one at a time, using an atomic PostgreSQL UPDATE with `FOR UPDATE SKIP LOCKED`. Claims match the exact issuer, central client and deployment. The claim first commits local revocation, clears the customer-token cache and closes any refresh lease. It never refreshes tokens or restores access.
+
+Proposed additive migration `packages/db/auth-migrations/0004_revocation_reconciliation.sql` adds cohort fields, attempts, next-attempt time and a complete lease pair with constraints and a partial index. New sessions record their client/deployment. Existing rows without cohort metadata are retained and excluded from automatic selection; an owner must verify them before any separately reviewed recovery. The migration remains outside the active M2 journal. Runtime code executes DML only with the existing proposed restricted identity role.
+
+The worker decrypts the retained central credential using its exact session/generation/client/deployment context, validates issuer/subject and calls only the fixed strict revoke endpoint. The reviewed Portal commit `35a47c9d6d7b41adbed5cc6556a4e9bbe78269ba` was inspected directly with `git show`: authenticated revoke returns uniform success, and the family store matches current refresh, spent refresh and current access hashes within that client. Retrying revocation is idempotent. It does not repeat an uncertain refresh or rely on a possibly missing refresh response to recover a new token.
+
+Claims have thirty-second leases. Only the current unexpired lease may acknowledge success. Uncertain transport/response/decryption outcomes remain pending. Backoff starts at one minute and doubles to a maximum hour, with eight queue claims maximum; exhaustion remains pending for manual review. A crashed claim consumes an attempt. The worker stops the batch after any lost local acknowledgement, preventing immediate reclaims. A definite authority response plus a committed acknowledgement is required to report confirmation. A confirmed row is not selected again. Repeated direct logout remains a deliberate idempotent action outside the queue attempt count.
+
+The return value contains counts only: attempted, confirmed, pending and manualReview. No tokens, ciphertext, identity IDs, subjects, email, keys or database values are logged. Errors are sanitized. The private web runtime composes the batch as a trusted server method only when identity is enrolled. There is no new HTTP route, startup execution, cron or automation. Periodic invocation, access controls, alerting and live operational ownership still require review and execution before staging acceptance.
+
+## Verification and limitations
+
+Seven new unit checks cover disabled behavior, batch bounds, exact acknowledgement, uncertain revocation/backoff, copied ciphertext/live-session refusal, lost acknowledgement and exhausted attempts. Combined unit/config scope:117PASS. Disposable PostgreSQL16.12:33scenariosPASS, including competing workers, exact cohort isolation, all eight backoff steps, stale-lease fencing, expiry/abandoned-refresh closure, lost committed acknowledgement, credential-cache removal and historical-row preservation. The synthetic authority is injected; this is not a deployed Portal revoke test. Root lint, complete root typecheck and optimized Next build PASS.
+
+Broader regression execution: M0, reference and M2 unit/worker checks passed. Lifecycle checks initially failed because sandbox taskkill was denied; exact synthetic process identities were verified and cleaned up, and the permission-correct lifecycle run passed5checks with2platform skips. Security-policy and staging-source tests correctly reject the changed M1b lockfile with `LOCK_FINGERPRINT_MISMATCH`. The approved M2 seal is unchanged. Full `npm test`/CI therefore is not green, and no exception, reseal or test weakening was performed. A fresh M1b dependency/security/source review remains required.
+
+## Rollback and operator review
+
+Disable identity/private transport and stop any separately enrolled batch invocation. Retain pending/confirmed rows, encrypted credentials, cohort metadata, key versions and lease/attempt evidence. Reverting the application does not require dropping these additive columns. Never reset pending attempts, replace missing cohort metadata by assumption, revive expired sessions or delete native customers as a rollback shortcut. Before live migration, review exact checksums, existing object conflicts, backup/restore and minimal grants. Before live invocation, confirm the approved authority/client, bounded limits, monitoring and a private operator procedure for exhausted rows. No new external API or application event is introduced.

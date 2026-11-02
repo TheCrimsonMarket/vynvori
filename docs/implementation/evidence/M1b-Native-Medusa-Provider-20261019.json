@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-19",
+  "status": "PASS_LOCAL_NATIVE_PROVIDER_SOURCE_AND_COMPILED_DISABLED_PROBE",
+  "files": {
+    "packages/commerce/src/central-identity.ts": "7742621262f5fdaf76949ed69dee661c74b40feca38ed66d1ec44061678dde17",
+    "packages/commerce/src/central-identity-core.ts": "a9385c450c67be456ff7910f237bed45a216fe205704814e07e5ea48e56c501f",
+    "apps/medusa/src/auth/central-identity.ts": "a9385c450c67be456ff7910f237bed45a216fe205704814e07e5ea48e56c501f",
+    "apps/medusa/src/modules/tcm-auth/service.ts": "9b35b6f29e345bb7ec2d60bf1064df7b7b1df0712f7168cce69eaeada5be214e",
+    "apps/medusa/src/modules/tcm-auth/index.ts": "31a3cfcb5524f8465089864063b53534816abbb234be50b5df9e9ddeb9aa6332",
+    "apps/medusa/tests/tcm-auth.test.ts": "e3a18feb6bb31d4b7d98ae9eca9a4d048e2180a41e7a9a62fe48a05eff74bffe",
+    "apps/medusa/scripts/check-auth-source.mjs": "8eab3c916a18d6241d92d758a31ff55a4b2dd173633d1d36bc8f44f6f479d3ed",
+    "apps/medusa/scripts/build.mjs": "a76a0d20acf6ec40d2b65e83489963c1b3a73aa00784df6916f41d54d014cf29",
+    "apps/medusa/Dockerfile": "79f6d10d27460943d1ddf5d3548a2a1293b665f801c99d8539080aeb62a72a0a",
+    "scripts/test-m1b-medusa-build.mjs": "22d7590e289c0dc7bcd40324f338b238df2145aae53e3d48318a214e873e23c4"
+  },
+  "tests": {
+    "scope": "Native framework provider class with synthetic HTTP and identity-service fixtures; physical native auth uniqueness not tested here",
+    "combinedCommerceAndMedusaPass": 69,
+    "newProviderTests": 8,
+    "fail": 0
+  },
+  "build": {
+    "status": "PASS_COMPILER_AND_COMPILED_DISABLED_PROVIDER",
+    "output": "C:\\Users\\User\\AppData\\Local\\Temp\\VYNVORI-M1b-20261019\\medusa-source-build-70ad724b-e6f3-4fe6-90d9-ed0784bfc440",
+    "runtimeRegistration": false,
+    "install": false,
+    "database": "NOT_CONNECTED_LOOPBACK_PORT9_CONFIG_ONLY",
+    "deployment": false
+  },
+  "checks": {
+    "affectedLint": "PASS",
+    "medusaTypecheck": "PASS",
+    "sharedProtocolByteEquality": "PASS",
+    "whitespace": "PASS",
+    "commerceTypecheck": "PASS"
+  },
+  "dependenciesInstalled": false,
+  "providerRegisteredInRuntime": false,
+  "customerProvisioning": "NOT_IMPLEMENTED",
+  "liveDatabaseMutation": false,
+  "deployment": false,
+  "registration": false,
+  "limitations": [
+    "No native customer workflow yet",
+    "Race fixture models native unique-index behavior; actual physical constraint acceptance remains open",
+    "No enrolled provider or actor-policy configuration activated",
+    "Image recipe changed locally but no new image built/pushed",
+    "No deployed login or M1b acceptance"
+  ]
+}

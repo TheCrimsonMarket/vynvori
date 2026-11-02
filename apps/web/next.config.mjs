@@ -5,9 +5,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const config = {
   poweredByHeader: false,
   agentRules: false,
-  transpilePackages: ["@vynvori/shared"],
+  transpilePackages: ["@vynvori/shared", "@vynvori/commerce", "@vynvori/db"],
   outputFileTracingRoot: root,
-  outputFileTracingExcludes: { "/*": ["../../design/**/*", "../../docs/**/*", "../../logo/**/*", "../../packages/shared/tests/**/*"] },
+  outputFileTracingExcludes: { "/*": ["../../design/**/*", "../../docs/**/*", "../../logo/**/*", "../../apps/medusa/**/*", "../../services/**/*", "../../packages/*/tests/**/*", "../../packages/db/auth-migrations/**/*", "../../packages/db/migrations/**/*", "../../packages/db/src/migrate*.ts", "../../packages/db/src/identity-migrations.ts"] },
   turbopack: { root },
   async headers() {
     return [{ source: "/:path*", headers: [

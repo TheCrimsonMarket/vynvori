@@ -1,0 +1,99 @@
+{
+  "date": "2026-10-19",
+  "status": "PASS_LOCAL_HTTP_SESSION_AND_DISABLED_BUILT_WEB",
+  "files": {
+    "apps/web/src/server/identity-settings.ts": "7b1aeb85fdd3d3a2eb7e664cd7a2d8bf36213c76997e820d90357df19ae643b8",
+    "apps/web/src/server/auth-runtime.ts": "0ab43e4dc8888b4b78328c79235cb1869a3717f9ddcb62f773ff9369ca7b3998",
+    "apps/web/src/components/auth-panel.tsx": "6626492295c46b48365369b9264148df1177237b391179b641f71c95167479e6",
+    "apps/web/src/app/account/page.tsx": "21ee39dafb5152213d96745b985d4de49f13d8bfc5bd6f0c182099cbe207a3e8",
+    "apps/web/src/instrumentation.ts": "c8192540c1c8a662199bc2a2bb0ace84f2ae0bb6c5463aabd531efbe20312a7e",
+    "apps/web/next.config.mjs": "ad4063b045d613cad0a2de16fa37f05b7cf6023ac5c674d017134f0c84ca363c",
+    "apps/web/package.json": "f3bbb021416eda366a9397c3fa6ad30a1bd3059e87af9435c49f9e5cc80d21b9",
+    "packages/commerce/src/auth-http.ts": "e7d561d69ec08a8ffd6b0f876cbf4e799b1a21a2ae4b66ff149dad8d96d4a766",
+    "packages/commerce/src/auth-sessions.ts": "8200f1f36cac5dc6c85f78a39cdf2de8f315bfd0900b38ec299114bc354badfb",
+    "packages/commerce/src/login-transactions.ts": "dff2c974308d532fab65165622e4eca751fe13b9a499dae1f5cd7f9151e1b749",
+    "packages/commerce/src/identity.ts": "fd993552cbcc0d655a06402df600a2cba9dcfdabad1d8c23c5923dfeb3a95117",
+    "packages/commerce/tests/auth-http.test.ts": "faa05b9c01e9af0315f7ef94d0abec60b37c9382fc4e1ef8e2d2a7d7d94ba720",
+    "packages/db/src/identity.ts": "4c0f52ec111becb3f27a11bf8179ca7cad50de0ae83edde3b4a2681f0bd2ae06",
+    "packages/db/tests/auth-state.test.ts": "c02fbb82849a84d5a8669cb217246fd9fd0c6d1e06d9cf4847ac31a2a27c708c",
+    "packages/shared/src/server.ts": "ef184c2a06fb3264897e4a7357c7ea1246995000d1fb4c1408c48cebfacebe1a",
+    "packages/shared/src/public.ts": "5c5ff8c8544016a911955d82468583e091cd5d8af27418f8d27f5004d59718c6",
+    "packages/shared/tests/config.test.ts": "4a0b5a5e07bb80ad0f1c99a37f225ba6cdbbc1cc45c86e6db9cec9746c55b6c5",
+    "apps/web/tests/identity-settings.test.ts": "10317a015ec85059e1e1b70b9658a51f742f109eaa8278fb78379793232acae6",
+    "scripts/web.mjs": "1f42f530c1f46a41877524616534fa02107aa3f5f9e7373f54ff615003b7c275",
+    "scripts/test-m1b-web.mjs": "7acf04bbd14d8e71bbfc73b375e7378c4a21d2c783f782000fd2e866aa669bb1",
+    "package.json": "09d8c8708a8b9099c5c64f005cc85ed95a8f8e7a330e624d5d0456b615fde2d5",
+    "package-lock.json": "c6d7d7c264276055583fef66ad86c63b6d9bdeab7e0307bcd8d77ea44679afa0",
+    "apps/web/src/app/api/auth/commerce/route.ts": "15f1b7683e34357d64b6ac4e34d91ac7ce8041a146687b6b7f2f06d59ed5d968",
+    "apps/web/src/app/api/auth/csrf/route.ts": "2e7105ffb6eb941844e81b940ac6e427cc4b55ef58037881e0cbe7243b15daf5",
+    "apps/web/src/app/api/auth/guest/claim/route.ts": "6f6cd1fe263bb0c8e218b51e36e8cace26ca8e8ff956fbd05a4da71e3da2a811",
+    "apps/web/src/app/api/auth/logout/route.ts": "71f3f837f47d85b94909a0d709fcc4bbb745f8d5291a085e2fa25ecf41edf843",
+    "apps/web/src/app/api/auth/session/route.ts": "cbc51d7c3df7351529e900eac73ff94b326a7a71c5e402e2f83245f25494951e",
+    "apps/web/src/app/api/auth/tcm/refresh/route.ts": "fa07a3dc447664dd3c332a4a826b76c663a4113b7d26bee11607fbbcfbac9d16",
+    "apps/web/src/app/api/auth/tcm/start/route.ts": "061be75f861386a0c15a84e1682ea330d6dbb0b4904e3ad6a8883dc7f72ce2a8",
+    "apps/web/src/app/auth/tcm/callback/route.ts": "bef733f31018436f8ccfd6955f3e1e93d67c95cbef902f1e298fc578e3f8b3ce"
+  },
+  "unitTests": {
+    "command": "node --conditions=react-server --import tsx --test --test-reporter=dot packages/shared/tests/config.test.ts packages/commerce/tests/*.test.ts apps/web/tests/*.test.ts",
+    "pass": 78,
+    "scope": "Commerce+shared configuration+web unit tests",
+    "fail": 0
+  },
+  "postgres": {
+    "version": "16.12",
+    "scenariosPass": 20,
+    "newCoverage": "Request/Response callback, secure cookie, CSRF, exact authority expiry, renewal, replay and persisted logout",
+    "nodeEntriesPass": 21,
+    "containerCleanup": "REMOVED_VERIFIED_LABEL",
+    "skipped": 0,
+    "fail": 0
+  },
+  "nextBuild": {
+    "scope": "Real optimized production build, flags default OFF",
+    "output": "C:\\Users\\User\\AppData\\Local\\Temp\\VYNVORI-M0-next-azuExI\\build",
+    "status": "PASS",
+    "buildId": "pn91pKb-cUW93dWEKKvWh"
+  },
+  "browser": {
+    "status": "PASS_BUILT_WEB_DISABLED_BOUNDARY",
+    "routes": [
+      "/api/auth/csrf",
+      "/api/auth/session",
+      "/api/auth/tcm/start",
+      "/auth/tcm/callback",
+      "/api/auth/tcm/refresh",
+      "/api/auth/logout",
+      "/api/auth/commerce",
+      "/api/auth/guest/claim"
+    ],
+    "browser": "155.0.8059.80",
+    "viewports": 2,
+    "activeIdentityBrowserFlow": "NOT_TESTED",
+    "deployment": false,
+    "output": "C:\\Users\\User\\AppData\\Local\\Temp\\VYNVORI-M1b-web-ctwUhm"
+  },
+  "checks": {
+    "webTypecheck": "PASS",
+    "affectedLint": "PASS",
+    "commerceTypecheck": "PASS",
+    "sharedTypecheck": "PASS",
+    "privateSettingsAbsentFromClientJS": "PASS",
+    "whitespace": "PASS",
+    "dbTypecheck": "PASS",
+    "mobileDefaultScreenshotInspected": "PASS"
+  },
+  "dependencyChanges": "Existing internal workspace dependencies/exports only; no external resolution/install",
+  "freshNpmCiAfterMetadataChange": "NOT_RUN",
+  "stagingFlag": "Only explicit isolated staging preview+matching project/origin can enroll identity; production and all financial flags reject activation",
+  "operationalConfigChanged": false,
+  "clientRegistration": false,
+  "liveDatabaseMutation": false,
+  "deployment": false,
+  "limitations": [
+    "Enabled account UI browser flow not yet tested",
+    "Synthetic authority in local HTTP+Postgres composition",
+    "Private Medusa HTTP transport not wired into web runtime; commerce remains unavailable",
+    "Pending central revoke worker not implemented",
+    "No actual staging acceptance or CI/source publication claim"
+  ]
+}

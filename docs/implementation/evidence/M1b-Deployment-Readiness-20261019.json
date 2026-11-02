@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-19",
+  "status": "PASS_LOCAL_VERCEL_INSTALL_BUILD_AND_TRACE",
+  "head": "262489d8a5c367e579839806d7e8554a394dcd2a",
+  "files": {
+    ".vercelignore": "ce8318699fd69c2e905a43cdde3bc13c67722530a540b841d140d6e7f47b83c3",
+    "apps/web/next.config.mjs": "12e41703443fe305dbed853f929cd75692a7bbd35a195715c6287c15711f12ba",
+    "scripts/deployment-check.mjs": "0c8988a3a317969e5d1502a1746e419217c973af78a2885f85bec3f7f66c291e",
+    "scripts/security-smoke.mjs": "48684499754edc2e23d44b9e54c45179d365a917a7981d12367b73e581dbf888",
+    "scripts/tests/security-smoke.test.mjs": "99f20c958d7f04ef32e71c17d7b1f7bad199654d93a9f90418f1c7f6fc01f7c7",
+    "package.json": "617b34c9d534433183fbb66b92f97e7991d9e2c7f468363cd3dae33ba0f24bbd",
+    "package-lock.json": "eb171c98f73d28c81e1e51816bb69376887f8be194ab945a27d6a34bb7df944d"
+  },
+  "result": {
+    "status": "PASSED",
+    "environment": "preview",
+    "install": "npm install (workspace root)",
+    "reusedVerifiedCanonicalInstall": true,
+    "build": "npm run build in apps/web (next build)",
+    "lockfileUnchanged": true,
+    "lockfileComparison": "Exact UTF8 text after CRLF/LF normalization only",
+    "lockSha256": "9a164a05b4620dedd7df8eebc71d50c397e5a886b56e2f898708aa535c9ba2b7",
+    "rawLockBefore": "eb171c98f73d28c81e1e51816bb69376887f8be194ab945a27d6a34bb7df944d",
+    "rawLockAfter": "9a164a05b4620dedd7df8eebc71d50c397e5a886b56e2f898708aa535c9ba2b7",
+    "traces": 24,
+    "cloudDeployment": "NOT_RUN"
+  },
+  "normalNpmCi": "PASS_PRECEDING_ISOLATED_INSTALL",
+  "normalNpmInstall": "PASS_CANONICAL_LOCK_CONTENT_UNCHANGED",
+  "notes": [
+    "Initial install exposed SDK dependency-key ordering; npm canonical ordering applied with no version/resolution/integrity change.",
+    "Windows CRLF/LF conversion is the sole lock comparison normalization; raw before/after hashes retained."
+  ],
+  "m0Tests": {
+    "fail": 0,
+    "pass": 17
+  },
+  "securitySmoke": "PASS_TWO_EXPLICIT_BFF_COMPONENTS_WITH_EXISTING_NEGATIVES",
+  "oldM2Policy": "UNCHANGED_SOURCE_GATE_STILL_REJECTS_M1B",
+  "cloudDeployment": "NOT_RUN",
+  "fullCi": "NOT_GREEN"
+}

@@ -13,6 +13,8 @@ COPY design/reference/package.json design/reference/package.json
 FROM manifests AS build
 RUN npm ci --workspace=@vynvori/medusa --include-workspace-root=false --no-audit --no-fund
 COPY apps/medusa apps/medusa
+COPY packages/commerce/src/central-identity-core.ts packages/commerce/src/central-identity-core.ts
+COPY packages/commerce/src/medusa-proof-core.ts packages/commerce/src/medusa-proof-core.ts
 RUN npm run build --workspace=@vynvori/medusa
 
 FROM manifests AS dependencies

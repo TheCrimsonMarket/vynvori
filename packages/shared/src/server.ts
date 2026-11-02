@@ -28,10 +28,17 @@ export function parseServerConfig(env: Readonly<Record<string, string | undefine
     throw new Error("Invalid VERCEL_ENV; expected development, preview or production.");
   }
   if (env.VERCEL === "1" && env.VERCEL_ENV === undefined) throw new Error("VERCEL_ENV is required on Vercel.");
+  // Only an explicitly pinned isolated staging preview can enroll central identity.
+  // Production and every financial/provider feature retain their closed defaults.
+  const identityCanary = env.M1B_DEPLOYMENT === "staging" && env.VERCEL === "1" && deployment === "preview" &&
+    env.M1B_APP_ORIGIN === "https://staging.vynvori.com" && /^[A-Za-z0-9_-]{8,256}$/.test(env.M1B_ISOLATED_STAGING_PROJECT_ID ?? "") &&
+    env.M1B_ISOLATED_STAGING_PROJECT_ID === env.VERCEL_PROJECT_ID;
+  let identityEnabled = false;
   for (const feature of Object.keys(featureDefaults)) {
     const key = `VYNVORI_${feature.replaceAll(".", "_").toUpperCase()}`;
     const value = env[key];
-    if (value !== undefined && value !== "false") {
+    if (feature === "identity.central_sso" && value === "true" && identityCanary) identityEnabled = true;
+    else if (value !== undefined && value !== "false") {
       throw new Error(`${key} must be false or unset; activation is unavailable in M0.`);
     }
   }
@@ -41,7 +48,8 @@ export function parseServerConfig(env: Readonly<Record<string, string | undefine
     if (key.startsWith("VYNVORI_") && !keys.has(key)) throw new Error("Unknown VYNVORI configuration key.");
     if (key.startsWith("NEXT_PUBLIC_") && !platformPublicKeys.has(key)) throw new Error(`Public environment configuration is not supported in M0: ${key}.`);
   }
-  return Object.freeze({ environment: environment as Environment, deployment: deployment as Deployment, features: featureDefaults });
+  const features: FeatureFlags = identityEnabled ? Object.freeze({ ...featureDefaults, "identity.central_sso": true }) : featureDefaults;
+  return Object.freeze({ environment: environment as Environment, deployment: deployment as Deployment, features });
 }
 
 export function getServerConfig(): ServerConfig { return parseServerConfig(process.env); }

@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-19",
+  "status": "PASS_LOCAL_COMPOSED_SESSION_ONLY",
+  "startingHead": "262489d8a5c367e579839806d7e8554a394dcd2a",
+  "files": {
+    "packages/commerce/src/central-identity.ts": "a1cf2a6f61d74562801781ede3da257b575b51d2eba4b6a3ac087c474473fd17",
+    "packages/commerce/src/auth-sessions.ts": "5a7003919d037ece06f31c9dacc46af012fa4078ff2fb94f31adea5c9593593c",
+    "packages/commerce/tests/central-identity.test.ts": "a2b9b0b0ef993dcb859b74780879d3fa68bf5ce10145e2ab37afe735ad5f9959",
+    "packages/db/src/auth-state.ts": "6940dbee0384bc23f1a08f42cff4e7dbb98a630f4a8e953e8a5cd195263e9f8d",
+    "packages/db/auth-migrations/0001_identity_state.sql": "84ae0f55201f44dd134750e718eeaf146289fcccbb5fa1f77da8a477ee3aedd4",
+    "packages/db/tests/auth-state.test.ts": "5f8d2e924c892d1d89354a8d00ab75d74fe700940b22d70832235f7afa228bc5"
+  },
+  "commerceTests": {
+    "pass": 55,
+    "fail": 0,
+    "command": "node --conditions=react-server --import tsx --test --test-reporter=dot packages/commerce/tests/*.test.ts"
+  },
+  "postgres": {
+    "version": "16.12",
+    "scope": "DISPOSABLE_LOOPBACK_DATABASE_AND_SYNTHETIC_AUTHORITY",
+    "skipped": 0,
+    "command": "node scripts/test-m1b-identity-state.mjs",
+    "scenariosPassed": 15,
+    "containerCleanup": "REMOVED_VERIFIED_LABEL",
+    "nodeTestEntriesPassed": 16,
+    "failed": 0
+  },
+  "checks": {
+    "whitespace": "PASS",
+    "commerceTypecheck": "PASS",
+    "affectedLint": "PASS",
+    "dbTypecheck": "PASS"
+  },
+  "implemented": [
+    "Pinned strict code exchange/refresh/revoke with form-encoded Basic credentials",
+    "Outcome-unknown rotation errors without automatic retry",
+    "Opaque local session creation from consumed PKCE transaction and current identity",
+    "Fresh central identity verification on protected operations",
+    "Contact retrieval separate from identity authentication",
+    "Generation-bound encrypted credentials and refresh fencing",
+    "Local-first persisted logout with pending/confirmed central revoke status",
+    "Fresh identity and capability checks for guest claims"
+  ],
+  "liveDatabaseMutation": false,
+  "registration": false,
+  "deployment": false,
+  "limitations": [
+    "Authority transport is synthetic in integration tests",
+    "No live session/cookie/web-route activation",
+    "No dedicated Medusa provider/customer mapping yet",
+    "Pending central revoke state is durable but worker reconciliation not yet implemented",
+    "No actual Neon18 or browser/staging acceptance"
+  ],
+  "supersedesSourceSnapshot": "M1b-Durable-Auth-Primitives-20261019.json remains historical primitive evidence"
+}

@@ -1,6 +1,6 @@
 {
   "name": "@vynvori/db", "version": "0.0.0", "private": true, "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": { ".": "./src/index.ts", "./identity": "./src/identity.ts" },
   "scripts": { "typecheck": "tsc --noEmit", "build": "tsc --noEmit", "generate": "drizzle-kit generate", "check": "drizzle-kit check", "migrate": "node --conditions=react-server --import tsx src/migrate.ts" },
   "dependencies": { "@vynvori/shared": "0.0.0", "drizzle-orm": "0.45.4", "pg": "8.23.1", "server-only": "0.0.1" },
   "devDependencies": { "drizzle-kit": "0.31.11", "@types/pg": "8.20.0", "@types/node": "22.20.5", "typescript": "5.9.3" }
