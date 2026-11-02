@@ -8,7 +8,7 @@ permissions:
 jobs:
   foundation:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:17.6-bookworm
@@ -23,6 +23,9 @@ jobs:
       M2_CREATIVE_DATABASE_URL: postgres://synthetic:synthetic-local-only@127.0.0.1:5432/vynvori_creative_staging
       M2_MEDUSA_DATABASE_URL: postgres://synthetic:synthetic-local-only@127.0.0.1:5432/vynvori_medusa_staging
       M2_APPLY_MIGRATIONS: vynvori-creative-staging
+      # Root (W1): Postgres-backed suites must run here, not skip. M3 composition suites use these disposable databases.
+      M3_TEST_POSTGRES_URL: postgres://synthetic:synthetic-local-only@127.0.0.1:5432/vynvori_m3_migration_test
+      CI_REQUIRE_PG_TESTS: '1'
       PGPASSWORD: synthetic-local-only
       NEXT_TELEMETRY_DISABLED: '1'
       MEDUSA_DISABLE_TELEMETRY: 'true'
@@ -34,12 +37,24 @@ jobs:
           cache: npm
       - run: npm ci
       - run: psql -h 127.0.0.1 -U synthetic -d postgres -c 'CREATE DATABASE vynvori_medusa_staging'
+      - name: Raise Postgres max_connections for concurrency acceptance tests
+        run: |
+          psql -h 127.0.0.1 -U synthetic -d postgres -c 'ALTER SYSTEM SET max_connections = 250'
+          docker restart "${{ job.services.postgres.id }}"
+          for attempt in $(seq 1 30); do pg_isready -h 127.0.0.1 -U synthetic -d postgres && break; sleep 1; done
+          test "$(psql -h 127.0.0.1 -U synthetic -d postgres -tAc 'SHOW max_connections')" = "250"
+      - run: psql -h 127.0.0.1 -U synthetic -d postgres -c 'CREATE DATABASE vynvori_m3_migration_test' -c 'CREATE DATABASE vynvori_m3_service_test'
       - run: npm run lint
       - run: npm run typecheck:m2
       - run: npm run db:check
       - run: npm run db:generate && git diff --exit-code -- packages/db/migrations
       - run: npm run db:migrate && npm run db:migrate
       - run: npm run test:m2
+      - name: M1b identity Postgres harness (disposable container, restricted role, backup/restore drill)
+        run: |
+          docker pull postgres:16-alpine
+          node scripts/test-m1b-identity-state.mjs
+        timeout-minutes: 6
       - run: npm run build:m2
         env:
           M2_MEDUSA_DATABASE_NAME: vynvori_medusa_staging

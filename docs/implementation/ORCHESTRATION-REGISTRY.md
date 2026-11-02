@@ -2,7 +2,7 @@
 
 Shared-resource and session registry for the tree-structured multi-session harness. **Root owns this file.** Only root-authored PRs change it, and the founder merges them. Milestone status remains authoritative in [MILESTONE-PROGRESS.md](MILESTONE-PROGRESS.md); this file allocates resources and records who works where.
 
-Last updated: 2026-11-02, after [PR #18](https://github.com/TheCrimsonMarket/vynvori/pull/18) (`3760de6`). Baseline `main` CI: all jobs green (W0 complete).
+Last updated: 2026-11-02 (W1 started; founder authorized W1 and confirmed the M7 manager session). Baseline `main` @ `92c8114`, CI green.
 
 ## Harness
 
@@ -44,7 +44,7 @@ Only the holder may change files in a lane. **Root-only** lanes change through r
 | Lane | Files | Holder | Notes |
 |---|---|---|---|
 | Dependencies | `package-lock.json`, any `package.json` dependency/override fields | **free** (request from root) | One holder at a time. Any new advisory fails `security:audit` (ADR-0020) and needs a founder risk decision. |
-| Shared contracts | `packages/contracts/**` | **free** (request from root) | Additive changes preferred; breaking changes need a root-approved contract PR first. |
+| Shared contracts | `packages/contracts/**` | **M7 (additive), shared with root** | Granted to M7 2026-11-02 for additive ledger contracts. Root holds `state-machines.ts` Plane C and `operations.ts` package-state definitions (Q7 fix); M7 must not edit them. |
 | Security policy | `security/**`, `scripts/security/**`, `scripts/security-smoke.mjs` | root only | Founder approval required for any change. |
 | Protected files | `docs/implementation/M0-protected-files.json` and every file it lists (including `docs/technical/20-acceptance-matrix.md`) | root only | Re-anchoring needs founder authorization (precedent: PR #18). |
 | CI | `.github/workflows/**`, `scripts/deployment-check.mjs`, `scripts/integrity.mjs` | root only | |
@@ -59,7 +59,7 @@ Last used: **ADR-0020**. Two historical files share number 0008 (`ADR-0008-M2-Cl
 
 | Number | Reserved for | Holder | Status |
 |---|---|---|---|
-| ADR-0021 | M7 core ledger foundation | M7 manager (not yet created) | reserved, pending founder authorization of W1 |
+| ADR-0021 | M7 core ledger foundation | M7 manager | granted 2026-11-02 |
 
 ### Migration journals (`packages/db`)
 
@@ -68,6 +68,7 @@ Last used: **ADR-0020**. Two historical files share number 0008 (`ADR-0008-M2-Cl
 | Core (drizzle-kit) | `packages/db/migrations/` | `0000_organic_valkyrie.sql` | M2 |
 | Identity / auth | `packages/db/auth-migrations/` | `0004_revocation_reconciliation.sql` | M1b |
 | Composition | `packages/db/composition-migrations/` | `0001_composition_scene.sql` | M3 |
+| Ledger (new) | `packages/db/ledger-migrations/` | none yet; starts at `0001` | M7 (granted 2026-11-02) |
 
 New journals or new sequence numbers in an existing journal are allocated by root on request. A milestone never appends to another milestone's journal without a root grant. Every migration needs a documented, non-destructive rollback (AGENTS.md §4).
 
@@ -77,7 +78,8 @@ Root records every session the founder starts. Messages from a session not liste
 
 | Role | Milestone | Session | Branch | Open PR | Since |
 |---|---|---|---|---|---|
-| Root | all | `session_01Cowtxigt3rWyjMVZYShYyX` | `claude/peaceful-heisenberg-cocinf` | (this registry PR) | 2026-11-02 |
+| Root | all | `session_01Cowtxigt3rWyjMVZYShYyX` | `claude/peaceful-heisenberg-cocinf` | root W1 shared-lane PR | 2026-11-02 |
+| M7 manager | M7 | `session_01CowtxkLZEcmhjncVjGLGqK` (founder-confirmed) | `claude/exciting-wright-9f71eg` | [#20](https://github.com/TheCrimsonMarket/vynvori/pull/20) plan (awaiting founder approval) | 2026-11-02 |
 
 ## Protocol
 
@@ -93,10 +95,20 @@ From the 2026-11-02 council; the founder decides each wave's start.
 | Wave | Tracks | Prerequisites | Max parallel worker PRs | Status |
 |---|---|---|---|---|
 | W0 | CI recovery, dependency remediation, waiver gate | — | 1 | **DONE** (PR #18) |
-| W1 | M7 core ledger (no Medusa top-ups) + M3 local closure | CI green ✅; founder authorization | 2 | awaiting founder authorization |
+| W1 | M7 core ledger (no Medusa top-ups) + M3 local closure | CI green ✅; founder authorization ✅ | 2 (M7: 1 until root frees the second) | **IN PROGRESS**: M7 plan under review; M3-closure track not yet staffed |
 | W2 | M4 sandbox commerce + M6a mock studio | M1b PASSED, M3 PASSED | 2 | blocked |
 | W3 | M5, M7 top-ups, M8a, M8b | M4 (and M6a for M8b) | 2–3 | blocked |
 | — | M6b, M9 | doc 15 gates; production, financial, rights, vendor and SSO flags stay OFF | — | blocked |
+
+## Founder decisions log
+
+| Date | Decision |
+|---|---|
+| 2026-11-02 | W1 authorized. M7 manager = `session_01CowtxkLZEcmhjncVjGLGqK`. |
+| 2026-11-02 | M7 Q1/Q2/Q6 defaults accepted: funding only via a registered grant source (none in W1); no promo re-offer after a verified-uncharged failure; fixed quoted charges only. |
+| 2026-11-02 | Q7 contract gap: root fixes it. Additive: guarded C-02 reopen edge plus the internal → customer package-state mapping. No rename, because the canonical v1.1 reference contract and protected fixtures use `refinements_open`. |
+| 2026-11-02 | CI Postgres coverage: root wires the M3 composition suites and the M1b identity harness into `m2.yml`, sets `CI_REQUIRE_PG_TESTS=1` and `max_connections=250`. The flag avoids the reserved `VYNVORI_*` prefix, which must always be `false`. |
+| 2026-11-02 | Local PG16 binaries allowed for feedback only; such results are NOT_RUN as evidence. |
 
 ## Deadlines
 

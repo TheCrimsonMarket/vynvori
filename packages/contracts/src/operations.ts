@@ -6,6 +6,7 @@
  */
 import { z } from "zod";
 import { OperationIdSchema, QuoteIdSchema, ReceiptIdSchema, VersionIdSchema, NaturalNumberSchema, IsoDateSchema } from "./ids";
+import type { PlaneCBundleState } from "./state-machines";
 
 export const CustomerLedgerReceiptV1Schema = z.union([
   z.object({ kind: z.literal("not_authorized"), quoteId: QuoteIdSchema.optional() }).strict(),
@@ -116,3 +117,16 @@ export const PackageStateV1Schema = z.enum([
   "closure_pending", "closed", "remedy_pending",
 ]);
 export type PackageStateV1 = z.infer<typeof PackageStateV1Schema>;
+
+/**
+ * Internal bundle state (doc 04 `studio_packages.state`, doc 22 bundle line: `open_for_refinements`) projected to the
+ * customer-facing v1.1 reference contract name (`PackageStateV1`: `refinements_open`). Two layers, two names: both
+ * canonical sources are kept byte-for-byte, and this exhaustive mapping is the only bridge between them.
+ */
+const CUSTOMER_PACKAGE_STATE: { readonly [K in PlaneCBundleState]: PackageStateV1 } = {
+  quoted: "quoted", authorized: "authorized", partial: "partial", delivered_3_of_3: "delivered_3_of_3",
+  open_for_refinements: "refinements_open", closure_pending: "closure_pending", closed: "closed", remedy_pending: "remedy_pending",
+};
+export function toCustomerPackageState(state: PlaneCBundleState): PackageStateV1 {
+  return CUSTOMER_PACKAGE_STATE[state];
+}
