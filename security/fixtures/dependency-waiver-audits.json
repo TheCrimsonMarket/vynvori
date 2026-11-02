@@ -1,0 +1,2724 @@
+{
+ "capturedOn": "2026-11-02",
+ "command": {
+  "production": "npm audit --omit=dev --json",
+  "all": "npm audit --json"
+ },
+ "production": {
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+   "@medusajs/admin-bundler": {
+    "name": "@medusajs/admin-bundler",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "glob"
+    ],
+    "effects": [
+     "@medusajs/medusa"
+    ],
+    "range": ">=2.3.0",
+    "nodes": [
+     "node_modules/@medusajs/admin-bundler"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.8.4",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/analytics": {
+    "name": "@medusajs/analytics",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/analytics"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/analytics-local": {
+    "name": "@medusajs/analytics-local",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/analytics-local"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/analytics-posthog": {
+    "name": "@medusajs/analytics-posthog",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/analytics-posthog"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/api-key": {
+    "name": "@medusajs/api-key",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/api-key"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/auth": {
+    "name": "@medusajs/auth",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/auth"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/auth-emailpass": {
+    "name": "@medusajs/auth-emailpass",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/auth-emailpass"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/auth-github": {
+    "name": "@medusajs/auth-github",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/auth-github"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/auth-google": {
+    "name": "@medusajs/auth-google",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/auth-google"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/auth-oidc": {
+    "name": "@medusajs/auth-oidc",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [
+     "@medusajs/medusa"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/auth-oidc"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.8.4",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/cache-inmemory": {
+    "name": "@medusajs/cache-inmemory",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/cache-inmemory"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/cache-redis": {
+    "name": "@medusajs/cache-redis",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/cache-redis"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/caching": {
+    "name": "@medusajs/caching",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [
+     "@medusajs/medusa"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/caching"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.8.4",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/caching-redis": {
+    "name": "@medusajs/caching-redis",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/caching-redis"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/cart": {
+    "name": "@medusajs/cart",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/cart"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/cli": {
+    "name": "@medusajs/cli",
+    "severity": "moderate",
+    "isDirect": true,
+    "via": [
+     "glob"
+    ],
+    "effects": [
+     "@medusajs/draft-order",
+     "@medusajs/framework"
+    ],
+    "range": ">=2.3.0",
+    "nodes": [
+     "node_modules/@medusajs/cli"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/cli",
+     "version": "2.2.0",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/core-flows": {
+    "name": "@medusajs/core-flows",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [
+     "@medusajs/medusa"
+    ],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/core-flows"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.8.4",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/currency": {
+    "name": "@medusajs/currency",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/currency"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/customer": {
+    "name": "@medusajs/customer",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/customer"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/draft-order": {
+    "name": "@medusajs/draft-order",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/cli",
+     "@medusajs/framework"
+    ],
+    "effects": [
+     "@medusajs/medusa"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/draft-order"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.8.4",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/event-bus-local": {
+    "name": "@medusajs/event-bus-local",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/event-bus-local"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/event-bus-redis": {
+    "name": "@medusajs/event-bus-redis",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/event-bus-redis"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/file": {
+    "name": "@medusajs/file",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/file"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/file-local": {
+    "name": "@medusajs/file-local",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/file-local"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/file-s3": {
+    "name": "@medusajs/file-s3",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/file-s3"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/framework": {
+    "name": "@medusajs/framework",
+    "severity": "moderate",
+    "isDirect": true,
+    "via": [
+     "@medusajs/cli",
+     "glob"
+    ],
+    "effects": [
+     "@medusajs/analytics",
+     "@medusajs/analytics-local",
+     "@medusajs/analytics-posthog",
+     "@medusajs/api-key",
+     "@medusajs/auth",
+     "@medusajs/auth-emailpass",
+     "@medusajs/auth-github",
+     "@medusajs/auth-google",
+     "@medusajs/auth-oidc",
+     "@medusajs/cache-inmemory",
+     "@medusajs/cache-redis",
+     "@medusajs/caching",
+     "@medusajs/caching-redis",
+     "@medusajs/cart",
+     "@medusajs/core-flows",
+     "@medusajs/currency",
+     "@medusajs/customer",
+     "@medusajs/event-bus-local",
+     "@medusajs/event-bus-redis",
+     "@medusajs/file",
+     "@medusajs/file-local",
+     "@medusajs/file-s3",
+     "@medusajs/fulfillment",
+     "@medusajs/fulfillment-manual",
+     "@medusajs/index",
+     "@medusajs/inventory",
+     "@medusajs/link-modules",
+     "@medusajs/locking",
+     "@medusajs/locking-postgres",
+     "@medusajs/locking-redis",
+     "@medusajs/medusa",
+     "@medusajs/notification",
+     "@medusajs/notification-local",
+     "@medusajs/notification-sendgrid",
+     "@medusajs/order",
+     "@medusajs/payment",
+     "@medusajs/payment-stripe",
+     "@medusajs/pricing",
+     "@medusajs/product",
+     "@medusajs/promotion",
+     "@medusajs/rbac",
+     "@medusajs/region",
+     "@medusajs/sales-channel",
+     "@medusajs/search",
+     "@medusajs/search-postgres",
+     "@medusajs/settings",
+     "@medusajs/stock-location",
+     "@medusajs/store",
+     "@medusajs/tax",
+     "@medusajs/translation",
+     "@medusajs/user",
+     "@medusajs/workflow-engine-inmemory",
+     "@medusajs/workflow-engine-redis"
+    ],
+    "range": ">=2.4.0",
+    "nodes": [
+     "node_modules/@medusajs/framework"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/framework",
+     "version": "2.8.4",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/fulfillment": {
+    "name": "@medusajs/fulfillment",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/fulfillment"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/fulfillment-manual": {
+    "name": "@medusajs/fulfillment-manual",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/fulfillment-manual"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/index": {
+    "name": "@medusajs/index",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/index"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/inventory": {
+    "name": "@medusajs/inventory",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/inventory"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/link-modules": {
+    "name": "@medusajs/link-modules",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/link-modules"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/locking": {
+    "name": "@medusajs/locking",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/locking"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/locking-postgres": {
+    "name": "@medusajs/locking-postgres",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/locking-postgres"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/locking-redis": {
+    "name": "@medusajs/locking-redis",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/locking-redis"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/medusa": {
+    "name": "@medusajs/medusa",
+    "severity": "moderate",
+    "isDirect": true,
+    "via": [
+     "@medusajs/admin-bundler",
+     "@medusajs/analytics",
+     "@medusajs/analytics-local",
+     "@medusajs/analytics-posthog",
+     "@medusajs/api-key",
+     "@medusajs/auth",
+     "@medusajs/auth-emailpass",
+     "@medusajs/auth-github",
+     "@medusajs/auth-google",
+     "@medusajs/auth-oidc",
+     "@medusajs/cache-inmemory",
+     "@medusajs/cache-redis",
+     "@medusajs/caching",
+     "@medusajs/caching-redis",
+     "@medusajs/cart",
+     "@medusajs/core-flows",
+     "@medusajs/currency",
+     "@medusajs/customer",
+     "@medusajs/draft-order",
+     "@medusajs/event-bus-local",
+     "@medusajs/event-bus-redis",
+     "@medusajs/file",
+     "@medusajs/file-local",
+     "@medusajs/file-s3",
+     "@medusajs/framework",
+     "@medusajs/fulfillment",
+     "@medusajs/fulfillment-manual",
+     "@medusajs/index",
+     "@medusajs/inventory",
+     "@medusajs/link-modules",
+     "@medusajs/locking",
+     "@medusajs/locking-postgres",
+     "@medusajs/locking-redis",
+     "@medusajs/notification",
+     "@medusajs/notification-local",
+     "@medusajs/notification-sendgrid",
+     "@medusajs/order",
+     "@medusajs/payment",
+     "@medusajs/payment-stripe",
+     "@medusajs/pricing",
+     "@medusajs/product",
+     "@medusajs/promotion",
+     "@medusajs/rbac",
+     "@medusajs/region",
+     "@medusajs/sales-channel",
+     "@medusajs/search",
+     "@medusajs/search-postgres",
+     "@medusajs/settings",
+     "@medusajs/stock-location",
+     "@medusajs/store",
+     "@medusajs/tax",
+     "@medusajs/translation",
+     "@medusajs/user",
+     "@medusajs/workflow-engine-inmemory",
+     "@medusajs/workflow-engine-redis"
+    ],
+    "effects": [],
+    "range": "1.19.0-next-20231211194438 - 1.19.0-next-20231213101140 || >=2.3.0",
+    "nodes": [
+     "node_modules/@medusajs/medusa"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.8.4",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/notification": {
+    "name": "@medusajs/notification",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/notification"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/notification-local": {
+    "name": "@medusajs/notification-local",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/notification-local"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/notification-sendgrid": {
+    "name": "@medusajs/notification-sendgrid",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework",
+     "@sendgrid/mail"
+    ],
+    "effects": [],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/notification-sendgrid"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/order": {
+    "name": "@medusajs/order",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/order"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/payment": {
+    "name": "@medusajs/payment",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/payment"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/payment-stripe": {
+    "name": "@medusajs/payment-stripe",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/payment-stripe"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/pricing": {
+    "name": "@medusajs/pricing",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/pricing"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/product": {
+    "name": "@medusajs/product",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/product"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/promotion": {
+    "name": "@medusajs/promotion",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/promotion"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/rbac": {
+    "name": "@medusajs/rbac",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [
+     "@medusajs/medusa"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/rbac"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.8.4",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/region": {
+    "name": "@medusajs/region",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/region"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/sales-channel": {
+    "name": "@medusajs/sales-channel",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/sales-channel"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/search": {
+    "name": "@medusajs/search",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=0.0.2-snapshot-20231107114332",
+    "nodes": [
+     "node_modules/@medusajs/search"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/search-postgres": {
+    "name": "@medusajs/search-postgres",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [
+     "@medusajs/medusa"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/search-postgres"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.8.4",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/settings": {
+    "name": "@medusajs/settings",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/settings"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/stock-location": {
+    "name": "@medusajs/stock-location",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/stock-location"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/store": {
+    "name": "@medusajs/store",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/store"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/tax": {
+    "name": "@medusajs/tax",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/tax"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/translation": {
+    "name": "@medusajs/translation",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [
+     "@medusajs/medusa"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/translation"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.8.4",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/user": {
+    "name": "@medusajs/user",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/user"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/workflow-engine-inmemory": {
+    "name": "@medusajs/workflow-engine-inmemory",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/workflow-engine-inmemory"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/workflow-engine-redis": {
+    "name": "@medusajs/workflow-engine-redis",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/workflow-engine-redis"
+    ],
+    "fixAvailable": true
+   },
+   "@sendgrid/client": {
+    "name": "@sendgrid/client",
+    "severity": "low",
+    "isDirect": false,
+    "via": [
+     "@sendgrid/helpers"
+    ],
+    "effects": [],
+    "range": ">=6.5.3",
+    "nodes": [
+     "node_modules/@sendgrid/client"
+    ],
+    "fixAvailable": true
+   },
+   "@sendgrid/helpers": {
+    "name": "@sendgrid/helpers",
+    "severity": "low",
+    "isDirect": false,
+    "via": [
+     "deepmerge"
+    ],
+    "effects": [
+     "@sendgrid/client",
+     "@sendgrid/mail"
+    ],
+    "range": ">=6.5.3",
+    "nodes": [
+     "node_modules/@sendgrid/helpers"
+    ],
+    "fixAvailable": true
+   },
+   "@sendgrid/mail": {
+    "name": "@sendgrid/mail",
+    "severity": "low",
+    "isDirect": false,
+    "via": [
+     "@sendgrid/client",
+     "@sendgrid/helpers"
+    ],
+    "effects": [
+     "@medusajs/notification-sendgrid"
+    ],
+    "range": ">=6.5.3",
+    "nodes": [
+     "node_modules/@sendgrid/mail"
+    ],
+    "fixAvailable": true
+   },
+   "deepmerge": {
+    "name": "deepmerge",
+    "severity": "low",
+    "isDirect": false,
+    "via": [
+     {
+      "source": 1243505,
+      "name": "deepmerge",
+      "dependency": "deepmerge",
+      "title": "deepmerge mergeObject() allows prototype poisoning of returned objects",
+      "url": "https://github.com/advisories/GHSA-gcqx-w48m-w2h4",
+      "severity": "low",
+      "cwe": [
+       "CWE-1321"
+      ],
+      "cvss": {
+       "score": 5.3,
+       "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N"
+      },
+      "range": ">=4.2.0 <=4.3.1"
+     }
+    ],
+    "effects": [
+     "@sendgrid/helpers"
+    ],
+    "range": ">=4.2.0",
+    "nodes": [
+     "node_modules/deepmerge"
+    ],
+    "fixAvailable": true
+   },
+   "glob": {
+    "name": "glob",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     {
+      "source": 1244013,
+      "name": "glob",
+      "dependency": "glob",
+      "title": "Glob: AbortSignal cancellation bypass allows post-timeout filesystem traversal",
+      "url": "https://github.com/advisories/GHSA-3g3m-2fjr-6pw4",
+      "severity": "moderate",
+      "cwe": [
+       "CWE-400"
+      ],
+      "cvss": {
+       "score": 0,
+       "vectorString": null
+      },
+      "range": ">=9.0.0 <=14.0.1"
+     },
+     "minimatch"
+    ],
+    "effects": [
+     "@medusajs/admin-bundler",
+     "@medusajs/cli",
+     "@medusajs/framework"
+    ],
+    "range": "3.0.0 - 14.0.1",
+    "nodes": [
+     "node_modules/glob"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/cli",
+     "version": "2.2.0",
+     "isSemVerMajor": true
+    }
+   },
+   "minimatch": {
+    "name": "minimatch",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     {
+      "source": 1244012,
+      "name": "minimatch",
+      "dependency": "minimatch",
+      "title": "minimatch has potential denial of service via globparts amplification",
+      "url": "https://github.com/advisories/GHSA-g3hv-75wg-m249",
+      "severity": "moderate",
+      "cwe": [
+       "CWE-405"
+      ],
+      "cvss": {
+       "score": 0,
+       "vectorString": null
+      },
+      "range": "<11.0.1"
+     }
+    ],
+    "effects": [
+     "glob"
+    ],
+    "range": "<11.0.1",
+    "nodes": [
+     "node_modules/minimatch"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/cli",
+     "version": "2.2.0",
+     "isSemVerMajor": true
+    }
+   }
+  },
+  "metadata": {
+   "vulnerabilities": {
+    "info": 0,
+    "low": 4,
+    "moderate": 59,
+    "high": 0,
+    "critical": 0,
+    "total": 63
+   },
+   "dependencies": {
+    "prod": 1010,
+    "dev": 360,
+    "optional": 224,
+    "peer": 19,
+    "peerOptional": 0,
+    "total": 1488
+   }
+  }
+ },
+ "all": {
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+   "@esbuild-kit/core-utils": {
+    "name": "@esbuild-kit/core-utils",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "esbuild"
+    ],
+    "effects": [
+     "@esbuild-kit/esm-loader"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@esbuild-kit/core-utils"
+    ],
+    "fixAvailable": {
+     "name": "drizzle-kit",
+     "version": "0.18.1",
+     "isSemVerMajor": true
+    }
+   },
+   "@esbuild-kit/esm-loader": {
+    "name": "@esbuild-kit/esm-loader",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@esbuild-kit/core-utils"
+    ],
+    "effects": [
+     "drizzle-kit"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@esbuild-kit/esm-loader"
+    ],
+    "fixAvailable": {
+     "name": "drizzle-kit",
+     "version": "0.18.1",
+     "isSemVerMajor": true
+    }
+   },
+   "@eslint-community/eslint-utils": {
+    "name": "@eslint-community/eslint-utils",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "eslint"
+    ],
+    "effects": [
+     "@next/eslint-plugin-next",
+     "@typescript-eslint/utils",
+     "eslint"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@eslint-community/eslint-utils"
+    ],
+    "fixAvailable": {
+     "name": "eslint",
+     "version": "4.0.0",
+     "isSemVerMajor": true
+    }
+   },
+   "@eslint/config-array": {
+    "name": "@eslint/config-array",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "minimatch"
+    ],
+    "effects": [
+     "eslint"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@eslint/config-array"
+    ],
+    "fixAvailable": {
+     "name": "eslint",
+     "version": "4.0.0",
+     "isSemVerMajor": true
+    }
+   },
+   "@eslint/eslintrc": {
+    "name": "@eslint/eslintrc",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "minimatch"
+    ],
+    "effects": [
+     "eslint"
+    ],
+    "range": "0.0.1 || >=0.1.1",
+    "nodes": [
+     "node_modules/@eslint/eslintrc"
+    ],
+    "fixAvailable": {
+     "name": "eslint",
+     "version": "4.0.0",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/admin-bundler": {
+    "name": "@medusajs/admin-bundler",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "glob"
+    ],
+    "effects": [
+     "@medusajs/medusa"
+    ],
+    "range": ">=2.3.0",
+    "nodes": [
+     "node_modules/@medusajs/admin-bundler"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.2.0",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/analytics": {
+    "name": "@medusajs/analytics",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/analytics"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/analytics-local": {
+    "name": "@medusajs/analytics-local",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/analytics-local"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/analytics-posthog": {
+    "name": "@medusajs/analytics-posthog",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/analytics-posthog"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/api-key": {
+    "name": "@medusajs/api-key",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/api-key"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/auth": {
+    "name": "@medusajs/auth",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/auth"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/auth-emailpass": {
+    "name": "@medusajs/auth-emailpass",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/auth-emailpass"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/auth-github": {
+    "name": "@medusajs/auth-github",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/auth-github"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/auth-google": {
+    "name": "@medusajs/auth-google",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/auth-google"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/auth-oidc": {
+    "name": "@medusajs/auth-oidc",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [
+     "@medusajs/medusa"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/auth-oidc"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.2.0",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/cache-inmemory": {
+    "name": "@medusajs/cache-inmemory",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/cache-inmemory"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/cache-redis": {
+    "name": "@medusajs/cache-redis",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/cache-redis"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/caching": {
+    "name": "@medusajs/caching",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [
+     "@medusajs/medusa"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/caching"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.2.0",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/caching-redis": {
+    "name": "@medusajs/caching-redis",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/caching-redis"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/cart": {
+    "name": "@medusajs/cart",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/cart"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/cli": {
+    "name": "@medusajs/cli",
+    "severity": "moderate",
+    "isDirect": true,
+    "via": [
+     "glob"
+    ],
+    "effects": [
+     "@medusajs/draft-order",
+     "@medusajs/framework"
+    ],
+    "range": ">=2.3.0",
+    "nodes": [
+     "node_modules/@medusajs/cli"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/cli",
+     "version": "2.2.0",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/core-flows": {
+    "name": "@medusajs/core-flows",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [
+     "@medusajs/medusa"
+    ],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/core-flows"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.2.0",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/currency": {
+    "name": "@medusajs/currency",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/currency"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/customer": {
+    "name": "@medusajs/customer",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/customer"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/draft-order": {
+    "name": "@medusajs/draft-order",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/cli",
+     "@medusajs/framework"
+    ],
+    "effects": [
+     "@medusajs/medusa"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/draft-order"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.2.0",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/event-bus-local": {
+    "name": "@medusajs/event-bus-local",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/event-bus-local"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/event-bus-redis": {
+    "name": "@medusajs/event-bus-redis",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/event-bus-redis"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/file": {
+    "name": "@medusajs/file",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/file"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/file-local": {
+    "name": "@medusajs/file-local",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/file-local"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/file-s3": {
+    "name": "@medusajs/file-s3",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/file-s3"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/framework": {
+    "name": "@medusajs/framework",
+    "severity": "moderate",
+    "isDirect": true,
+    "via": [
+     "@medusajs/cli",
+     "glob"
+    ],
+    "effects": [
+     "@medusajs/analytics",
+     "@medusajs/analytics-local",
+     "@medusajs/analytics-posthog",
+     "@medusajs/api-key",
+     "@medusajs/auth",
+     "@medusajs/auth-emailpass",
+     "@medusajs/auth-github",
+     "@medusajs/auth-google",
+     "@medusajs/auth-oidc",
+     "@medusajs/cache-inmemory",
+     "@medusajs/cache-redis",
+     "@medusajs/caching",
+     "@medusajs/caching-redis",
+     "@medusajs/cart",
+     "@medusajs/core-flows",
+     "@medusajs/currency",
+     "@medusajs/customer",
+     "@medusajs/event-bus-local",
+     "@medusajs/event-bus-redis",
+     "@medusajs/file",
+     "@medusajs/file-local",
+     "@medusajs/file-s3",
+     "@medusajs/fulfillment",
+     "@medusajs/fulfillment-manual",
+     "@medusajs/index",
+     "@medusajs/inventory",
+     "@medusajs/link-modules",
+     "@medusajs/locking",
+     "@medusajs/locking-postgres",
+     "@medusajs/locking-redis",
+     "@medusajs/medusa",
+     "@medusajs/notification",
+     "@medusajs/notification-local",
+     "@medusajs/notification-sendgrid",
+     "@medusajs/order",
+     "@medusajs/payment",
+     "@medusajs/payment-stripe",
+     "@medusajs/pricing",
+     "@medusajs/product",
+     "@medusajs/promotion",
+     "@medusajs/rbac",
+     "@medusajs/region",
+     "@medusajs/sales-channel",
+     "@medusajs/search",
+     "@medusajs/search-postgres",
+     "@medusajs/settings",
+     "@medusajs/stock-location",
+     "@medusajs/store",
+     "@medusajs/tax",
+     "@medusajs/translation",
+     "@medusajs/user",
+     "@medusajs/workflow-engine-inmemory",
+     "@medusajs/workflow-engine-redis"
+    ],
+    "range": ">=2.4.0",
+    "nodes": [
+     "node_modules/@medusajs/framework"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/framework",
+     "version": "2.8.4",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/fulfillment": {
+    "name": "@medusajs/fulfillment",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/fulfillment"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/fulfillment-manual": {
+    "name": "@medusajs/fulfillment-manual",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/fulfillment-manual"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/index": {
+    "name": "@medusajs/index",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/index"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/inventory": {
+    "name": "@medusajs/inventory",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/inventory"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/link-modules": {
+    "name": "@medusajs/link-modules",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/link-modules"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/locking": {
+    "name": "@medusajs/locking",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/locking"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/locking-postgres": {
+    "name": "@medusajs/locking-postgres",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/locking-postgres"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/locking-redis": {
+    "name": "@medusajs/locking-redis",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/locking-redis"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/medusa": {
+    "name": "@medusajs/medusa",
+    "severity": "moderate",
+    "isDirect": true,
+    "via": [
+     "@medusajs/admin-bundler",
+     "@medusajs/analytics",
+     "@medusajs/analytics-local",
+     "@medusajs/analytics-posthog",
+     "@medusajs/api-key",
+     "@medusajs/auth",
+     "@medusajs/auth-emailpass",
+     "@medusajs/auth-github",
+     "@medusajs/auth-google",
+     "@medusajs/auth-oidc",
+     "@medusajs/cache-inmemory",
+     "@medusajs/cache-redis",
+     "@medusajs/caching",
+     "@medusajs/caching-redis",
+     "@medusajs/cart",
+     "@medusajs/core-flows",
+     "@medusajs/currency",
+     "@medusajs/customer",
+     "@medusajs/draft-order",
+     "@medusajs/event-bus-local",
+     "@medusajs/event-bus-redis",
+     "@medusajs/file",
+     "@medusajs/file-local",
+     "@medusajs/file-s3",
+     "@medusajs/framework",
+     "@medusajs/fulfillment",
+     "@medusajs/fulfillment-manual",
+     "@medusajs/index",
+     "@medusajs/inventory",
+     "@medusajs/link-modules",
+     "@medusajs/locking",
+     "@medusajs/locking-postgres",
+     "@medusajs/locking-redis",
+     "@medusajs/notification",
+     "@medusajs/notification-local",
+     "@medusajs/notification-sendgrid",
+     "@medusajs/order",
+     "@medusajs/payment",
+     "@medusajs/payment-stripe",
+     "@medusajs/pricing",
+     "@medusajs/product",
+     "@medusajs/promotion",
+     "@medusajs/rbac",
+     "@medusajs/region",
+     "@medusajs/sales-channel",
+     "@medusajs/search",
+     "@medusajs/search-postgres",
+     "@medusajs/settings",
+     "@medusajs/stock-location",
+     "@medusajs/store",
+     "@medusajs/tax",
+     "@medusajs/translation",
+     "@medusajs/user",
+     "@medusajs/workflow-engine-inmemory",
+     "@medusajs/workflow-engine-redis"
+    ],
+    "effects": [],
+    "range": "1.19.0-next-20231211194438 - 1.19.0-next-20231213101140 || >=2.3.0",
+    "nodes": [
+     "node_modules/@medusajs/medusa"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.2.0",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/notification": {
+    "name": "@medusajs/notification",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/notification"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/notification-local": {
+    "name": "@medusajs/notification-local",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/notification-local"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/notification-sendgrid": {
+    "name": "@medusajs/notification-sendgrid",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework",
+     "@sendgrid/mail"
+    ],
+    "effects": [],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/notification-sendgrid"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/order": {
+    "name": "@medusajs/order",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/order"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/payment": {
+    "name": "@medusajs/payment",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/payment"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/payment-stripe": {
+    "name": "@medusajs/payment-stripe",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/payment-stripe"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/pricing": {
+    "name": "@medusajs/pricing",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/pricing"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/product": {
+    "name": "@medusajs/product",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/product"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/promotion": {
+    "name": "@medusajs/promotion",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/promotion"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/rbac": {
+    "name": "@medusajs/rbac",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [
+     "@medusajs/medusa"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/rbac"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.2.0",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/region": {
+    "name": "@medusajs/region",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/region"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/sales-channel": {
+    "name": "@medusajs/sales-channel",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/sales-channel"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/search": {
+    "name": "@medusajs/search",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=0.0.2-snapshot-20231107114332",
+    "nodes": [
+     "node_modules/@medusajs/search"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/search-postgres": {
+    "name": "@medusajs/search-postgres",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [
+     "@medusajs/medusa"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/search-postgres"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.2.0",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/settings": {
+    "name": "@medusajs/settings",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/settings"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/stock-location": {
+    "name": "@medusajs/stock-location",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/stock-location"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/store": {
+    "name": "@medusajs/store",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/store"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/tax": {
+    "name": "@medusajs/tax",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/tax"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/translation": {
+    "name": "@medusajs/translation",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [
+     "@medusajs/medusa"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@medusajs/translation"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.2.0",
+     "isSemVerMajor": true
+    }
+   },
+   "@medusajs/user": {
+    "name": "@medusajs/user",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/user"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/workflow-engine-inmemory": {
+    "name": "@medusajs/workflow-engine-inmemory",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/workflow-engine-inmemory"
+    ],
+    "fixAvailable": true
+   },
+   "@medusajs/workflow-engine-redis": {
+    "name": "@medusajs/workflow-engine-redis",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@medusajs/framework"
+    ],
+    "effects": [],
+    "range": ">=2.8.5",
+    "nodes": [
+     "node_modules/@medusajs/workflow-engine-redis"
+    ],
+    "fixAvailable": true
+   },
+   "@next/eslint-plugin-next": {
+    "name": "@next/eslint-plugin-next",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@eslint-community/eslint-utils"
+    ],
+    "effects": [
+     "eslint-config-next"
+    ],
+    "range": ">=16.3.0-canary.0",
+    "nodes": [
+     "node_modules/@next/eslint-plugin-next"
+    ],
+    "fixAvailable": {
+     "name": "eslint-config-next",
+     "version": "0.2.4",
+     "isSemVerMajor": true
+    }
+   },
+   "@sendgrid/client": {
+    "name": "@sendgrid/client",
+    "severity": "low",
+    "isDirect": false,
+    "via": [
+     "@sendgrid/helpers"
+    ],
+    "effects": [],
+    "range": ">=6.5.3",
+    "nodes": [
+     "node_modules/@sendgrid/client"
+    ],
+    "fixAvailable": true
+   },
+   "@sendgrid/helpers": {
+    "name": "@sendgrid/helpers",
+    "severity": "low",
+    "isDirect": false,
+    "via": [
+     "deepmerge"
+    ],
+    "effects": [
+     "@sendgrid/client",
+     "@sendgrid/mail"
+    ],
+    "range": ">=6.5.3",
+    "nodes": [
+     "node_modules/@sendgrid/helpers"
+    ],
+    "fixAvailable": true
+   },
+   "@sendgrid/mail": {
+    "name": "@sendgrid/mail",
+    "severity": "low",
+    "isDirect": false,
+    "via": [
+     "@sendgrid/client",
+     "@sendgrid/helpers"
+    ],
+    "effects": [
+     "@medusajs/notification-sendgrid"
+    ],
+    "range": ">=6.5.3",
+    "nodes": [
+     "node_modules/@sendgrid/mail"
+    ],
+    "fixAvailable": true
+   },
+   "@typescript-eslint/eslint-plugin": {
+    "name": "@typescript-eslint/eslint-plugin",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@typescript-eslint/parser",
+     "@typescript-eslint/type-utils",
+     "@typescript-eslint/utils",
+     "eslint"
+    ],
+    "effects": [
+     "typescript-eslint"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@typescript-eslint/eslint-plugin"
+    ],
+    "fixAvailable": {
+     "name": "eslint-config-next",
+     "version": "0.2.4",
+     "isSemVerMajor": true
+    }
+   },
+   "@typescript-eslint/parser": {
+    "name": "@typescript-eslint/parser",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@typescript-eslint/typescript-estree",
+     "eslint"
+    ],
+    "effects": [
+     "@typescript-eslint/eslint-plugin"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@typescript-eslint/parser"
+    ],
+    "fixAvailable": {
+     "name": "eslint-config-next",
+     "version": "0.2.4",
+     "isSemVerMajor": true
+    }
+   },
+   "@typescript-eslint/type-utils": {
+    "name": "@typescript-eslint/type-utils",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@typescript-eslint/typescript-estree",
+     "@typescript-eslint/utils",
+     "eslint"
+    ],
+    "effects": [
+     "@typescript-eslint/eslint-plugin"
+    ],
+    "range": ">=5.9.2-alpha.0",
+    "nodes": [
+     "node_modules/@typescript-eslint/type-utils"
+    ],
+    "fixAvailable": {
+     "name": "eslint-config-next",
+     "version": "0.2.4",
+     "isSemVerMajor": true
+    }
+   },
+   "@typescript-eslint/typescript-estree": {
+    "name": "@typescript-eslint/typescript-estree",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "minimatch"
+    ],
+    "effects": [
+     "@typescript-eslint/parser",
+     "@typescript-eslint/type-utils",
+     "@typescript-eslint/utils",
+     "typescript-eslint"
+    ],
+    "range": ">=6.16.0",
+    "nodes": [
+     "node_modules/@typescript-eslint/typescript-estree"
+    ],
+    "fixAvailable": {
+     "name": "eslint-config-next",
+     "version": "0.2.4",
+     "isSemVerMajor": true
+    }
+   },
+   "@typescript-eslint/utils": {
+    "name": "@typescript-eslint/utils",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@eslint-community/eslint-utils",
+     "@typescript-eslint/typescript-estree",
+     "eslint"
+    ],
+    "effects": [
+     "@typescript-eslint/eslint-plugin",
+     "@typescript-eslint/type-utils",
+     "typescript-eslint"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/@typescript-eslint/utils"
+    ],
+    "fixAvailable": {
+     "name": "eslint-config-next",
+     "version": "0.2.4",
+     "isSemVerMajor": true
+    }
+   },
+   "deepmerge": {
+    "name": "deepmerge",
+    "severity": "low",
+    "isDirect": false,
+    "via": [
+     {
+      "source": 1243505,
+      "name": "deepmerge",
+      "dependency": "deepmerge",
+      "title": "deepmerge mergeObject() allows prototype poisoning of returned objects",
+      "url": "https://github.com/advisories/GHSA-gcqx-w48m-w2h4",
+      "severity": "low",
+      "cwe": [
+       "CWE-1321"
+      ],
+      "cvss": {
+       "score": 5.3,
+       "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N"
+      },
+      "range": ">=4.2.0 <=4.3.1"
+     }
+    ],
+    "effects": [
+     "@sendgrid/helpers"
+    ],
+    "range": ">=4.2.0",
+    "nodes": [
+     "node_modules/deepmerge"
+    ],
+    "fixAvailable": true
+   },
+   "drizzle-kit": {
+    "name": "drizzle-kit",
+    "severity": "moderate",
+    "isDirect": true,
+    "via": [
+     "@esbuild-kit/esm-loader"
+    ],
+    "effects": [],
+    "range": "0.19.0 - 1.0.0-beta.1-fd8bfcc",
+    "nodes": [
+     "node_modules/drizzle-kit"
+    ],
+    "fixAvailable": {
+     "name": "drizzle-kit",
+     "version": "0.18.1",
+     "isSemVerMajor": true
+    }
+   },
+   "esbuild": {
+    "name": "esbuild",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     {
+      "source": 1102341,
+      "name": "esbuild",
+      "dependency": "esbuild",
+      "title": "esbuild enables any website to send any requests to the development server and read the response",
+      "url": "https://github.com/advisories/GHSA-67mh-4wv8-2f99",
+      "severity": "moderate",
+      "cwe": [
+       "CWE-346"
+      ],
+      "cvss": {
+       "score": 5.3,
+       "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:N/A:N"
+      },
+      "range": "<=0.24.2"
+     }
+    ],
+    "effects": [
+     "@esbuild-kit/core-utils"
+    ],
+    "range": "<=0.24.2",
+    "nodes": [
+     "node_modules/@esbuild-kit/core-utils/node_modules/esbuild"
+    ],
+    "fixAvailable": {
+     "name": "drizzle-kit",
+     "version": "0.18.1",
+     "isSemVerMajor": true
+    }
+   },
+   "eslint": {
+    "name": "eslint",
+    "severity": "moderate",
+    "isDirect": true,
+    "via": [
+     "@eslint-community/eslint-utils",
+     "@eslint/config-array",
+     "@eslint/eslintrc",
+     "minimatch"
+    ],
+    "effects": [
+     "@eslint-community/eslint-utils",
+     "@typescript-eslint/eslint-plugin",
+     "@typescript-eslint/parser",
+     "@typescript-eslint/type-utils",
+     "@typescript-eslint/utils",
+     "eslint-config-next",
+     "typescript-eslint"
+    ],
+    "range": "0.7.1 - 2.0.0-rc.1 || >=4.1.0",
+    "nodes": [
+     "node_modules/eslint"
+    ],
+    "fixAvailable": {
+     "name": "eslint",
+     "version": "4.0.0",
+     "isSemVerMajor": true
+    }
+   },
+   "eslint-config-next": {
+    "name": "eslint-config-next",
+    "severity": "moderate",
+    "isDirect": true,
+    "via": [
+     "@next/eslint-plugin-next",
+     "eslint",
+     "eslint-plugin-import",
+     "eslint-plugin-jsx-a11y",
+     "eslint-plugin-react",
+     "typescript-eslint"
+    ],
+    "effects": [],
+    "range": ">=10.2.1-canary.2",
+    "nodes": [
+     "node_modules/eslint-config-next"
+    ],
+    "fixAvailable": {
+     "name": "eslint-config-next",
+     "version": "0.2.4",
+     "isSemVerMajor": true
+    }
+   },
+   "eslint-plugin-import": {
+    "name": "eslint-plugin-import",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "minimatch"
+    ],
+    "effects": [],
+    "range": ">=1.15.0",
+    "nodes": [
+     "node_modules/eslint-config-next/node_modules/eslint-plugin-import"
+    ],
+    "fixAvailable": true
+   },
+   "eslint-plugin-jsx-a11y": {
+    "name": "eslint-plugin-jsx-a11y",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "minimatch"
+    ],
+    "effects": [
+     "eslint-config-next"
+    ],
+    "range": ">=6.5.0",
+    "nodes": [
+     "node_modules/eslint-config-next/node_modules/eslint-plugin-jsx-a11y"
+    ],
+    "fixAvailable": {
+     "name": "eslint-config-next",
+     "version": "0.2.4",
+     "isSemVerMajor": true
+    }
+   },
+   "eslint-plugin-react": {
+    "name": "eslint-plugin-react",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "minimatch"
+    ],
+    "effects": [],
+    "range": ">=7.23.0",
+    "nodes": [
+     "node_modules/eslint-config-next/node_modules/eslint-plugin-react"
+    ],
+    "fixAvailable": true
+   },
+   "glob": {
+    "name": "glob",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     {
+      "source": 1244013,
+      "name": "glob",
+      "dependency": "glob",
+      "title": "Glob: AbortSignal cancellation bypass allows post-timeout filesystem traversal",
+      "url": "https://github.com/advisories/GHSA-3g3m-2fjr-6pw4",
+      "severity": "moderate",
+      "cwe": [
+       "CWE-400"
+      ],
+      "cvss": {
+       "score": 0,
+       "vectorString": null
+      },
+      "range": ">=9.0.0 <=14.0.1"
+     },
+     "minimatch"
+    ],
+    "effects": [
+     "@medusajs/admin-bundler",
+     "@medusajs/cli",
+     "@medusajs/framework"
+    ],
+    "range": "3.0.0 - 14.0.1",
+    "nodes": [
+     "node_modules/glob"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/cli",
+     "version": "2.2.0",
+     "isSemVerMajor": true
+    }
+   },
+   "minimatch": {
+    "name": "minimatch",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     {
+      "source": 1244012,
+      "name": "minimatch",
+      "dependency": "minimatch",
+      "title": "minimatch has potential denial of service via globparts amplification",
+      "url": "https://github.com/advisories/GHSA-g3hv-75wg-m249",
+      "severity": "moderate",
+      "cwe": [
+       "CWE-405"
+      ],
+      "cvss": {
+       "score": 0,
+       "vectorString": null
+      },
+      "range": "<11.0.1"
+     }
+    ],
+    "effects": [
+     "@eslint/config-array",
+     "@eslint/eslintrc",
+     "@typescript-eslint/typescript-estree",
+     "eslint",
+     "eslint-plugin-import",
+     "eslint-plugin-jsx-a11y",
+     "eslint-plugin-react",
+     "glob"
+    ],
+    "range": "<11.0.1",
+    "nodes": [
+     "node_modules/@eslint/config-array/node_modules/minimatch",
+     "node_modules/@eslint/eslintrc/node_modules/minimatch",
+     "node_modules/eslint-config-next/node_modules/minimatch",
+     "node_modules/eslint/node_modules/minimatch",
+     "node_modules/minimatch"
+    ],
+    "fixAvailable": {
+     "name": "eslint",
+     "version": "4.0.0",
+     "isSemVerMajor": true
+    }
+   },
+   "typescript-eslint": {
+    "name": "typescript-eslint",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "@typescript-eslint/eslint-plugin",
+     "@typescript-eslint/parser",
+     "@typescript-eslint/typescript-estree",
+     "@typescript-eslint/utils",
+     "eslint"
+    ],
+    "effects": [
+     "eslint-config-next"
+    ],
+    "range": "*",
+    "nodes": [
+     "node_modules/typescript-eslint"
+    ],
+    "fixAvailable": {
+     "name": "eslint-config-next",
+     "version": "0.2.4",
+     "isSemVerMajor": true
+    }
+   }
+  },
+  "metadata": {
+   "vulnerabilities": {
+    "info": 0,
+    "low": 4,
+    "moderate": 78,
+    "high": 0,
+    "critical": 0,
+    "total": 82
+   },
+   "dependencies": {
+    "prod": 1010,
+    "dev": 360,
+    "optional": 224,
+    "peer": 19,
+    "peerOptional": 0,
+    "total": 1488
+   }
+  }
+ }
+}

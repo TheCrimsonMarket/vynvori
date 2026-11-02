@@ -44,11 +44,11 @@
     "test:lifecycle": "node --test scripts/tests/process-lifecycle.test.mjs scripts/tests/dependency-compat.test.mjs",
     "security:audit": "node scripts/security/run-audit.mjs",
     "security:review:m1b": "node scripts/security/m1b-collect-review.mjs",
-    "test:security-policy": "node --test scripts/tests/security-policy.test.mjs scripts/tests/m1b-source-policy.test.mjs"
+    "test:security-policy": "node --test scripts/tests/security-policy.test.mjs scripts/tests/m1b-source-policy.test.mjs scripts/tests/dependency-waiver-policy.test.mjs"
   },
   "devDependencies": {
     "eslint": "9.39.5",
-    "eslint-config-next": "16.4.0",
+    "eslint-config-next": "16.4.3",
     "tsx": "4.23.15",
     "@medusajs/medusa": "2.21.2"
   },
@@ -68,6 +68,7 @@
     },
     "bullmq@5.13.0": {
       "uuid": "11.1.1"
-    }
+    },
+    "zod": "4.6.7"
   }
 }

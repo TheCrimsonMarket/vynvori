@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "id": "dependency-advisory-waiver-v1",
+  "authority": "VYNVORI founder",
+  "approvedOn": "2026-11-02",
+  "notBefore": "2026-11-02T00:00:00Z",
+  "expiresAt": "2026-12-17T23:59:59Z",
+  "scope": "ci-and-local-audit-gate-only",
+  "deploymentAuthorized": false,
+  "decisionRecord": "docs/implementation/ADR-0020-Dated-Dependency-Advisory-Waiver.md",
+  "waivers": [
+    {
+      "ghsa": "GHSA-3g3m-2fjr-6pw4",
+      "package": "glob",
+      "severity": "moderate",
+      "range": ">=9.0.0 <=14.0.1",
+      "nodes": [
+        { "path": "node_modules/glob", "version": "13.0.6", "context": "production", "resolved": "https://registry.npmjs.org/glob/-/glob-13.0.6.tgz", "integrity": "sha512-Wjlyrolmm8uDpm/ogGyXZXb1Z+Ca2B8NbJwqBVg0axK9GbBeoS7yGV6vjXnYdGm6X53iehEuxxbyiKp8QmN4Vw==" }
+      ],
+      "owner": "VYNVORI founder",
+      "rationale": "Pinned exactly by @medusajs/framework, @medusajs/admin-bundler and @medusajs/cli 2.21.2 (and still in 2.22.2). Only a major upgrade fixes it; patterns are Medusa-internal, not user input.",
+      "recheck": "Every Medusa release and before waiver expiry; remove when Medusa ships glob >=14.0.2."
+    },
+    {
+      "ghsa": "GHSA-g3hv-75wg-m249",
+      "package": "minimatch",
+      "severity": "moderate",
+      "range": "<11.0.1",
+      "nodes": [
+        { "path": "node_modules/minimatch", "version": "10.2.6", "context": "production", "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-10.2.6.tgz", "integrity": "sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==" },
+        { "path": "node_modules/@eslint/config-array/node_modules/minimatch", "version": "3.1.5", "context": "development", "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-3.1.5.tgz", "integrity": "sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w==" },
+        { "path": "node_modules/@eslint/eslintrc/node_modules/minimatch", "version": "3.1.5", "context": "development", "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-3.1.5.tgz", "integrity": "sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w==" },
+        { "path": "node_modules/eslint-config-next/node_modules/minimatch", "version": "3.1.5", "context": "development", "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-3.1.5.tgz", "integrity": "sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w==" },
+        { "path": "node_modules/eslint/node_modules/minimatch", "version": "3.1.5", "context": "development", "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-3.1.5.tgz", "integrity": "sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w==" }
+      ],
+      "owner": "VYNVORI founder",
+      "rationale": "Production copy is required by glob 13 (above); development copies are ESLint's. Only a major upgrade fixes it; patterns are repository-controlled.",
+      "recheck": "With the glob waiver and on ESLint upgrades; remove when no affected node remains."
+    },
+    {
+      "ghsa": "GHSA-gcqx-w48m-w2h4",
+      "package": "deepmerge",
+      "severity": "low",
+      "range": ">=4.2.0 <=4.3.1",
+      "nodes": [
+        { "path": "node_modules/deepmerge", "version": "4.3.1", "context": "production", "resolved": "https://registry.npmjs.org/deepmerge/-/deepmerge-4.3.1.tgz", "integrity": "sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A==" }
+      ],
+      "owner": "VYNVORI founder",
+      "rationale": "No patched release exists (4.3.1 is latest). Reached only through @medusajs/notification-sendgrid, which is not configured in apps/medusa.",
+      "recheck": "Before waiver expiry and before configuring any SendGrid notification provider."
+    },
+    {
+      "ghsa": "GHSA-67mh-4wv8-2f99",
+      "package": "esbuild",
+      "severity": "moderate",
+      "range": "<=0.24.2",
+      "nodes": [
+        { "path": "node_modules/@esbuild-kit/core-utils/node_modules/esbuild", "version": "0.18.20", "context": "development", "resolved": "https://registry.npmjs.org/esbuild/-/esbuild-0.18.20.tgz", "integrity": "sha512-ceqxoedUrcayh7Y7ZX6NdbbDzGROiyVBgC4PriJThBKSVPWnnFHZAkfI1lJT8QFkOwH4qOS2SJkS4wvpGl8BpA==" }
+      ],
+      "owner": "VYNVORI founder",
+      "rationale": "Development-only, via drizzle-kit's @esbuild-kit loader. The advisory affects esbuild's dev server, which this repository never starts or exposes.",
+      "recheck": "On drizzle-kit upgrades and before waiver expiry."
+    }
+  ]
+}

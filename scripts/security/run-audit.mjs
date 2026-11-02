@@ -10,12 +10,13 @@ import { collectLocalState, evaluateLocal, validateLocalInputs, contextAllowed, 
 import { verifyLocalImage } from "./pr5-runtime-check.mjs";
 import { collectStagingState, validateStagingAudits, evaluateStaging } from "./staging-policy.mjs";
 import { M1B_IMPLEMENTATION_COMMIT, M1B_POLICY_DIGEST, M1B_POLICY_PATH, collectApprovedM1bState, validateM1bInputs, evaluateM1b } from "./m1b-source-policy.mjs";
+import { WAIVER_POLICY_PATH, collectWaiverState, evaluateWaivers } from "./dependency-waiver-policy.mjs";
 
 // Rendered only in the separately committed activation step; never by this runner.
 export const PR5_IMPLEMENTATION_COMMIT = "dfa716c53adf83c613bb4aca459b1b5580fdcaf5";
 export const PR5_POLICY_DIGEST = "03d4d2291513834c6caab951a7c9506cbec6bc7bedfcea5843f77f1258c017a4";
-export const STAGING_IMPLEMENTATION_COMMIT = "f923f7b26c4fc0684e26cfdf29ebf177d80103f6";
-export const STAGING_POLICY_DIGEST = "abedb2518665b13e53cb9a83c9c6504310ab58266361ceb6f37b7bcc8105c5af";
+export const STAGING_IMPLEMENTATION_COMMIT = "UNACTIVATED";
+export const STAGING_POLICY_DIGEST = "UNACTIVATED";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const policyPath = path.join(root, "security/m2-exception-policy.json");
@@ -48,7 +49,7 @@ export async function runAudit(productionOnly = true) {
   if (!npmCli || !path.isAbsolute(npmCli) || !npmCli.endsWith("npm-cli.js")) throw new Error("RUN_THROUGH_NPM");
   const registry = await exec(process.execPath, [npmCli, "config", "get", "registry"], { cwd: root, timeout: 10000, maxBuffer: 4096, windowsHide: true });
   if (!["https://registry.npmjs.org/", "https://registry.npmjs.org"].includes(registry.stdout.trim())) throw new Error("UNREVIEWED_AUDIT_REGISTRY");
-  const handle = startProcess(process.execPath, [npmCli, "audit", ...(productionOnly ? ["--omit=dev"] : []), "--json"], { cwd: root, env: process.env });
+  const handle = startProcess(process.execPath, [npmCli, "audit", ...(productionOnly ? ["--omit=dev"] : ["--include=dev"]), "--json"], { cwd: root, env: process.env });
   let stdout = "", stderr = "", exceeded = false;
   const capture = which => bytes => {
     if (stdout.length + stderr.length + bytes.length > MAX_BYTES) { exceeded = true; return; }
@@ -84,7 +85,17 @@ async function main() {
   // Always attempt the full unfiltered audit before checking the exception fingerprint.
   try { audit = await runAudit(); } catch { result = { accepted: false, status: "REJECTED", code: "AUDIT_EXECUTION_FAILURE" }; }
   try { allAudit = await runAudit(false); } catch { /* Recorded as a failed full audit; never except execution errors. */ }
-  try {
+  // Current gate (ADR-0020): dated advisory waiver over both audits. Historical sealed exceptions below remain fallbacks only.
+  let waiverPolicy, waiverState, waiverResult;
+  if (!result) {
+    try {
+      waiverPolicy = JSON.parse(await fs.readFile(path.join(root, WAIVER_POLICY_PATH), "utf8"));
+      waiverState = await collectWaiverState(root, waiverPolicy);
+      waiverResult = evaluateWaivers({ policy: waiverPolicy, state: waiverState, production: audit, all: allAudit, now: new Date(), env: process.env });
+    } catch (error) { waiverResult = { accepted: false, status: "REJECTED", code: error.message }; }
+    if (waiverResult.accepted) result = waiverResult;
+  }
+  if (!result?.accepted) try {
     policy = JSON.parse(await fs.readFile(policyPath, "utf8"));
     validatePolicy(policy);
     state = await snapshot(root, policy);
@@ -110,6 +121,8 @@ async function main() {
         state: localState, production: audit, all: allAudit, image, env: process.env });
     }
   } catch (error) { result = { accepted: false, status: "REJECTED", code: error.message }; }
+  // When every fallback also rejects, report the current gate's reason rather than an expired historical one.
+  if (!result.accepted && waiverResult && !waiverResult.accepted) { historicalResult ??= result; result = waiverResult; }
   if (!result.accepted && (M1B_IMPLEMENTATION_COMMIT !== "UNACTIVATED" || M1B_POLICY_DIGEST !== "UNACTIVATED")) {
     try {
       m1bPolicy = JSON.parse(await fs.readFile(path.join(root, M1B_POLICY_PATH), "utf8"));
@@ -141,11 +154,13 @@ async function main() {
       signal: allAudit.signal, stdoutSha256: sha256(allAudit.stdout), summary: clean ? summarizeAudit(allAudit.stdout, localState ? { installed: localState.installed } : state) : null },
     localApproval: localPolicy ? { policySha256: digest(localPolicy), implementationCommit: PR5_IMPLEMENTATION_COMMIT,
       sourceCommit: localState?.commit, sourceTree: localState?.tree, imageId: image?.imageId, archiveSha256: image?.archiveSha256 } : null,
+    waiverApproval: waiverPolicy ? { policySha256: digest(waiverPolicy), expiresAt: waiverPolicy.expiresAt, lockSha256: waiverState?.lockSha256 ?? null, result: waiverResult } : null,
     m1bApproval: m1bPolicy ? { policySha256: digest(m1bPolicy), implementationCommit: M1B_IMPLEMENTATION_COMMIT, sourceCommit: m1bState?.commit, imageId: image?.imageId } : null,
   };
   await fs.writeFile(path.join(evidence, "evaluation.json"), JSON.stringify(report, null, 2) + "\n");
   if (policy) await fs.writeFile(path.join(evidence, "policy.json"), JSON.stringify(policy, null, 2) + "\n");
   if (localPolicy) await fs.writeFile(path.join(evidence, "pr5-local-policy.json"), JSON.stringify(localPolicy, null, 2) + "\n");
+  if (waiverPolicy) await fs.writeFile(path.join(evidence, "dependency-waiver-policy.json"), JSON.stringify(waiverPolicy, null, 2) + "\n");
   if (m1bPolicy) await fs.writeFile(path.join(evidence, "m1b-source-ci-policy.json"), JSON.stringify(m1bPolicy, null, 2) + "\n");
   console.log(`Original unfiltered npm audit exit=${audit.exitCode}; findings=${result.counts?.total ?? "unavailable"}; effective security gate=${result.status}${result.code ? ` (${result.code})` : ""}`);
   console.log(`Security evidence: ${evidence}`);
