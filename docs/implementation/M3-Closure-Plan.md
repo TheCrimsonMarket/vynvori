@@ -1,8 +1,18 @@
 # M3 closure plan — local closure of the BYO garment editor (W1)
 
-Status: **PROPOSED — awaiting founder review. No worker may start until the founder approves this plan** (registry rule 2: a plan is not authorization to implement). Author: M3-closure milestone manager. Base: `main` @ `1fa10e8` (CI green per root). Date: 2026-11-02. Revision 1.
+Status: **PROPOSED — awaiting founder review. No worker may start until the founder approves this plan** (registry rule 2: a plan is not authorization to implement). Author: M3-closure milestone manager. Base: `main` @ `1fa10e8` (CI green per root). Date: 2026-11-02. **Revision 2** (rev 1 = first draft; rev 2 = adversarial review applied, §12). Neither revision approves anything.
 
-Authority: founder-authorized W1 scope as relayed in the M3-closure manager kickoff. ADR-0022, migration number `0002` in `packages/db/composition-migrations/` and additive edits to the M3-owned contract files are granted by root. This document changes no code, schema, flag, workflow or protected file.
+Authority: founder-authorized W1 scope as relayed in the M3-closure manager kickoff. ADR-0022 and migration number `0002` in `packages/db/composition-migrations/` were granted by root in that kickoff, and so were additive edits to the M3-owned contract files. The registry does not yet record them (§7 asks root to). This document changes no code, schema, flag, workflow or protected file.
+
+## 0. Decisions needed before approval
+
+Three questions change the shape of the work and are asked **now**, not discovered during implementation. Each has a stated working assumption; approving the plan without comment accepts the assumption.
+
+| # | Question | Working assumption |
+|---|---|---|
+| **QA** | **Server-backed editor fixture.** The browser harness cannot exercise upload, save, freeze, restore, scan or download states unless the page is rendered with `artworkUpload` enabled. That needs the isolated-staging identity canary: `VYNVORI_IDENTITY_CENTRAL_SSO=true` (a reserved variable that must stay `false`), a spoofed `VERCEL=1`/`VERCEL_ENV=preview`/project-id match, a `*.neon.tech` pooler host and `tcm_` client credentials (`packages/shared/src/server.ts:33-40`, `apps/web/src/server/identity-settings.ts`). Options: **A)** no seam: browser tests cover everything reachable with all flags OFF (text layers, keyboard, numeric controls, layers, undo, tabs, 200 % text, reflow: most of the editor); server-backed states are covered by handler-level and PostgreSQL tests and by the founder's staging checklist (B-items). **B)** a reviewed, test-only capability seam in product code. **C)** a harness-scoped synthetic canary environment, which needs an explicit, written exception to the reserved-prefix rule and the canary pin. | **A.** Step C1b (server-backed fixture) is conditional on B or C. |
+| **QB** | **Local preview of the user's own file.** The approved reference design and the live editor keep the picked file's bytes in the browser, preview it from a `data:` URL, and upload only on save (`editor.tsx:25,45,133-139`). The kickoff says unscanned assets are never "used in previews". Options: **a)** server-sourced pixels (inline asset read, derivatives, any server preview) require `clean`, while the browser may keep displaying bytes it already holds from the user's own device; **b)** strict: no pixels for any asset until a scan is `clean`, which requires uploading at pick time and re-architects the approved flow. | **a.** This departs from the literal kickoff wording. It is reported to root as an AGENTS stop condition (f) item; the founder decides. |
+| **QC** | **M3 cannot reach PASSED, and W2 stays blocked, until uploads can be enabled, and uploads need a scanner.** With no scanner wired, uploads return 503 (D3), so "upload → edit → preview → save → restore" can be shown only in tests. Options: **i)** founder chooses a scanner (Q4); **ii)** founder accepts doc 12:17's wording "antivirus **or controlled image decode/quarantine**" and approves the existing structural inspection as an interim, honestly named scanner (`structural-inspect`), recorded as such in scan events; **iii)** founder defers: M3 stays at LOCAL CLOSURE COMPLETE and W2 waits. | Nothing is assumed. The plan never selects a scanner and never labels structural inspection as antivirus. |
 
 ## 1. Objective, scope and outcome
 
@@ -12,15 +22,15 @@ Close every M3 gap that can be closed **inside the repository**, and prepare exa
 
 | # | Workstream | ACC |
 |---|---|---|
-| A1 | Guest quota and rate limiting: per guest capability, per owner, and IP-independent global keys | ACC-04 |
-| A2 | Short-lived, owner-checked, single-use download grants for private originals | ACC-07 |
-| A3 | `ArtifactScanPort` plus an append-only scan-status lifecycle; unscanned/unknown assets are never served, previewed or frozen | ACC-07 |
-| A4 | Editor accessibility hardening, verified by automated checks in the browser harness | ACC-05 |
-| A5 | Browser harness parameterised by engine (Chromium, Firefox, WebKit) plus a reproducible interactive editor fixture | ACC-04/05 |
+| A1 | Guest quota and rate limiting: per guest capability, per owner, IP-independent global keys | ACC-04 |
+| A2 | Short-lived, owner-checked download grants for private originals | ACC-07 |
+| A3 | `ArtifactScanPort` plus an append-only scan lifecycle; unscanned/unknown assets are never served, frozen or used for server-sourced previews | ACC-07 |
+| A4 | Editor accessibility hardening with automated checks | ACC-05 |
+| A5 | Engine-parameterised browser harness (Chromium, Firefox, WebKit) and an interactive editor fixture | ACC-04/05 |
 
-**Out of scope here:** staging Neon, R2, real identity, screen-reader pass, scanner vendor (§9 checklists, §8 questions); any Medusa/checkout/print/QA behaviour (M4/M5); the AI wallet (M7); derivative generation; garbage collection of expired guest objects (§11).
+**Out of scope:** staging Neon, R2, real identity, screen-reader pass, scanner vendor (§9, §8); Medusa/checkout/print/QA (M4/M5); the AI wallet (M7); derivatives; garbage collection of expired guest objects (§11).
 
-**Outcome.** M3 can be proposed as **LOCAL CLOSURE COMPLETE** when C1–C8 are merged with CI green and the B checklists are ready. It is **never PASSED** until the B items have executed evidence. Root and the founder decide acceptance changes. ACC rows change only with CI-executed evidence (§10).
+**Outcome.** M3 can be proposed as **LOCAL CLOSURE COMPLETE** when the unconditional steps are merged with CI green and the B checklists are ready. It is **never PASSED** until the B items have executed evidence, and (QC) not until uploads can be enabled. Root and the founder decide acceptance changes. ACC rows change only with CI-executed evidence (§10).
 
 ## 2. Hard constraints (copy into every worker brief)
 
@@ -28,12 +38,13 @@ Close every M3 gap that can be closed **inside the repository**, and prepare exa
 2. **Identity.** Verified `issuer + subject` is the user key; email never links or proves ownership. Guests are capability holders only.
 3. **No invented values.** No limits, TTLs, prices, print specs, supplier data, vendor choices. Production code carries **no numeric policy values**; they arrive as typed config and an unset value fails closed. Numeric fixtures exist only in `tests/`, are named `SYNTHETIC_*`, and are never exported from `src/`.
 4. **No print permission.** Preview-only profiles stay non-print-eligible; nothing here moves any Plane E state. Paid never means print.
-5. **Ownership everywhere.** Every ID and every asset access is checked in SQL with the existing access predicate. Absent, foreign, expired and claimed all return the same `NOT_FOUND`. Object keys are built on the server from validated IDs and a content hash, never from client input.
-6. **Flags.** `assets.production_uploads` stays `false` and unsettable. No new `VYNVORI_*` variable (that prefix is reserved for operational flags that must stay `"false"`); new configuration uses `M3_*`.
-7. **Migrations.** Non-destructive; documented, **tested** rollback; checksum pinned in `plan.json`.
-8. **Never commit** user art, customer data, EICAR files or third-party binaries/vendor SDKs.
-9. **Lanes.** Not granted: `package-lock.json`/dependency fields, `security/**`, `scripts/security/**`, `scripts/security-smoke.mjs`, `.github/workflows/**`, `scripts/deployment-check.mjs`, `scripts/integrity.mjs`, `docs/implementation/M0-protected-files.json` and every file it lists (including `docs/technical/20-acceptance-matrix.md` and `design/reference/**`), `MILESTONE-PROGRESS.md`, the registry, canonical specs `docs/technical/00`–`25`. Contracts: **additive only** and only in `composition-scene.ts`, `composition-port.ts`, `editor.ts`, `assets.ts` plus export lines in `index.ts`; never `state-machines.ts`, `operations.ts`, `quote.ts` or any ledger file (shared with M7).
-10. **Stop and escalate** (AGENTS.md): need for any invented value or vendor; need for a lane not granted; contract conflict with a canonical doc; a change that would break an approved requirement.
+5. **Ownership everywhere.** Every ID and every asset access is checked in SQL with the existing access predicate. Authenticated-but-not-entitled requests (absent, foreign, expired, claimed) return the same `NOT_FOUND`. Object keys are built on the server from validated IDs and a content hash, never from client input.
+6. **Flags.** `assets.production_uploads` stays `false` and unsettable. No new `VYNVORI_*` variable, and no test or CI use of that prefix; new configuration uses `M3_*`.
+7. **Migrations.** Non-destructive; documented, **tested** rollback; checksum pinned in `plan.json`; a merged migration is never edited.
+8. **Never commit** user art, customer data, antivirus test strings or third-party binaries/vendor SDKs.
+9. **Lanes.** Not granted: `package-lock.json`/dependency fields, `security/**`, `scripts/security/**`, `scripts/security-smoke.mjs`, `.github/workflows/**`, `scripts/deployment-check.mjs`, `scripts/integrity.mjs`, `docs/implementation/M0-protected-files.json` and every file it lists (including `docs/technical/20-acceptance-matrix.md` and `design/reference/**`, which also declares the Playwright/axe-core dependencies), `MILESTONE-PROGRESS.md`, the registry, canonical specs `docs/technical/00`–`25`. Contracts: **additive only**, only in `composition-scene.ts`, `composition-port.ts`, `editor.ts`, `assets.ts` plus export lines in `index.ts`; never `state-machines.ts`, `operations.ts`, `quote.ts` or any ledger file (shared with M7).
+10. **Security-smoke policy (root-owned, read it before writing UI or fixtures).** `scripts/security-smoke.mjs` allows `fetch(` in `.ts`/`.tsx` only in the listed files (for M3: `editor.tsx`, `review.tsx`) and bans `localStorage`, `eval(` and `dangerouslySetInnerHTML` across `apps/web`. All new browser-side network calls (download mint, scan status) therefore live in `editor.tsx`/`review.tsx`, and fixtures live in `scripts/` as `.mjs`. Needing anything else is a RESOURCE REQUEST.
+11. **Stop and escalate** (AGENTS.md): need for any invented value or vendor; a lane not granted; a contract conflict with a canonical doc; a change that would break an approved requirement.
 
 ## 3. Cloud-sandbox facts (verbatim block for every brief)
 
@@ -45,196 +56,196 @@ Close every M3 gap that can be closed **inside the repository**, and prepare exa
 - Never use the `VYNVORI_*` prefix for test or CI variables.
 - Only skills/commands listed in `.claude/VENDORED.md` exist (no `/security-scan`, `/verify`, `/tdd`, `/save-session`). For security review use `npm run smoke:security`, `npm run security:audit`, the `security-review` skill and the `security-reviewer` agent; record findings in the PR's security notes.
 
-## 4. Verified repository findings (read on `main` @ `1fa10e8`)
+## 4. Verified repository findings (read on `main` @ `1fa10e8`; rev 2 corrections marked ✎)
 
 | # | Finding | Consequence |
 |---|---|---|
-| F1 | **CI runs M3's Postgres suites.** `m2.yml` `foundation` provides Postgres 17.6, sets `M3_TEST_POSTGRES_URL` (`…/vynvori_m3_migration_test`) and `CI_REQUIRE_PG_TESTS=1`, creates `vynvori_m3_migration_test` and `vynvori_m3_service_test`, and sets `max_connections=250`. The migration runner (`packages/db/src/composition-migrations.ts`) accepts **only** those two database names, user `synthetic`, host `127.0.0.1`. | DB evidence comes from `foundation` log lines showing `ok`, not `# SKIP`. New DB tests reuse these two names. A third name needs a one-line allow-list edit in M3's own runner. The `browser` job lives in `m0.yml`, a separate job without Postgres. |
-| F2 | **Asset path today.** `uploadAsset`: `inspectImage` (magic bytes, CRCs, size/pixel bounds) → key `private/composition/v1/{compositionId}/{sha256}` built server-side → `storage.put` (`If-None-Match: *`) → `insertAsset`. `readAsset` streams bytes through the API after an ownership check. No scanner and no scan status exist. `assets` rows are **immutable** (UPDATE/DELETE/TRUNCATE rejected by trigger). | A scan status cannot be a column on `assets`. It must be an append-only table. Existing rows have no scan record, so "no record = `pending`" makes them fail closed with no backfill. |
-| F3 | **Invented numeric defaults already exist.** `defaultCompositionConfig` (`composition.ts`): guest TTL 24 h, image 25 MiB / 36 MP / 20 000 px, 24 assets and 150 MiB per composition. `composition-runtime.ts`: 256 KiB JSON body. `0001` hard-codes `byte_size <= 26214400` and `width/height <= 20000` as CHECKs; the editor status text says "expires in 24 hours". ADR-0018 records no founder approval for any of them. | Constraint 3 is already violated by M3's own implementation. Q1 asks the founder to ratify or replace them; C2 removes the defaults unless ratified. The DB CHECKs stay as structural ceilings either way (security bounds), pending Q1. |
-| F4 | **No rate limiting or quota exists in the composition path.** Anonymous `POST /api/v1/compositions` is guarded only by same-origin. Doc 16 requires "short TTL, quota, CSRF" for guest drafts; doc 12 says "account-level and IP/device-aware rate limits … CAPTCHA/step-up only under abnormal risk". | The repository can enforce capability-, owner- and global-keyed limits. IP/device-aware limits and challenges are edge decisions (Q5). |
-| F5 | **Browser harness.** `scripts/browser-web.mjs` is single-engine (`chromium.launch`, `channel: "chrome"` unless `M0_BROWSER=chromium`; any other value silently falls through to the Chrome channel). It runs route-level axe (WCAG 2.0–2.2 A/AA) over five routes × nine viewports, a mobile-menu keyboard check, the disabled-upload assertion, and a text-inflation/reduced-motion check. It never exercises editor interaction. CI (`m0.yml` job `browser`) installs Chromium only and sets `M0_BROWSER=chromium`. | The interactive journey in `M3-Evidence-20261102.md` (upload, numeric edit, drag, save, reload, freeze, restore) has **no script in the repository** (only `browser-web.mjs`, `browser-preview.mjs`, `editorial-layout.mjs` mention `/customize`). It is not reproducible by CI. C1 builds a committed fixture. |
-| F6 | **Candidate editor accessibility observations** from reading `editor.tsx` (hypotheses; the worker must reproduce each before fixing): tablist has `role=tab`/`aria-selected` but no roving tabindex, arrow-key or `tabpanel` wiring; "Move up/down", "Hide layer" buttons share names across layers; each canvas layer repeats the full key help in its `aria-label`; arrow-key nudges change only an `aria-label` (no live announcement); the issues list is `aria-live="polite"` and re-announces wholesale; deleting a layer sets `selected=null` with no focus target; no announcement for freeze/restore/claim outcomes; numeric fields commit on blur/Enter with no visible validation message. | Drives C7 and the A4 assertions. |
-| F7 | **Presigned URLs are not available without a dependency.** `@aws-sdk/s3-request-presigner` appears in the lockfile only as another package's dependency; `commerce` does not declare it. A presigned GET is also a bearer URL that bypasses the app's ownership and scan checks at fetch time. | Download access is app-issued, principal-bound and DB-backed (D4). The presigned option is recorded as rejected. |
-| F8 | **`0001` rollback leaves the journal schema.** `rollback/0001_composition_scene.down.sql` drops `vynvori_composition` and deletes the journal row but not `vynvori_composition_migrations`; the runner then sees `hasJournal && !hasSchema` and throws `HISTORY_OR_SCHEMA_DRIFT` on a re-apply. (Read from source; **to be confirmed by a test in C3**.) | C3 tests up → down → up for `0002` and, if confirmed, repairs the `0001` down script (rollback files are not hash-pinned). |
-| F9 | `CompositionError` codes drive a `Record<…>` status map in `composition-http.ts`; adding a code forces a compile-time update. `AssetRecord` has no `scanStatus`. The conformance suite (`composition-suite.ts`) runs one scenario list against an in-memory port and the PostgreSQL store. | New store methods land in both implementations, and tests prove parity. |
-| F10 | **Connection budget.** `foundation` shares `max_connections=250` with M1b and M3 suites and, once merged, M7's ledger concurrency file (M7 plan D15: up to 110 connections plus ≤45 for other ledger files). | M3 tests cap their pools (≤ 5 per file, ≤ 20 concurrent actors in race tests). C3 records the budget in the ADR. |
-| F11 | Playwright is 1.62.1 and axe-core 4.14.0 (lockfile); both are already workspace dependencies. | `locator.ariaSnapshot()` and the `target-size` rule are available. No dependency change is needed anywhere in this plan. |
+| F1 ✎ | **CI runs M3's Postgres suites in `m2.yml` `foundation` only.** It provides Postgres 17.6, sets `M3_TEST_POSTGRES_URL`, `CI_REQUIRE_PG_TESTS=1`, creates `vynvori_m3_migration_test` and `vynvori_m3_service_test`, and sets `max_connections=250`. The `m0.yml` `verify` job also runs `test:m2`, where these suites print `# SKIP`. The migration runner (`composition-migrations.ts:36`) **and** the test fixture (`composition-fixture.ts:9`) allow-list exactly those two names. `freshComposition()` **drops all three schemas** on whichever database it opens, and `test:m2` runs all test files in one `node --test`, which runs files in parallel. | Evidence is `foundation` lines showing `ok`. A new DB test file must **not** share a database with an existing one (they would drop each other's schema mid-run). Each new DB test file gets its own database created by the fixture (D8). |
+| F2 | **Asset path today.** `uploadAsset`: `inspectImage` → duplicate/quota pre-check → key `private/composition/v1/{compositionId}/{sha256}` built server-side → `storage.put` (`If-None-Match: *`) → `insertAsset`. `readAsset` buffers the object and returns it after an ownership check. `assets` rows are **immutable** by trigger. No scanner, no scan status. | Scan status must be an append-only table, not a column. Existing rows have no scan record; "no record = `pending`" makes them fail closed. |
+| F3 ✎ | **Invented numeric values already exist and no founder approval is recorded (ADR-0018:11).** `defaultCompositionConfig`: guest TTL 24 h, image 25 MiB/36 MP/20 000 px, 24 assets and 150 MiB per composition; web runtime: 256 KiB JSON body; `0001` CHECKs 26 214 400 bytes and 20 000 px; `editor.tsx:146,201` hard-code "24 hours". Also: contracts `SCENE_LIMITS` (`composition-scene.ts:77-78`: 5000 mm position and size, 64 layers per scene, 2000 text chars, 360° rotation), the zone-size schema cap of 2000 mm (`:41-42`) and the synthetic preview profile's own limits (16 layers per zone, 280 text chars, 150 PPI; `:241`, declared synthetic and not supplier data), a 30 s body deadline (`composition-http.ts:45`), R2 timeouts 20 s/5 s (`composition-storage.ts`), `LIMIT 100` (`composition-store.ts:69`), 1500 ms autosave (`editor.tsx:157`). | Constraint 3 is already violated by M3's own code. Q1 classifies each as *policy limit* (typed config, no default), *structural ceiling* (contracts/DB CHECK; additive-only rule means they stay) or *engineering constant* (documented in the ADR). |
+| F4 | **No rate limiting or quota exists in the composition path.** Anonymous `POST /api/v1/compositions` is guarded only by same-origin. Doc 16:13 requires "short TTL, quota, CSRF"; doc 12:33 says "account-level and IP/device-aware rate limits … CAPTCHA/step-up only under abnormal risk". | The repo can enforce capability-, owner- and global-keyed limits. IP/device-aware limits and challenges are edge decisions (Q5). |
+| F4b ✎ | **Upload bytes are read before access is verified.** `uploadAsset` (`composition-http.ts`) calls `actor()`, which for a guest only checks the cookie's *format* and derives a hash (no database check), then `readBody` buffers up to the upload limit, and only then does the service run its access check. | A well-formed but invalid guest cookie buys unlimited large-body buffering. C4 must authorize and charge **before** reading the body. |
+| F5 ✎ | **Browser harness.** `scripts/browser-web.mjs` is single-engine: `chromium.launch`, `channel: "chrome"` unless `M0_BROWSER=chromium`; any other value falls through to the Chrome channel. It runs route-level axe over five routes × nine viewports, a mobile-menu keyboard check, the disabled-upload assertion and a text-inflation/reduced-motion check; it never exercises editor interaction. CI (`m0.yml` job `browser`) installs Chromium only. The evidence file says identity was OFF, in which case `editorCapabilities()` returns `artworkUpload:false` and `/customize` renders a disabled button with no file input (`customize/page.tsx`, `editor.tsx:230-232`). | The recorded "upload" journey **cannot have run on the unmodified production build** and has no committed script. It is not reproducible by CI. A faithful server-backed fixture needs QA. Everything the editor does with all flags OFF **is** testable now. |
+| F6 | **Candidate editor accessibility observations** (hypotheses; the worker reproduces each before fixing): tablist has `role=tab`/`aria-selected` but no roving tabindex, arrow keys or `tabpanel`; "Move up/down", "Hide layer" names repeat across layers; each canvas layer repeats full key help in its `aria-label`; arrow-key nudges change only an `aria-label`; the issues list is `aria-live="polite"` and re-announces wholesale; deleting a layer sets `selected=null` with no focus target; no announcement of freeze/restore/claim outcomes; numeric fields commit on blur/Enter and report errors only through the shared status line. | Drives C7a/C7b. |
+| F7 ✎ | **Presigned URLs.** `@aws-sdk/s3-request-presigner` is in the lockfile only as `@medusajs/file-s3`'s dependency, not declared by `commerce`. A hand-rolled SigV4 query presign using `node:crypto` is technically possible without a dependency. Rejected anyway: a presigned GET is a bearer URL that bypasses the app's ownership and scan checks at fetch time. | D4. |
+| F8 ✎ | **`0001`'s rollback breaks re-apply and would destroy `0002`.** `down.sql` drops `vynvori_composition` and deletes the journal row but not `vynvori_composition_migrations`; the runner then sees `hasJournal && !hasSchema` → `HISTORY_OR_SCHEMA_DRIFT` (`composition-migrations.ts:44-46`). The existing test never re-applies. Also its guard checks only compositions/assets/versions, and `DROP SCHEMA … CASCADE` would silently drop `0002` tables. | C3a repairs it: refuse while any journal row other than `0001` exists; drop the empty journal schema; test up→down→up on both migrations. |
+| F9 | `CompositionError` codes drive a `Record<…>` status map (`composition-http.ts:8`); the conformance suite runs one scenario list against an in-memory port and the PostgreSQL store. `AssetRecord` is used only in `commerce/src/composition.ts`, its tests, `db/src/composition-store.ts` and `composition-port.ts`: all M3-owned. | New store methods and a required `scanStatus` field land in both implementations in one PR (C3b); a grep proving no other implementer is part of the PR. |
+| F10 ✎ | **Connection and lock budget is shared.** `foundation` runs M1b, M3 and (when merged) M7 suites against one server with `max_connections=250`, and `node --test` runs files in parallel, so budgets add up. M7 plans up to 110 connections in one file plus ≤45 elsewhere. Advisory-lock keys in use: `(742110,1)` identity runner, `(742110,3)` composition runner; M7 plans `(742110,7)`. | M3 race-test pools are capped (≤ 20 in one file, ≤ 5 elsewhere); the ADR records the sum. M3 asks root for a lock-key class (§7). |
+| F11 ✎ | Playwright 1.62.1 and axe-core 4.14.0 are in the lockfile but declared only in the **protected** `design/reference/package.json`; the harness loads them via `createRequire` on that file. | `ariaSnapshot()` and the `target-size` rule are available; no dependency change is needed anywhere in this plan. |
+| F12 ✎ | **Harness engine constraints.** The product session/guest cookies are `Secure; __Host-`; WebKit may not store them over `http://127.0.0.1`. The existing `Tab`/skip-link assertions may differ in WebKit. | Firefox/WebKit must pass the **existing** checks as well as new ones; an engine-specific exception needs written founder approval, never a silent skip. |
 
 ## 5. Design decisions (proposed content of ADR-0022)
 
-**Review method.** The kickoff allows a council only where the design is genuinely ambiguous. D3 and D4 were the candidates; both follow from existing constraints (immutable `assets`, ownership re-check, no new dependency), so a four-voice council was **not** convened. Instead D1–D7 went through the blueprint adversarial review (§12). The founder may override any decision at plan review.
+**Review method.** The kickoff allows a council only where the design is genuinely ambiguous. D3 and D4 were the candidates; both follow from existing constraints (immutable `assets`, ownership re-check, no new dependency), so a four-voice council was **not** convened. Instead the whole plan went through the blueprint adversarial review (§12), which materially changed D3, D4 and D5. The founder may override any decision at plan review.
 
-**D1 — Typed limits, no defaults.** `CompositionLimitsV1` (commerce) holds every policy number: guest TTL seconds; image bytes/pixels/side; assets and bytes per composition; JSON body bytes; download-grant TTL seconds; scan timeout; per-operation rate policy `{ windowSeconds, max }`; global live-guest-draft cap. `parseCompositionLimits(env)` returns the limits or the list of missing/invalid keys (`M3_LIMIT_*` names; positive safe integers only; no zero, negative, float or `NaN`). **Each capability closes when its keys are missing**: guest creation without TTL and its rate keys; uploads without image/asset limits; downloads without a grant TTL; every rate-limited operation without its policy. A closed capability answers `503 COMPOSITION_LIMITS_NOT_CONFIGURED` (not 429). A static test asserts that `packages/commerce/src` and `apps/web/src/server` contain no numeric limit literals for these fields.
+**D1 — Typed limits, no defaults.** `CompositionLimitsV1` (commerce) holds every *policy* number: guest TTL; image bytes/pixels/side; assets and bytes per composition; JSON body bytes; download-grant TTL; scan timeout and scan lease; per-operation rate policy `{ windowSeconds, max }`; global live-guest-draft cap. `parseCompositionLimits(env)` returns the limits or the missing/invalid keys (`M3_LIMIT_*`; positive safe integers only), and **rejects values above the structural ceilings** (the `0001` CHECKs) instead of letting an insert fail later. A capability whose keys are missing is closed: guest creation without TTL and its rate keys; uploads without image/asset limits; downloads without a grant TTL; each rate-limited operation without its policy. A closed capability answers `503 COMPOSITION_LIMITS_NOT_CONFIGURED` (not 429). The guest-draft status text in the editor derives from the API's `expiresAt`, never a literal. A static test asserts no numeric limit literals for these fields in `packages/commerce/src` and `apps/web/src/server`.
 
 **D2 — Rate limiting and quota (ACC-04).**
-- Storage: Postgres table `rate_limit_buckets(bucket_key, window_start, count)` in `vynvori_composition`. Admission is one atomic statement: `INSERT … ON CONFLICT (bucket_key, window_start) DO UPDATE SET count = b.count + 1 WHERE b.count < $max RETURNING count`. No row returned means limited. It works on Neon's pooled transaction-mode connections and across serverless instances; there is no in-process state.
-- Keys (all IP-independent): `guest_create:global`; `guest_write:{compositionId}` and `asset_upload:{compositionId}`, `download_grant:{compositionId}`, `rescan:{compositionId}` (per guest capability; guest draft id equals composition id); the same operations keyed `…:{userId}` for owners. Subjects are charged **only after the access predicate succeeds**, so unauthenticated probing cannot create bucket rows (bounded cardinality). Flooding with invalid cookies is an edge concern (Q5).
-- Quota: a global cap on live guest drafts (unexpired, unclaimed), counted in the same transaction as the creation insert under `pg_advisory_xact_lock`; per-composition asset count/bytes (existing mechanism, now typed config).
-- Window: fixed window computed from the injected clock. A two-window burst at a boundary and cross-instance clock skew are documented, accepted trade-offs. A sliding window needs more state and is deferred.
-- Response: `429 COMPOSITION_RATE_LIMITED` with `Retry-After`. The editor shows a polite status message and stops retrying until the retry time.
-- **Known limit:** with no IP signal, one abusive client can exhaust the global `guest_create` budget and deny other guests. That is the cost of IP independence and is disclosed in Q5, which is where a per-client control belongs.
-- Pruning: `pruneRateBuckets({ olderThan })` takes a required cut-off with no default and is operator-run; no scheduler exists in W1. The runtime role gets no `DELETE`.
+- Storage: `rate_limit_buckets(bucket_key, window_start, count)`. Admission is one atomic statement: `INSERT … ON CONFLICT (bucket_key, window_start) DO UPDATE SET count = b.count + 1 WHERE b.count < $max RETURNING count`; no row means limited. The window is computed from the **database clock** (`date_bin(…, now())`), removing cross-instance skew; tests pass an explicit timestamp. Works on Neon's pooled transaction-mode connections; no in-process state.
+- Keys (all IP-independent): `guest_create:global`; `asset_upload:global`; per guest capability `guest_write:{compositionId}`, `asset_upload:{compositionId}`, `download_grant:{compositionId}`, `rescan:{compositionId}` (guest draft id equals composition id); the same operations keyed `{userId}` for owners.
+- **Order of operations (F4b):** parse and format-check IDs → verify the access predicate in SQL (for a guest, a database check, not just cookie format) → charge the bucket → **only then read the request body**. Subjects are charged only after access succeeds, so invalid callers create no bucket rows and learn nothing; an authenticated-but-limited caller gets `429` with `Retry-After`.
+- Quota: per-composition asset count/bytes enforced **in SQL under a per-composition advisory lock** (no check-then-insert race); a global live-guest-draft cap counted over M3's own `compositions` rows (`owner_user_id IS NULL`, joined to an unexpired, unclaimed guest draft) in the same transaction as the creation insert, under an advisory lock; `0002` adds a partial index for that count. M1b's direct writes to `guest_drafts` are not counted and not blocked.
+- Fixed window: a boundary burst of up to twice the limit is a documented, accepted trade-off. A sliding window needs more state and is deferred.
+- **Known limit:** with no IP signal, one abusive client can exhaust the global `guest_create` budget and deny other guests, and `asset_upload:global` bounds storage growth per window only (no garbage collection exists). That is the cost of IP independence; the per-client control belongs at the edge (Q5).
+- Pruning: `pruneRateBuckets({ olderThan })`, required cut-off, no default, operator-run; no scheduler in W1; the runtime role gets no `DELETE`.
 
 **D3 — Scan lifecycle (ACC-07).**
-- Table `asset_scan_events` (append-only; UPDATE/DELETE/TRUNCATE rejected, same style as `0001`): `asset_id`, `composition_id`, `asset_sha256`, `seq`, `from_status`, `to_status`, `scanner_id`, `engine_version`, `definitions_version`, `evidence_ref`, `reason_code`, `recorded_at`. **Current status** = latest `seq`; **no event = `pending`**.
-- Allowed edges, enforced by a database trigger: `pending→clean`, `pending→quarantined`, `pending→unknown`, `unknown→pending` (explicit rescan request), `clean→quarantined` (late detection). `quarantined` is terminal and never auto-released. `clean`/`quarantined` events require scanner id, engine and definitions versions and an evidence reference; `unknown` requires a reason code; `asset_sha256` must equal the asset row's hash. Events for one asset are serialised (row lock) so `seq` is gap-free.
+- `asset_scan_events` (append-only, UPDATE/DELETE/TRUNCATE rejected): `asset_id`, `composition_id`, `asset_sha256`, `seq`, `from_status`, `to_status`, `scanner_id`, `engine_version`, `definitions_version`, `evidence_ref`, `reason_code`, `recorded_at`. **Current status = latest `seq`; no event = `pending`.**
+- Edges enforced by trigger: `pending→clean | quarantined | unknown`, `unknown→pending` (explicit rescan request), `clean→quarantined` (late detection). `quarantined` is terminal and never auto-released. `clean`/`quarantined` events need scanner id, engine and definitions versions and an evidence reference; `unknown` needs a reason code; `asset_sha256` must equal the asset row's hash.
+- **Scan attempts as reservations (AGENTS rule 7, no uncontrolled billable retry).** `asset_scan_attempts(attempt_id, asset_id, started_at, lease_expires_at, finished_at)` with a partial unique index allowing **one open attempt per asset**. A scan is requested by the explicit operation `scanAsset(assetId)`, valid from `pending` (including rows that predate `0002`, and assets stranded by a crash between insert and scan) and, via a rescan request, from `unknown`. The attempt row is committed **before** the port is called. An attempt whose lease has expired is closed as `unknown(reason=lease_expired)` only by an explicit request, **never automatically**, and a new attempt can start only after that, so a vendor call is never duplicated by a timeout or a concurrent request. A scan is attempted once per request. The scan lease and timeout are typed config (Q3).
+- **Serialization:** per-asset `pg_advisory_xact_lock` from an M3-owned key class (§7). Not `SELECT … FOR UPDATE` on `assets`: that needs UPDATE privilege, and the runtime role is meant to hold only SELECT/INSERT on `assets`.
 - Scan results are **not shared** across compositions even for identical bytes (no cross-tenant existence oracle).
-- Port (`assets.ts`, types only): `ArtifactScanPort { scannerId; scan(request, signal): Promise<ArtifactScanResult> }` with `request = { assetId, sha256, byteSize, mime, bytes }` and a strict Zod-parsed result `{ verdict: "clean" | "infected" | "error", sha256, engineVersion, definitionsVersion, evidenceRef, scannedAt }`. Mapping: `clean`→`clean`; `infected`→`quarantined`; **anything else — error, timeout, throw, malformed or unrecognised result, result hash not equal to the request hash — maps to `unknown`**. The default wiring is `unconfiguredScanPort`, which always reports `error / SCANNER_NOT_CONFIGURED`. A scan is attempted once per request; `unknown→pending` happens only on an explicit rescan request (rate-limited), never automatically.
-- **No vendor, binary, SDK or service is chosen or vendored** (Q4). When a vendor is chosen, a richer request shape (stream or reference instead of bytes) is an additive contract revision.
-- Uploads require a wired scanner: with `unconfiguredScanPort` the upload route answers `503 UPLOADS_DISABLED`, so no unservable bytes accumulate. Until Q4 is decided, only tests (with a `SYNTHETIC_*` scan double) exercise the upload path; the editor's upload control stays unavailable.
-- Scanning is attempted inline after the asset row is inserted, with a typed timeout. An asynchronous worker is future work tied to the vendor decision.
+- **Port** (types only, in `composition-port.ts`, which is intentionally *not* in the public barrel; the runtime Zod result schema lives in commerce, not contracts): `ArtifactScanPort { scannerId; scan(request, signal) }` with `request = { assetId, sha256, byteSize, mime, bytes }` and a strict-parsed result `{ verdict: "clean" | "infected" | "error", sha256, engineVersion, definitionsVersion, evidenceRef, scannedAt }`. Mapping: `clean→clean`; `infected→quarantined`; **anything else — error, timeout, throw, malformed or unrecognised result, hash not equal to the request — maps to `unknown`.** Default wiring: `unconfiguredScanPort` (always `error / SCANNER_NOT_CONFIGURED`). A richer request shape (stream or reference) is an additive revision when a vendor is chosen.
+- **No vendor, binary, SDK or service is chosen or vendored** (Q4).
+- **Uploads require a wired scanner.** With `unconfiguredScanPort` the upload route answers `503 UPLOADS_DISABLED`, so in that mode no objects accumulate. When a scanner is wired, objects in `pending`, `unknown` and `quarantined` **do** accumulate (the storage adapter has no delete); disposal is a founder policy (Q6b). Scan-then-store (reject infected bytes before `put`) was considered and **rejected**: it cannot support asynchronous scanners and loses quarantine evidence.
+- Scanning is attempted inline after the row is inserted, with the typed timeout. An asynchronous worker is future work tied to Q4.
 
 **D4 — Download access (ACC-07).**
-- Table `asset_download_grants`: `grant_id`, `token_hash` (unique), `asset_id`, `composition_id`, `principal_kind` (`owner` | `guest`), `principal_hash` (SHA-256 of the user id or the guest capability hash), `issued_at`, `expires_at` (`> issued_at`), `redeemed_at`.
-- `POST /api/v1/compositions/:id/assets/:assetId/download-grants` (mutating: same-origin, CSRF for sessions, rate-limited) mints a 256-bit token, stores only its hash, and returns `{ downloadUrl, expiresAt }`. TTL comes from `M3_LIMIT_DOWNLOAD_GRANT_TTL_SECONDS` (Q3); unset closes the endpoint. Minting needs the asset to be `clean`.
-- `GET …/assets/:assetId/download?grant=<token>` **redeems**: one atomic `UPDATE … SET redeemed_at = now WHERE token_hash = $ AND redeemed_at IS NULL AND expires_at > now RETURNING`. Redemption also requires that the **same principal** presents its normal credential (session cookie or guest capability cookie) and passes the standard access predicate, and that the asset is still `clean` and belongs to that composition. A leaked or logged URL is therefore useless to anyone else. Unknown, expired, already-used, foreign, wrong-principal and non-clean all return the identical `NOT_FOUND`.
-- The response is `Content-Disposition: attachment` with a server-generated filename (`original-<sha12>.<ext>`), `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, `Cache-Control: no-store`, `Cross-Origin-Resource-Policy: same-origin`, and a SHA-256 integrity check against the stored hash (the existing storage adapter already verifies size and hash). The bytes are the **unchanged original**.
-- No wallet, entitlement or payment check exists on this path (doc 06: originals are never gated behind export payment). A static test asserts that the download module imports nothing from the ledger or entitlement code.
-- The existing inline `GET …/assets/:assetId` (used for editor thumbnails) stays. It is cookie-authenticated, `no-store` and not a bearer URL, but it now serves only `clean` assets.
-- Expired and redeemed grants are not deleted in W1; pruning is operator-run.
-- **Rejected:** (a) R2 presigned GET (needs a dependency; bearer; bypasses re-checks), (b) stateless HMAC tokens (need a new signing secret and cannot be revoked or made single-use without state), (c) permanent per-asset public URLs (forbidden).
+- `asset_download_grants`: `grant_id`, `token_hash` (unique), `asset_id`, `composition_id`, `principal_kind` (`owner` | `guest`), `principal_hash` (SHA-256 of the user id, or the guest capability hash), `issued_at`, `expires_at` (`> issued_at`), `redeemed_at`.
+- **Mint:** `POST …/assets/:assetId/download-grants` (mutating: same-origin, CSRF for sessions, rate-limited, access and charge before body). Requires the asset to be `clean`; otherwise `409 ASSET_NOT_AVAILABLE` (visible only after the ownership predicate, so no cross-tenant oracle). Returns `{ downloadUrl, expiresAt }`; TTL is `M3_LIMIT_DOWNLOAD_GRANT_TTL_SECONDS` (Q3); unset closes the endpoint. Only the token hash is stored.
+- **Redeem** `GET …/assets/:assetId/download?grant=<token>`, in this order:
+  1. standard authentication (session or guest capability). **Unauthenticated callers receive `401 AUTH_REQUIRED` (before any lookup, so no information leaks); the uniform `NOT_FOUND` applies to every authenticated-but-not-entitled case;**
+  2. read-only validation: grant exists, unexpired, unredeemed, `principal_hash` matches, asset belongs to the composition, access predicate passes, latest scan status is `clean`;
+  3. fetch the object and verify size and SHA-256 **before** consuming anything, so a storage failure never burns a grant;
+  4. consume with **one atomic statement** whose `WHERE` repeats every condition of step 2 (`UPDATE … SET redeemed_at … WHERE … RETURNING`), so a leaked URL cannot be spent by a different valid session and a race loses cleanly;
+  5. only if the consume statement returned a row, send the bytes. Otherwise `NOT_FOUND`.
+- Requests marked as prefetch (`Sec-Purpose`/`Purpose`) never redeem. The editor mints on an explicit button press and navigates programmatically; there is no rendered link and no `<Link>`.
+- Response: `Content-Disposition: attachment` with a server-generated filename (`original-<sha12>.<ext>`), `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `Cross-Origin-Resource-Policy: same-origin`. The bytes are the **unchanged original**.
+- Token handling, stated precisely: the token appears in the mint response's `downloadUrl` (by necessity) and nowhere else; application code never logs it; platform access logs may record query strings, which is harmless because the grant is principal-bound, short-lived and (by default) single-use.
+- **Single-use vs multi-use within the TTL** is a founder question (Q3b). Working assumption: single-use, re-mintable (mint is rate-limited). Download managers or Safari re-requests without cookies will fail by design.
+- No wallet, entitlement or payment check exists on this path (doc 06: originals are never gated behind export payment). A static test asserts the download module imports nothing from ledger or entitlement code.
+- The existing inline `GET …/assets/:assetId` (editor thumbnails) stays: cookie-authenticated, `no-store`, not a bearer URL, now serving only `clean` assets.
+- Expired and redeemed grants are not deleted in W1 (operator-run prune).
+- **Rejected:** R2 presigned GET (bearer URL; bypasses re-checks; official presigner needs a dependency); stateless HMAC tokens (new signing secret; not revocable or single-use without state); permanent per-asset public URLs (forbidden). Whether an app-issued, principal-bound grant satisfies ACC-07's literal "expired presigned URL" (doc 20:25) and doc 16:38's "owner-signed temporary download link" is Q9.
 
 **D5 — Fail-closed choke points.**
 
 | Operation | Requires | Otherwise |
 |---|---|---|
-| `readAsset` (inline) | `clean` | `NOT_FOUND` |
-| download-grant mint | `clean` | `409 ASSET_NOT_AVAILABLE` (the owner may learn the state of their own asset) |
-| download redeem | `clean` | `NOT_FOUND` |
-| `freeze` | every image layer's asset `clean` | `409 ASSET_NOT_CLEAN` |
+| inline `readAsset` | `clean` | `NOT_FOUND` |
+| download mint | `clean` | `409 ASSET_NOT_AVAILABLE` |
+| download redeem | `clean` (re-checked in the consuming statement) | `NOT_FOUND` |
+| `freeze` | every image layer's asset `clean`, **checked inside the freeze transaction under the per-asset advisory lock** (including the idempotent re-point branch of `store.freeze`, where no insert trigger fires) | `409 ASSET_NOT_CLEAN` |
 | `saveDraft` | asset belongs to the composition (unchanged) | `ASSET_NOT_OWNED` |
-| editor preview | asset `clean` | placeholder block with an announced status; **no pixels**, including no local object-URL preview of the picked file |
+| server-sourced pixels in the editor | `clean` | placeholder block with an announced status |
+| browser pixels from bytes the user's device already holds | (QB-a) allowed | n/a |
 
-Draft saves may reference a `pending` asset so work is not lost; the preflight reports `ASSET_NOT_SCANNED` and freeze is blocked. Restore copies a frozen scene, whose assets were clean at freeze, but the check at freeze time is repeated for the next freeze.
+Draft saves may reference a `pending` asset so work is not lost; preflight reports `ASSET_NOT_SCANNED` and freeze is blocked. After a reload the asset appears as a placeholder until `clean`. **Downstream contract note (recorded in the ADR for M4/M5):** a frozen version that pins an asset later found `quarantined` must be refused for quote, proof and print by those milestones; M3 cannot enforce it.
 
-**D6 — Migration `0002` (one migration, three tables).** `0002_asset_access_and_limits.sql` creates `asset_scan_events`, `asset_download_grants` and `rate_limit_buckets` plus triggers. One migration keeps one staging apply and one rollback drill. It grants nothing (runtime-role grants are a documented proposal, as in ADR-0018). `plan.json` gains the entry with a pinned SHA-256. **Rollback** `rollback/0002_*.down.sql` refuses while any scan event or grant row exists, otherwise drops only the `0002` objects and deletes only its journal row, leaving `0001` untouched and re-appliable. If a later step proves that more schema is needed, it asks root for `0003`; a merged `0002` is never edited.
+**D6 — Migration `0002`.** `0002_asset_access_and_limits.sql` creates `asset_scan_events`, `asset_scan_attempts`, `asset_download_grants`, `rate_limit_buckets`, the triggers, and the partial index for the live-guest count. One migration keeps one staging apply and one rollback drill. It grants nothing (runtime-role grants are a documented proposal, as in ADR-0018). `plan.json` gains the entry with a pinned SHA-256. **Rollback** `rollback/0002_*.down.sql` refuses while any scan event, attempt or grant row exists; otherwise it drops only `0002` objects and deletes only its journal row, leaving `0001` re-appliable. If a later step proves more schema is needed it asks root for `0003`.
 
-**D7 — Flags and wiring.** No new feature flag. The new routes sit behind the existing composition gate (isolated staging identity canary **and** `M3_COMPOSITION_ENABLED=true`, never production). `M3_COMPOSITION_UPLOADS=true` additionally needs a wired scanner (D3) and complete limits (D1). `assets.production_uploads` is untouched. The static test from `composition-config.test.ts` (all flags OFF by default) is extended to cover the new variables.
+**D7 — Flags and wiring.** No new feature flag. New routes sit behind the existing composition gate (isolated staging identity canary **and** `M3_COMPOSITION_ENABLED=true`, never production). `M3_COMPOSITION_UPLOADS=true` additionally needs a wired scanner (D3) and complete limits (D1). `assets.production_uploads` is untouched. The all-flags-OFF config test is extended to the new variables.
+
+**D8 — Test databases, locks and budget.** Each new database test file creates and drops **its own database** (`vynvori_m3_<name>_test`, `CREATE DATABASE` through the fixture's maintenance connection, as M7 D15 does); the fixture and runner allow-lists switch from a two-name list to a strict name pattern plus loopback plus user `synthetic`. Race tests use a pool ≤ 20 in a single file; other files ≤ 5. The ADR records the arithmetic against `250 − 3` reserved superuser connections together with M1b's and M7's figures. Advisory locks use a key class assigned by root (§7), documented in the ADR, distinct from `(742110,1)`, `(742110,3)` and M7's `(742110,7)`.
 
 ## 6. Steps, dependencies and lanes
 
-One step = one branch = one PR = one worker. **One worker PR in flight for M3 closure** (W1 total 2; M7 holds the other). Suggested model tier: strongest for C3, C5 and C6 (security-critical), default for the rest. Execution is serial in the order below; the graph shows true dependencies only.
+One step = one branch = one PR = one worker. **One worker PR in flight for M3 closure** (W1 total 2; M7 holds the other). Strongest model tier for C3a, C3b, C5, C6 (security-critical); default for the rest. Serial order: **C1a → C2 → C3a → C3b → C4 → C5 → C6 → C7a → C7b → C8**, with **C1b** inserted before C5 only if the founder approves QA-B or QA-C.
 
 ```mermaid
 flowchart LR
- C1[C1 interactive fixture + engine param] -.soft.-> C4
- C1 -.soft.-> C5
- C1 -.soft.-> C6
- C1 --> C7[C7 a11y hardening]
- C2[C2 ADR-0022 + typed limits + contract types] --> C3[C3 migration 0002 + store primitives]
- C3 --> C4[C4 quota + rate limits]
- C3 --> C5[C5 scan boundary]
- C4 --> C6[C6 download grants]
- C5 --> C6
- C6 --> C7
- C7 --> C8[C8 checklists + evidence ledger]
- C6 --> C8
- RR{{root: m0.yml browser engines}} -.CI evidence for.-> C1
+ C1a[C1a engine param + flags-OFF interactive scenarios] --> C7a
+ C1a -.soft.-> C1b[C1b server-backed fixture - conditional on QA B/C]
+ C1b -.enables browser evidence for.-> C5 & C6 & C7b
+ C2[C2 ADR-0022 + limits + contract types] --> C3a[C3a migration 0002 DDL + 0001 down repair]
+ C3a --> C3b[C3b store port + PG/in-memory + conformance]
+ C3b --> C4[C4 quota + rate limits + pre-read ordering]
+ C4 --> C5[C5 scan boundary]
+ C5 --> C6[C6 download grants]
+ C6 --> C7b[C7b visual/reflow + full-state sweep]
+ C7a[C7a editor core a11y] --> C7b
+ C7b --> C8[C8 checklists + evidence ledger]
+ RR{{root: m0.yml engines; lock class; registry}} -.CI evidence for.-> C1a
 ```
-
-Order of execution: **C1 → C2 → C3 → C4 → C5 → C6 → C7 → C8.** C1 goes first because it carries the largest unknown (can a faithful interactive fixture be built from committed code without a production seam?) and every later UI change benefits from it. It is independent of C2–C6 (soft edges: later steps *should* extend its scenarios; they do not need it to compile).
 
 | Step | Title | Migration | Hard deps | Evidence source |
 |---|---|---|---|---|
-| C1 | Interactive editor browser fixture and engine-parameterised harness | — | — | `m0.yml` `browser` (Chromium); Firefox/WebKit only after root's CI step |
-| C2 | ADR-0022, typed limits config, contract types | — | — | `m0.yml` `verify` (contracts, web), `m2.yml` (commerce) |
-| C3 | Migration `0002`, store port and primitives (PG + in-memory), rollback drill | `0002` | C2 | `m2.yml` `foundation` |
-| C4 | Quota and rate limiting | — | C3 | `m2.yml`, `m0.yml` |
-| C5 | Malware-scanning boundary | — | C3 | `m2.yml`, `m0.yml` |
-| C6 | Short-lived owner-checked download grants | — | C4, C5 | `m2.yml`, `m0.yml` |
-| C7 | Editor accessibility hardening | — | C1, C6 | `m0.yml` `browser` |
-| C8 | Founder checklists and evidence ledger | — | C6, C7 | docs-only; link check |
+| C1a | Engine-parameterised harness + interactive scenarios with all flags OFF | — | — | `m0.yml` `browser` (Chromium); Firefox/WebKit only after root's CI step |
+| C1b (conditional) | Server-backed interactive fixture | — | QA B or C, C1a | `m0.yml` `browser` |
+| C2 | ADR-0022, typed limits, contract types, "24 hours" text | — | — | `m0.yml` `verify`, `m2.yml` |
+| C3a | Migration `0002` DDL, rollback, `0001` down repair | `0002` | C2 | `m2.yml` `foundation` |
+| C3b | Store port + PostgreSQL and in-memory implementations + conformance | — | C3a | `m2.yml` `foundation` |
+| C4 | Quota, rate limits, authorize-before-read | — | C3b | `m2.yml`, `m0.yml` |
+| C5 | Malware-scanning boundary | — | C4 (uses the `rescan` bucket) | `m2.yml`, `m0.yml` |
+| C6 | Short-lived owner-checked download grants | — | C5 | `m2.yml`, `m0.yml` |
+| C7a | Editor core accessibility: keyboard, focus, names, roles, live regions | — | C1a | `m0.yml` `browser` |
+| C7b | Visual accessibility: reduced motion, 200 % text, reflow, target size, full-state sweep | — | C6, C7a | `m0.yml` `browser` |
+| C8 | Founder checklists and evidence ledger | — | C6, C7b | docs-only; link check |
 
-### C1 — Interactive editor browser fixture and engine-parameterised harness (default model)
+### C1a — Engine-parameterised harness and flags-OFF interactive scenarios (default model)
 
-*Context.* F5. Today CI proves only route-level axe on `/customize` with every flag OFF. The interactive M3 journey is documented in the evidence file but cannot be reproduced from the repository.
-
-*Tasks.*
-1. Make the engine explicit: `M0_BROWSER` ∈ `chrome` (current default channel), `chromium`, `firefox`, `webkit`. **An unknown value must fail the run** (today it silently falls through). Record engine and `browser.version()` in `results.json`. Use `playwright` exports for all three engines already in the lockfile.
-2. Build a committed, test-only fixture (suggested `scripts/browser-editor-fixture.mjs`, imported by `browser-web.mjs`). It must run the **production Next build** with synthetic configuration that makes `editorCapabilities()` report upload available, and serve `/api/v1/compositions*` through the real `compositionHttpHandlers` over an in-memory store behind a same-origin proxy (the approach recorded in the evidence file). **No production code seam, no new route, no test-only branch in `src/`.** If that proves impossible, stop and escalate: do not add a seam.
-3. Port the evidence journey into assertions that run in CI: upload (using a generated PNG), numeric X to 1 µm, arrow and Shift/Alt nudges, drag with a single undo step, text layer, out-of-bounds issues, front/back independence, guest save, `HttpOnly` + `SameSite=Strict` + `__Host-` cookie, identical geometry after reload, freeze, restore, ED-03 review link, no horizontal overflow at 1280/390/320.
-4. Engine notes: assert where engines legitimately differ (e.g. `setPointerCapture` and `getScreenCTM` drag math, `<input type="color">`) rather than skipping silently.
-5. **Do not edit `.github/workflows/**`.** Produce the exact CI step in the PR description for root (see RESOURCE REQUEST text in §7).
-
-*Files/lanes.* `scripts/browser-web.mjs`, new `scripts/browser-editor-fixture.mjs` (and helpers), fixtures under `scripts/` or `apps/web/tests/` (test-only), docs. No `src/` product code.
-
+*Tasks.* (1) `M0_BROWSER` ∈ `chrome` (current default channel), `chromium`, `firefox`, `webkit`; **an unknown value fails the run**; engine and `browser.version()` go into `results.json`. (2) Run the **existing** checks on every engine (F12). (3) Add interactive scenarios on the production build with all flags OFF (reachable now): add text; Tab to a layer; arrow/Shift/Alt nudges; numeric X/Y/size to 1 µm; reorder, hide, duplicate, delete; undo/redo; front/back independence; out-of-bounds issues; no horizontal overflow at 1280/390/320. (4) Assert where engines legitimately differ rather than skipping silently. (5) Do **not** edit `.github/workflows/**`; put root's exact CI step (§7) in the PR description. (6) No product-code seam; no new fetch call outside the allowed files.
+*Files.* `scripts/browser-web.mjs`, helpers in `scripts/`, docs. No `apps/web/src` product code.
 *Verify.* `npm ci`; `npm run build:web`; `npm run test:browser:web` with `M0_BROWSER=chromium` (local result NOT_RUN as evidence); `npm run verify`; `npm run security:audit`.
+*Exit.* CI `browser` green on Chromium with the new scenarios; unknown engine rejected; Firefox/WebKit invocation documented. Firefox/WebKit stay **NOT_RUN** until root's workflow change merges and CI runs them.
 
-*Exit.* CI `browser` job green on Chromium with the new scenarios; harness rejects unknown engines; Firefox/WebKit invocation documented and ready for root's step. Firefox/WebKit rows stay **NOT_RUN** until root's workflow change merges and CI executes them.
+### C1b — Server-backed interactive fixture (conditional; default model)
 
-### C2 — ADR-0022, typed limits and contract types (default model)
+Only if the founder approves QA option B or C. Runs the production build with the approved mechanism and serves `/api/v1/compositions*` through the real `compositionHttpHandlers` over an in-memory store (the handlers are TypeScript with `import "server-only"`, so the fixture runs under `tsx` with `--conditions=react-server`). Adds the scenarios F5 says are missing: upload (generated PNG), save, **identical geometry after reload**, freeze, restore, ED-03 review link, cookie attributes (subject to F12), plus the C4–C6 UI states. If the founder chooses A, these states are covered by handler and PostgreSQL tests and the B checklists, and C5/C6/C7b carry that limitation in their PRs.
 
-*Tasks.* Write ADR-0022 (D1–D7, rejected options, rollout/rollback, security notes). Add `CompositionLimitsV1` + `parseCompositionLimits` and the closed-capability behaviour (D1) in commerce. **Remove numeric defaults** from `defaultCompositionConfig` and the web runtime (unless Q1 ratifies them); update existing tests to explicit `SYNTHETIC_*` config. Add types-only contracts: `ArtifactScanStatus` (`pending | clean | quarantined | unknown`), `ArtifactScanPort`/request/result schemas (`assets.ts`), `scanStatus` on `AssetRecord` and the new error-code vocabulary (`composition-port.ts`/`editor.ts`). Extend the flags-OFF config test.
+### C2 — ADR-0022, typed limits, contract types (default model)
 
-*Files.* `docs/implementation/ADR-0022-*.md`; `packages/contracts/src/{assets,composition-port,editor}.ts`; `packages/commerce/src/composition*.ts`; `apps/web/src/server/composition-runtime.ts`; tests in the same packages and `apps/web/tests/`. No migration, no route.
+*Tasks.* Write ADR-0022 (D1–D8, rejected options, rollout/rollback, security notes, downstream contract note). Add `CompositionLimitsV1` and `parseCompositionLimits` with closed-capability behaviour. **Remove numeric policy defaults** from `defaultCompositionConfig` and the web runtime (unless Q1 ratifies them), classify every other number per F3 in the ADR, move existing tests to `SYNTHETIC_*` config. Replace the hard-coded "24 hours" strings in `editor.tsx` with text derived from the API's `expiresAt`. Add **types only** in `composition-port.ts`: `ArtifactScanStatus`, `ArtifactScanPort`, request/result types; and the new error-code vocabulary. Extend the flags-OFF config test.
+*Files.* `docs/implementation/ADR-0022-*.md`; `packages/contracts/src/{composition-port,editor}.ts`; `packages/commerce/src/composition*.ts`; `apps/web/src/server/composition-runtime.ts`; `apps/web/src/components/editor/editor.tsx` (text strings only); tests.
+*Exit.* With no limits configured, guest creation, uploads and downloads are refused with `LIMITS_NOT_CONFIGURED`; with `SYNTHETIC_*` config all existing M3 behaviour is unchanged on both stores.
 
-*Verify.* contracts, commerce, web unit tests; `npm run verify`; `npm run security:audit`; static no-literal test.
+### C3a — Migration `0002` DDL, rollback, `0001` down repair (strongest model)
 
-*Exit.* With no limits configured the composition runtime refuses guest creation, uploads and downloads with `LIMITS_NOT_CONFIGURED`; with `SYNTHETIC_*` config all existing M3 behaviour is unchanged (existing composition suites green on both stores).
+*Tasks.* Author `0002_asset_access_and_limits.sql` (D6), `plan.json` entry (pinned SHA-256), `rollback/0002_*.down.sql`. Repair `0001`'s down script per F8. Switch the runner and fixture allow-lists to the name pattern (D8); give existing test files their own databases only if needed to stay isolated.
+*Tests (CI-counted in `foundation`).* replay and drift; every legal and illegal scan edge; `clean→quarantined` allowed; hash-mismatch rejected; scan-event immutability and gap-free `seq` under concurrent inserts; one open attempt per asset; grant uniqueness and expiry CHECK; bucket atomic admission (`SYNTHETIC_L` limit, N concurrent ⇒ exactly `SYNTHETIC_L`); rollback up → down → up for `0002` and for `0001`; `0002` down refuses with data; `0001` down refuses while `0002` is applied; additive-only SQL scan (no GRANT, no DROP of foreign objects).
+*Files.* `packages/db/composition-migrations/**`, `packages/db/src/composition-migrations.ts`, `packages/db/tests/**`.
 
-### C3 — Migration `0002`, store port and primitives (strongest model)
+### C3b — Store port and implementations (strongest model)
 
-*Tasks.* Author `0002_asset_access_and_limits.sql` + `plan.json` entry (pinned SHA-256) + `rollback/0002_*.down.sql` (D6). Extend `CompositionStore` with: `recordScanEvent`/current-status join in asset reads; `createDownloadGrant`/`redeemDownloadGrant`; `consumeRateToken`; `countLiveGuestDrafts`; `pruneRateBuckets`. Implement in the PostgreSQL store **and** the in-memory conformance harness. Confirm F8 by test and repair `0001`'s down script if confirmed. Record the connection budget (F10) in the ADR.
-
-*Tests (all CI-counted in `foundation`).* replay and drift; scan edges (each illegal edge rejected, `clean→quarantined` allowed, hash mismatch rejected, immutability, `seq` gap-free under concurrent inserts); grant single-use under N concurrent redeems (exactly one winner), expiry boundary, wrong principal; bucket admission under concurrency (limit `SYNTHETIC_L`, N concurrent ⇒ exactly `SYNTHETIC_L` admitted); live-guest cap race; rollback up → down → up, down refusing with data, `0001` still intact; additive-only SQL scan (no GRANT/DROP of foreign objects).
-
-*Files.* `packages/db/composition-migrations/**`, `packages/db/src/composition-store.ts`, `packages/db/tests/**`, `packages/contracts/src/composition-port.ts`, `packages/commerce/tests/composition-suite.ts` (memory harness).
-
+*Tasks.* Extend `CompositionStore` with scan-event recording and current-status join (required `scanStatus` on `AssetRecord`, with the grep from F9 in the PR), attempt open/close, grant create/validate/consume, `consumeRateToken`, `countLiveGuestDrafts`, `pruneRateBuckets`, lock helpers. Implement in the PostgreSQL store **and** the in-memory conformance harness; the same scenario list runs on both. Put the freeze-time status check inside the freeze transaction.
+*Tests.* parity of all new operations on both stores; grant single-use race (N concurrent redeems ⇒ one winner); wrong-principal consume returns nothing and leaves the grant spendable; freeze refuses a non-clean asset including the idempotent re-point branch; per-asset lock serialises scan events; pool/connection budget respected.
 *Exit.* DDL and conformance suites green in `foundation` with `ok` lines; no runtime import of the new primitives yet.
 
-### C4 — Quota and rate limiting (default model)
+### C4 — Quota, rate limits, authorize-before-read (default model)
 
-*Tasks.* Service-level limiter wrapping the mutating operations (D2 keys; charge after access check); `guest_create` global bucket and live-guest cap; `429` mapping with `Retry-After`; `COMPOSITION_RATE_LIMITED` error; editor 429 handling (status message, backoff, no retry storm); per-composition asset count/bytes read from typed config. Extend the conformance suite with SYNTHETIC policies.
-
-*Tests.* each operation limited at exactly `SYNTHETIC_L`; window rollover; a foreign or expired subject creates no bucket row and gets the uniform `NOT_FOUND`; unset policy ⇒ `LIMITS_NOT_CONFIGURED`, never "unlimited"; owner and guest keys independent; global cap race; browser scenario (C1 fixture) for the 429 status message.
-
-*Verify/exit.* Foundation + browser green; every limit value in the repo is `SYNTHETIC_*` and lives in `tests/`.
+*Tasks.* Limiter around the mutating operations (D2 order: access → charge → body); `guest_create` and `asset_upload` global buckets; live-guest cap; per-composition quota in SQL; `429`/`Retry-After`; `COMPOSITION_RATE_LIMITED`; guest access verified against the database before the body is read; editor handles 429 and `LIMITS_NOT_CONFIGURED` in the status line with no retry storm.
+*Tests.* each operation limited at exactly `SYNTHETIC_L`; window rollover (explicit timestamps); invalid/foreign/expired subjects create no bucket row and get `NOT_FOUND`/`401`, **and the body is never read** (a throwing body stream proves it); unset policy ⇒ closed, never unlimited; owner and guest keys independent; quota and live-cap races; flags-OFF browser scenario for the 429 message where reachable.
+*Exit.* Every limit value in the repository is `SYNTHETIC_*` and lives in `tests/`.
 
 ### C5 — Malware-scanning boundary (strongest model)
 
-*Tasks.* `unconfiguredScanPort`; service `scanAsset`/`requestRescan`; upload refuses when no scanner is wired (D3); choke points per D5 (`readAsset`, `freeze`, grant mint); projection of `scanStatus` through the HTTP asset list; preflight code `ASSET_NOT_SCANNED`; editor placeholder state and live announcements for `pending`, `clean`, `quarantined`, `unknown`; no local pixel preview of unscanned files.
+*Tasks.* `unconfiguredScanPort`; strict result parser; `scanAsset`/`requestRescan` with the attempt reservation (D3); choke points (D5); `scanStatus` through the HTTP asset list; preflight code `ASSET_NOT_SCANNED`; editor placeholder state and live announcements for `pending`, `clean`, `quarantined`, `unknown` (QB-a: no change to local previews of bytes the browser already holds).
+*Tests.* result-mapping table incl. malformed, wrong-hash, timeout, thrown ⇒ `unknown`; concurrent `scanAsset` calls open exactly one attempt and call the port once; lease expiry never auto-closes; pre-`0002` rows are `pending` and can be scanned; non-clean assets cannot be read, frozen or granted; cross-composition scan results are not shared; upload refuses with `unconfiguredScanPort`; security review. A `SYNTHETIC_*` scan double lives in `tests/` only.
+*Exit.* **No scanner vendor, binary or SDK in the diff**; `assets.production_uploads` unchanged.
 
-*Tests.* port result mapping table including malformed, wrong-hash, timeout and thrown results ⇒ `unknown`; every illegal transition; existing pre-scan rows treated as `pending` (migration compatibility); unscanned/unknown/quarantined asset cannot be read, frozen or granted; owner of a clean asset can read it; cross-composition scan results are not shared; upload refuses with `unconfiguredScanPort`; security review of the scan boundary. A `SYNTHETIC_*` scan double lives in `tests/` only.
+### C6 — Download grants (strongest model)
 
-*Exit.* Foundation + browser green; **no scanner vendor, binary or SDK in the diff**; `assets.production_uploads` unchanged.
+*Tasks.* `mintDownloadGrant`/`redeemDownloadGrant` per D4 (validation → fetch/verify → atomic consume → send); two route files under `apps/web/src/app/api/v1/compositions/[id]/assets/[assetId]/`; the editor "Download original" control (available only for `clean` assets, programmatic navigation, announced outcome) **inside `editor.tsx`** (constraint 10).
+*Tests.* owner and guest happy path returns the unchanged bytes with matching SHA-256; second redeem, expired, wrong principal (including a different valid session presenting the owner's token, which must leave the grant unspent), foreign composition, claimed guest, non-clean, prefetch and unknown token return the identical `NOT_FOUND` body for authenticated callers; unauthenticated ⇒ `401`; storage failure does not consume the grant; mint without TTL closed; mint rate-limited; headers asserted; token absent from error bodies; no ledger/entitlement import (static); no payment coupling.
+*Exit.* Security-reviewer sign-off recorded; fetch policy respected.
 
-### C6 — Short-lived owner-checked download grants (strongest model)
+### C7a — Editor core accessibility (default model; `react-reviewer` required)
 
-*Tasks.* Service `mintDownloadGrant`/`redeemDownloadGrant`; two route files under `apps/web/src/app/api/v1/compositions/[id]/assets/[assetId]/` (`download-grants`, `download`) forwarding to the handlers; response headers per D4; editor "Download original" control (available only for `clean` assets, named with the file context, announced on mint/redeem outcome).
+*Tasks (audit first; reproduce each F6 hypothesis, then fix).* Keyboard-only journey for every action reachable with flags OFF; focus order and restoration after add/delete/duplicate; roving tabindex, arrow/Home/End and `tabpanel` wiring for the zone tablist; unique accessible names for per-layer actions; one shared description for key help; debounced polite announcements for position changes and a summarised issue count; inline validation text for numeric fields.
+*Checks (in the harness, engine-parameterised).* axe (WCAG 2.0–2.2 A/AA) on each interactive state; `locator.ariaSnapshot()` assertions for landmark tree, tablist, layer list, selected-layer fieldset; a keyboard-only scenario with no pointer events; live-region text assertions; focus-order and restoration assertions.
+*Files.* `apps/web/src/components/editor/**` (no new fetch), editor CSS block in `globals.css`. Not `design/reference/**`.
 
-*Tests.* owner and guest happy path returns the unchanged bytes with matching SHA-256; second redeem, expired, wrong principal, foreign composition, claimed guest, non-clean asset and unknown token all return the **identical** `NOT_FOUND` body; mint without TTL config closed; mint rate-limited; headers asserted; token never appears in JSON responses, logs or error bodies; no ledger/entitlement import (static); no payment coupling; browser scenario for the download control.
+### C7b — Visual accessibility and full-state sweep (default model)
 
-*Exit.* Foundation + browser green; security-reviewer sign-off recorded.
-
-### C7 — Editor accessibility hardening (default model; `react-reviewer` required)
-
-*Tasks (audit first, then fix; reproduce each F6 hypothesis before changing code).* Keyboard-only journey for every editor action; focus order and focus restoration after add/delete/duplicate/restore/freeze; roving tabindex and arrow-key support for the zone tablist with `tabpanel` wiring; unique accessible names for per-layer actions; one shared description for key help instead of per-layer repetition; debounced polite announcements for position changes, save/conflict/freeze/restore/claim/scan/download outcomes and a summarised issue count (no wholesale re-announcement); visible focus indicators on SVG layers; target size ≥ 24 × 24 CSS px for all controls; inline validation text for numeric fields; reduced-motion and 200 % text behaviour on every interactive state; reflow at 320 px.
-
-*Automated checks (in the C1 harness, engine-parameterised).* axe (WCAG 2.0–2.2 A/AA) on each interactive state, not just the initial page; `locator.ariaSnapshot()` assertions for the editor landmark tree, tablist, layer list and selected-layer fieldset; keyboard-only scenario that completes the whole journey without a pointer event; live-region assertions (text appears in the status region after nudge, save, scan transitions); focus-order and focus-restoration assertions; computed-style assertions for focus outline, target size and `transition-duration: 0s` under `prefers-reduced-motion`; text inflated to 200 % with no horizontal overflow at 320 px.
-
-*Limits stated in the PR.* These checks do not replace the manual screen-reader pass (B4); Playwright's WebKit build is not Safari and its Tab behaviour differs from macOS Safari defaults.
-
-*Files.* `apps/web/src/components/editor/**`, `apps/web/src/app/globals.css` (editor block only), harness files from C1. Not `design/reference/**` (protected).
-
-*Exit.* CI `browser` green with the new scenarios; every accessibility change has a failing-first assertion; findings that cannot be fixed inside the approved design are listed as founder questions rather than silently waived.
+*Tasks.* Visible focus indicators on SVG layers (including WebKit/Firefox); target size ≥ 24 × 24 CSS px; `prefers-reduced-motion` on every interactive state; 200 % text and reflow at 320 px on every interactive state; contrast of editor-specific colours; axe sweep over the states added by C5/C6 (placeholder, status announcements, download control) where reachable (C1b if approved; otherwise component-level cases).
+*Limits stated in the PR.* These checks do not replace the manual screen-reader pass (B4). Playwright's WebKit is not Safari and its Tab behaviour differs from macOS Safari defaults. Findings that cannot be fixed inside the approved design become founder questions, never silent waivers (Q7).
 
 ### C8 — Founder checklists and evidence ledger (default model, docs-only)
 
-*Tasks.* Write `docs/implementation/M3-Closure-Checklists.md` (§9 outline, expanded with the final env names, routes, labels and commands) and an evidence ledger (`M3-Closure-Evidence-<date>.md`) listing, per step, PR, merge commit, CI run, the exact job/test lines that executed, and what was **NOT_RUN**. No acceptance-matrix edit (protected; root writes).
-
+*Tasks.* `docs/implementation/M3-Closure-Checklists.md` (§9 outline expanded with the final env names, routes, labels and commands) and `M3-Closure-Evidence-<date>.md` listing, per step, PR, merge commit, CI run, the exact job/test lines that executed and what was **NOT_RUN**. No acceptance-matrix edit (protected; root writes).
 *Exit.* Every B item has exact commands, expected output and an evidence artifact name; links resolve.
 
 ## 7. Resource requests and sequencing with root
 
 | Request | When | Text |
 |---|---|---|
-| **RESOURCE REQUEST — CI, `.github/workflows/m0.yml` job `browser`** (Firefox + WebKit evidence) | When C1's PR is open | See below |
-| ADR-0022 (granted); migration `0002` (granted) | in hand | — |
+| **RR-1 CI — `.github/workflows/m0.yml`, job `browser`** (Firefox + WebKit evidence) | when C1a's PR is open | below |
+| **RR-2 Advisory-lock key class** for M3 (scan events, attempts, quota counters) distinct from `(742110,1)`, `(742110,3)` and M7's `(742110,7)` | before C3a | root assigns the number |
+| **RR-3 Registry** | now | record ADR-0022, composition migration `0002`, the lock class, the database-name pattern `vynvori_m3_<name>_test`, and the connection budget in the registry (root-only) |
 | Migration `0003` | only if a later step proves schema is missing | ask then |
-| Dependencies/lockfile | **not needed**; if a scanner client ever is, ask then (any new advisory fails `security:audit`, ADR-0020) | — |
+| Dependencies/lockfile | **not needed**; if a scanner client is ever needed, ask then (any new advisory fails `security:audit`, ADR-0020) | — |
 
-**Exact CI change requested of root** (keeps the existing required-check name `browser`):
+**RR-1 exact change** (keeps the required-check name `browser`):
 
 ```yaml
       - run: npx playwright install --with-deps chromium firefox webkit   # was: chromium only
@@ -248,82 +259,105 @@ Order of execution: **C1 → C2 → C3 → C4 → C5 → C6 → C7 → C8.** C1 
       # one upload-artifact step per engine directory; each with if: always() and if-no-files-found: error
 ```
 
-Notes for root: (a) alternative is a matrix over `engine`, which would rename the required check to `browser (chromium)` etc.; (b) `timeout-minutes` (currently 15) very likely needs raising for three engines and the new interactive scenarios; the right value is unknown until the first CI run and must not be guessed; (c) the harness must land first (or in the same PR), because today an unknown `M0_BROWSER` value silently runs the Chrome channel; (d) `--with-deps` installs OS packages on the runner; install runs in CI only, never in a session.
+Notes for root: (a) a matrix over `engine` is the alternative but renames the required check to `browser (chromium)` etc.; (b) `timeout-minutes` (currently 15) very likely needs raising; the right value is unknown until the first CI run and must not be guessed; (c) the harness must land first, because today an unknown `M0_BROWSER` value silently runs the Chrome channel; (d) `--with-deps` installs OS packages on the runner and runs in CI only, never in a session.
 
 ## 8. Founder questions
 
-No default is invented for any of these. Where a question has an option set, no option is picked on the founder's behalf except where noted as the plan's working assumption.
+No default is invented for any numeric or vendor question. QA–QC are in §0.
 
 | # | Question | Needed by | If unanswered |
 |---|---|---|---|
-| Q1 | **Ratify or replace M3's existing numbers** (F3): guest TTL 24 h; 25 MiB / 36 MP / 20 000 px per image; 24 assets and 150 MiB per composition; 256 KiB JSON; hard DB CHECKs of 25 MiB and 20 000 px. | C2 | C2 removes the defaults and the runtime fails closed until values are configured. DB CHECKs stay. |
-| Q2 | **Rate/quota values** (`windowSeconds` and `max`) for: `guest_create` (global); live-guest-draft cap (global); and, per guest capability and per owner, `guest_write`, `asset_upload`, `download_grant`, `rescan`. | before staging use | Each operation stays closed. |
-| Q3 | **Download-grant TTL** (seconds). | before staging use | Downloads stay closed. |
-| Q4 | **Scanner selection** (Table below). | before any upload is enabled | Uploads stay refused (D3). No vendor is chosen by this plan. |
-| Q5 | **Edge controls** for what the repository cannot do: IP/device-aware limits and challenge/step-up (doc 12 says CAPTCHA only under abnormal risk). Disclosed gap: one client can exhaust the global `guest_create` budget. | before any public exposure | Global-key limits only. |
-| Q6 | **Scan-policy edges:** (a) may an owner ever download a non-`clean` original (default: no)? (b) retention/disposal of `quarantined` objects (storage has no delete today); (c) wording for the owner when an asset is `unknown` or `quarantined`. | C5 | strict default (a: no); no deletion; neutral wording drafted by the worker for review. |
-| Q7 | **Accessibility findings that conflict with the approved design** (if C7 finds any) — for example colour contrast of tokens, or target sizes fixed by the design reference. | C7 | Listed and waived by nobody; row stays IN_PROGRESS. |
-| Q8 | **Staging drill preference:** may a staging-only "hold-pending" upload mode exist (bytes stored, never served, scanner absent) so the R2 round trip can be rehearsed before Q4 is decided? | before B2 | No: the R2 round trip is rehearsed with the operator script only (B2). |
+| Q1 | **Classify and ratify M3's existing numbers (F3).** *Policy limits* (typed config, you supply values or ratify): guest TTL 24 h; image 25 MiB / 36 MP / 20 000 px; 24 assets and 150 MiB per composition; 256 KiB JSON. *Structural ceilings* (stay; contracts are additive-only, DB CHECKs): `SCENE_LIMITS`, the 2000 mm zone cap, `0001` CHECKs (25 MiB, 20 000 px). The synthetic preview profile's limits (16 layers per zone, 280 chars, 150 PPI) stay as labelled synthetic values until M5 supplies a supplier profile. *Engineering constants* (documented, not policy): 30 s body deadline, R2 timeouts 20 s/5 s, `LIMIT 100`, 1500 ms autosave. | C2 | C2 removes the policy defaults; the runtime fails closed until configured. |
+| Q2 | **Rate/quota values** (`windowSeconds`, `max`) for: `guest_create` (global); `asset_upload` (global); live-guest-draft cap; and per guest capability and per owner: `guest_write`, `asset_upload`, `download_grant`, `rescan`. | before staging use | Each operation stays closed. |
+| Q3 | **Time values:** download-grant TTL; scan timeout; scan lease. **Q3b:** grants single-use (working assumption) or multi-use within the TTL? | before staging use | Downloads and scans stay closed; single-use. |
+| Q4 | **Scanner selection** (below). | before any upload is enabled | Uploads stay refused. Nothing is chosen for you. |
+| Q5 | **Edge controls** for what the repository cannot do: IP/device-aware limits and challenge/step-up (doc 12:33 says CAPTCHA only under abnormal risk). Disclosed gap: one client can exhaust the global `guest_create` budget. | before any public exposure | Global-key limits only. |
+| Q6 | **Scan-policy edges:** (a) may an owner ever download a non-`clean` original (default no)? (b) retention/disposal of `pending`/`unknown`/`quarantined` objects (storage has no delete)? | C5 | strict default (a: no); no deletion. |
+| Q7 | **Accessibility findings that conflict with the approved design** (if C7a/C7b find any): token colour contrast, control sizes fixed by the reference. | C7 | Not waived by anyone; the ACC row stays IN_PROGRESS. |
+| Q8 | **Staging drill:** may a staging-only "hold-pending" upload mode exist (bytes stored, never served, scanner absent) so the R2 round trip can be rehearsed before Q4? | before B2 | No: B2 uses the operator script only. |
+| Q9 | **ACC-07 wording:** does an app-issued, principal-bound, single-use grant satisfy "expired presigned URL" (doc 20:25; doc 08:16,21-24; doc 16:38 "owner-signed temporary download link")? | before C6 merges | Proceed with the grant; the row's note says "grant, not presigned". |
 
-**Q4 — scanner options and trade-offs (no recommendation).** The categories below are generic. Product availability, licensing, data-handling terms and prices change; each must be verified at decision time.
+**Q4 — scanner options and trade-offs (no recommendation).** Categories are generic; availability, licensing, data-handling terms and prices change and must be verified at decision time.
 
 | Option | For | Against / risks |
 |---|---|---|
-| Self-hosted open-source engine as a separate service (e.g. a ClamAV-class daemon in a container) | no per-scan fee; customer art never leaves the platform; Cloud Run/GCP already used (M2) | we run it: signature update pipeline, hosting, scaling, patching; it is a new image in the supply chain (root-owned security lane; no binaries are committed); weaker on novel threats; scan latency and memory limits |
-| Hosted multi-engine scanning API | broader detection; no ops | customer artwork goes to a third party (privacy/rights/DPA, jurisdiction vs the pinned US R2 bucket, ADR-0007); per-scan cost; rate limits; vendor availability sits on the upload path; SDK may need a dependency (lockfile lane) |
-| Edge/WAF or storage-provider native upload scanning | no code on our side | availability depends on provider plan and product; coverage of server-side uploads (our path streams through the API) must be verified; limited visibility into verdict evidence |
-| No content scanner; rely on strict validation only | zero cost and zero data sharing | does not meet ACC-07 ("scans"); polyglot/metadata payloads in originals remain; originals must be returned **unchanged**, so re-encoding is not available for them |
+| Controlled decode/quarantine only (doc 12:17: "antivirus **or** controlled image decode/quarantine") using the existing structural inspection | vendor-free, no data sharing, no cost, available now, deterministic | not antivirus: polyglots and metadata payloads in originals remain, and originals must be returned **unchanged** so they cannot be re-encoded; must be labelled `structural-inspect` in scan events and never as malware-scanned; founder must decide it meets ACC-07 |
+| Self-hosted open-source engine as a separate service (a ClamAV-class daemon in a container) | no per-scan fee; art stays on our platform; Cloud Run/GCP already used (M2) | we run it: signature updates, hosting, scaling, patching; a new image in the supply chain (root-owned security lane; no binaries committed); weaker on novel threats; latency and memory limits |
+| Hosted multi-engine scanning API | broader detection; no ops | customer artwork goes to a third party (privacy/rights/DPA; jurisdiction vs the pinned US R2 bucket, ADR-0007); per-scan cost; rate limits; vendor availability sits on the upload path; an SDK may need a dependency |
+| Edge/WAF or storage-provider native upload scanning | no code on our side | availability depends on provider plan; coverage of server-side streamed uploads must be verified; limited verdict evidence |
 
-Decision inputs the founder needs to weigh: where bytes go; who operates it; fail-closed behaviour on outage (`unknown` blocks the owner from their own file, so an outage is a user-visible event); latency inside an upload request versus an asynchronous worker; cost per scan; evidence the scanner returns (engine and definitions version are mandatory in D3).
+Decision inputs: where bytes go; who operates it; behaviour on outage (`unknown` blocks the owner from their own file, so an outage is user-visible); inline vs asynchronous; cost per scan; evidence returned (engine and definitions version are mandatory in D3).
 
 ## 9. Founder-only checklists (outline; C8 writes the full text with exact commands)
 
-These are prepared, not executed. Each item will list prerequisites, ordered steps, the exact command, the expected result, the evidence artifact to attach, and the rollback.
+Prepared, not executed. Each item will list prerequisites, ordered steps, the exact command, the expected result, the evidence artifact, and the rollback.
 
 | Item | Prerequisites | Core steps | Evidence to produce |
 |---|---|---|---|
-| **B1 Staging Neon migration + rollback drill** | separate founder remote-database approval; pinned target added to the plan; native backup per `M2-Neon-Migration-Procedure.md`; runtime-role grants for `0001` and `0002` (§5 D6 proposal); a **staging-capable apply path** — the current runner is deliberately loopback-only, so a reviewed staging variant is a separately authorised work item, not part of W1 | backup → apply `0001`+`0002` → read-only inspection (journal rows, SHA-256s, table list) → synthetic row round trip → rollback drill on an empty copy (down refuses with data; down succeeds when empty; re-up) → restore drill | journal digest, schema digest, drill transcript, backup/restore transcript |
-| **B2 R2 private round trip** | R2 credentials already scoped to the staging bucket (ADR-0007); jurisdiction endpoint | operator script writes a synthetic object at a server-shaped key; read-back verifies size and SHA-256; second write is refused (`If-None-Match`); hash-mismatch is detected; unauthenticated GET and listing fail (bucket not public, no CORS); the **API** read path is not used (it now requires a clean scan) | transcript with status codes and hashes; bucket-privacy proof; confirmation that no public URL exists |
-| **B3 Real identity claim** | blocked on M1b live gates | staging canary on; create a guest draft; sign in through central identity; claim; old guest cookie is dead; a second real user gets `NOT_FOUND` for the composition and its assets; owner sees it in the list | request/response transcript (secrets redacted), screenshot of the claimed draft, database state of `guest_drafts`/`compositions` |
-| **B4 Manual screen-reader pass** | final labels from C7 | NVDA + Firefox and NVDA + Chrome (Windows); VoiceOver + Safari (macOS) and iOS Safari; per-step script with the **expected announcement** for every action (add text, select layer, nudge, numeric edit, reorder, hide, delete, switch side, save, conflict, freeze, restore, scan states, download) plus 200 % browser zoom and OS reduced-motion | filled results table (pass/fail/notes per step per reader), short recordings, defects filed as issues |
-| **B5 Scanner vendor selection and drill** | Q4 decision; adapter PR (separate, authorised) | decision record with criteria and chosen option → integration → clean file ⇒ `clean`; standard antivirus test string (assembled at run time, never committed) ⇒ `quarantined`, never servable; scanner outage ⇒ `unknown`; rescan path | decision record, drill transcript, scan-event rows |
-| **B6 Edge controls (if Q5 chosen)** | Q5 decision | configure the edge rule/challenge; replay the C4 scenarios against staging | rule export, test transcript |
+| **B1 Staging Neon migration + rollback drill** | separate founder remote-database approval; pinned target added to the plan; native backup per `M2-Neon-Migration-Procedure.md`; runtime-role grants for `0001` and `0002` (D6 proposal); a **staging-capable apply path** — the current runner is deliberately loopback-only, so a reviewed staging variant is a separately authorised work item, not part of W1 | backup → apply `0001`+`0002` → read-only inspection (journal rows, SHA-256s, tables) → synthetic row round trip → rollback drill on an empty copy (`0002` down refuses with data; succeeds when empty; `0001` down refuses while `0002` applied; re-up) → restore drill | journal digest, schema digest, drill transcript, backup/restore transcript |
+| **B2 R2 private round trip** | R2 credentials scoped to the staging bucket (ADR-0007) | operator script writes a synthetic object at a server-shaped key; read-back verifies size and SHA-256; second write refused (`If-None-Match`); hash mismatch detected; unauthenticated GET and listing fail; no CORS; the **API** read path is not used (it now requires `clean`) | transcript with status codes and hashes; bucket-privacy proof |
+| **B3 Real identity claim** | blocked on M1b live gates | staging canary on; create a guest draft; sign in through central identity; claim; old guest cookie dead; a second real user gets `NOT_FOUND` for the composition, its assets and any download grant | redacted request/response transcript, screenshot, `guest_drafts`/`compositions` state |
+| **B4 Manual screen-reader pass** | final labels from C7a/C7b | NVDA + Firefox and NVDA + Chrome (Windows); VoiceOver + Safari (macOS) and iOS Safari; per-step script with the **expected announcement** for add text, select layer, nudge, numeric edit, reorder, hide, delete, switch side, save, conflict, freeze, restore, each scan state, download; 200 % browser zoom; OS reduced motion; real Safari cookie behaviour (F12) | results table (pass/fail/notes per step per reader), recordings, defects filed |
+| **B5 Scanner decision and drill** | Q4 decision; adapter PR (separate, authorised) | decision record → integration → clean file ⇒ `clean`; standard antivirus test string (assembled at run time, never committed) ⇒ `quarantined`, never servable; scanner outage ⇒ `unknown`; rescan path and lease-expiry procedure | decision record, drill transcript, scan-event rows |
+| **B6 Edge controls (if Q5 chosen)** | Q5 decision | configure the rule/challenge; replay C4 scenarios against staging | rule export, test transcript |
 
 ## 10. Evidence policy and proposed ACC effects
 
 - **Counts:** only CI-executed results, cited by job and test lines. `m2.yml` `foundation` for PostgreSQL and commerce suites; `m0.yml` `verify` for contracts/web; `m0.yml` `browser` for the harness.
-- **Does not count:** any local run, local PG16 run or local Chromium run. These are reported `NOT_RUN`.
-- **Every step PR** includes: ADR link or reference, tests, security-review notes, API examples for new routes, and an explicit "NOT_RUN" list.
+- **Does not count:** any local run, local PG16 run or local Chromium run (reported `NOT_RUN`).
+- **Every step PR** includes: ADR reference, tests, security-review notes, API examples for new routes, and an explicit NOT_RUN list.
 - **Proposed ACC effects (root writes the matrix; nothing changes without executed evidence):**
 
-| Row | Today | After C1–C8 with CI evidence | Still open (needs B items) |
+| Row | Today | After the steps, with CI evidence | Still open |
 |---|---|---|---|
-| ACC-04 | IN_PROGRESS (no quota, no real SSO) | note updated: capability/owner/global limits and live-draft cap enforced and tested in CI | real SSO claim (B3); edge controls (Q5, B6); values (Q2) |
-| ACC-05 | IN_PROGRESS | note updated: interactive journey in CI on three engines (Firefox/WebKit after root's step) | none beyond B4 for accessibility |
+| ACC-04 | IN_PROGRESS (no quota, no real SSO) | note: capability/owner/global limits, live-draft cap and authorize-before-read enforced and tested in CI | real SSO claim (B3); edge controls (Q5, B6); values (Q2) |
+| ACC-05 | IN_PROGRESS | note: interactive checks in CI (three engines after RR-1); server-backed journey only if QA B/C | screen-reader pass (B4) |
 | ACC-06 | IN_PROGRESS | unchanged | staging Neon (B1) |
-| ACC-07 | IN_PROGRESS (no scanning, no expiring URLs) | note updated: scan boundary and expiring owner-checked grants tested in CI; **no scanner exists** | staging R2 (B2), vendor and drill (B5, Q4), staging Neon (B1) |
-| ACC-22 | NOT_STARTED | owner/BOLA tests for the new routes feed ACC-22 evidence | live identity (B3) |
+| ACC-07 | IN_PROGRESS (no scanning, no expiring URLs) | note: scan boundary and expiring owner-checked grants tested in CI; **no scanner exists**; "grant, not presigned" (Q9) | staging R2 (B2), scanner and drill (B5, Q4/QC), staging Neon (B1) |
+| ACC-22 | NOT_STARTED | owner/BOLA tests for the new routes contribute | live identity (B3) |
 
 ## 11. Risks, assumptions and known gaps
 
 | # | Item | Mitigation |
 |---|---|---|
-| R1 | A faithful interactive fixture may need a production seam | C1 is first and must escalate rather than add a seam |
-| R2 | Postgres connection budget shared with M1b, M3 and (soon) M7 | caps in F10; budget recorded in ADR-0022; coordinate with M7 plan D15 |
+| R1 | A server-backed fixture needs a seam or canary exception | decided up front (QA); C1a delivers value without it |
+| R2 | Shared Postgres connection and advisory-lock budget with M1b, M3, M7 | D8, RR-2, RR-3; ADR records the arithmetic |
 | R3 | Shared `packages/contracts` lane with M7 | M3 edits only its four files and `index.ts` export lines; rebase before merge; conflicts go to root |
-| R4 | Removing defaults (C2) changes many existing tests | worker moves them to `SYNTHETIC_*` fixtures in one commit; flags are OFF, so no runtime path changes |
-| R5 | Playwright WebKit and Firefox may expose real defects and iterate through CI | evidence only from CI; failures are recorded and fixed, never skipped; skip lists need founder approval |
-| R6 | Scanner `unknown` blocks the owner from their own original | by design (fail closed); visible status, rescan path, operator runbook in B5; trade-off is Q4/Q6 |
-| R7 | Fixed-window limiter allows a boundary burst and depends on clock agreement | documented and accepted in ADR-0022 |
-| R8 | `next build` ends with a Next.js "security upgrade" gate message after a successful compile (recorded in M3 evidence) | not touched here |
-| Gap | Expired guest drafts' R2 objects are not garbage-collected (doc 08 step 4) and the storage adapter has no delete | not in W1; recorded as a post-closure item, needs a deletion policy and root-approved storage change |
-| Gap | Derivatives/thumbnails, deterministic text renderer, async scanning worker | M5 / vendor decision |
+| R4 | Removing defaults (C2) changes many existing tests | one commit moving them to `SYNTHETIC_*` fixtures; flags are OFF, so no runtime path changes |
+| R5 | Firefox/WebKit may expose real defects and iterate through CI | evidence only from CI; failures fixed, never skipped; exceptions need written founder approval |
+| R6 | Scanner outage blocks the owner from their own original | by design (fail closed); status visible; rescan path; operator runbook in B5 |
+| R7 | Fixed-window limiter allows a boundary burst | documented and accepted in ADR-0022 |
+| R8 | `next build` ends with a Next.js "security upgrade" gate message after a successful compile (M3 evidence) | not touched here |
+| Gap | Expired guest drafts' R2 objects are not garbage-collected (doc 08 step 4); the storage adapter has no delete; unservable objects can accumulate once a scanner is wired | post-closure item needing a deletion policy (Q6b) and a root-approved storage change |
+| Gap | Derivatives/thumbnails, deterministic text renderer, asynchronous scan worker | M5 / scanner decision |
 
 ## 12. Review gate record
 
-Adversarial review of this plan is recorded below once complete (reviewer given the plan and read access to the repository, instructed to find defects rather than confirm; dispositions listed here).
+Adversarial review by an independent strongest-model reviewer (given the plan and read access to the repository, instructed to find defects): **APPROVE WITH CHANGES**; 19 findings. The manager re-verified the load-bearing ones against the code before acting (identity canary requirements, the security-smoke fetch policy, advisory-lock usage, the editor's local-preview flow, `AssetRecord` usage). Dispositions in revision 2:
 
-*(filled in by the review step)*
+| Finding | Severity | Disposition |
+|---|---|---|
+| 1 C1 infeasible without breaking the reserved-prefix rule | HIGH | **Accepted.** QA asked up front; C1 split into C1a (no seam) and conditional C1b; F5 and constraint list updated |
+| 2 D5 overrides the approved local-preview design; M3 PASS/W2 now depend on a scanner | HIGH | **Accepted.** QB and QC added; D5 changed; Outcome updated; escalated to root |
+| 3 Owner stranded in `pending`; no billable-call reservation | HIGH | **Accepted.** D3 gains `scanAsset` from `pending` and `asset_scan_attempts` leases; scan-first rejected with reason; false "no unservable bytes" claim corrected |
+| 4 Upload body read before access/charge | HIGH | **Accepted.** F4b; D2 order; C4 test with a throwing body stream |
+| 5 Parallel DB tests would clobber shared databases | HIGH | **Accepted.** F1, D8: one database per test file, pattern allow-list |
+| 6 Redemption ordering lets a third party burn the grant | MEDIUM | **Accepted.** D4 single consuming statement with all conditions; C6 test |
+| 7 Single-use GET hazards; token/401 wording | MEDIUM | **Accepted.** D4 fetch-then-consume, prefetch refusal, programmatic navigation, precise token wording, 401 documented; Q3b asked |
+| 8 Freeze TOCTOU | MEDIUM | **Accepted.** D5 check inside the freeze transaction under the per-asset lock; downstream note |
+| 9 `FOR UPDATE` needs UPDATE privilege; lock-key collisions | MEDIUM | **Accepted.** D3 advisory lock; RR-2 |
+| 10 `0001` down destroys `0002` | MEDIUM | **Accepted.** F8, C3a |
+| 11 Quota not atomic; live-guest count source; no global upload budget | MEDIUM | **Accepted.** D2 SQL quota under lock, count over M3 rows with partial index, `asset_upload:global`; Q2 |
+| 12 Security-smoke fetch policy | MEDIUM | **Accepted.** Constraint 10; C6 control in `editor.tsx`; fixtures in `scripts/` |
+| 13 Q1 incomplete; contracts additive-only collision; scan timeout unasked | MEDIUM | **Accepted.** Q1 classification; D1 ceiling check; Q3 |
+| 14 Q4 misstated doc 12:17; ACC-07 wording not asked | MEDIUM | **Accepted.** Q4 first option; Q9 |
+| 15 Steps too large; missing C4→C5 edge; "24 hours" text unassigned | MEDIUM | **Accepted.** C3 split, C7 split, edge added, text in C2 |
+| 16 Engine differences beyond drag math | LOW | **Accepted.** F12, C1a |
+| 17 Port types in the public barrel; breaking `AssetRecord` | LOW | **Accepted.** Types in `composition-port.ts`; Zod schema in commerce; F9 grep |
+| 18 Registry does not record ADR-0022/`0002` | LOW | **Accepted.** RR-3 |
+| 19 App clock skew in windows | LOW | **Accepted.** D2 database clock |
+
+Fact-check corrections applied: F1, F3, F5, F7, F8, F10, F11 (marked ✎). Not changed: the reviewer found no unscanned-asset serving bypass in the revised choke points, and confirmed that charging only after the access check avoids an existence oracle.
 
 ## 13. Plan mutation protocol
 
