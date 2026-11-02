@@ -12,6 +12,8 @@
     "./screens": "./src/screens.ts",
     "./assets": "./src/assets.ts",
     "./editor": "./src/editor.ts",
+    "./composition-scene": "./src/composition-scene.ts",
+    "./composition-port": "./src/composition-port.ts",
     "./account-commerce": "./src/account-commerce.ts",
     "./recovery": "./src/recovery.ts",
     "./remedy-public": "./src/remedy-public.ts",

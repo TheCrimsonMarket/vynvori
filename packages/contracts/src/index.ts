@@ -11,6 +11,7 @@ export * from "./operations";
 export * from "./screens";
 export * from "./assets";
 export * from "./editor";
+export * from "./composition-scene";
 export * from "./account-commerce";
 export * from "./recovery";
 export * from "./remedy-public";

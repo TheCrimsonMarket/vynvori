@@ -19,10 +19,10 @@ Use statuses `NOT_STARTED`, `NOT_RUN`, `IN_PROGRESS`, `PASSED`, `FAILED`, `BLOCK
 | ACC-01 | Repository | Existing benchmark CLI/tests unchanged and green after npm workspace expansion | NOT_STARTED |
 | ACC-02 | Central auth | LuckyLittleDevil actual bridge audited with source SHA and threat model | BLOCKED: repo access |
 | ACC-03 | Auth correctness | org canonical subject maps to one Medusa customer; issuer/audience/logout tests pass | BLOCKED: ACC-02 |
-| ACC-04 | Guest onboarding | anonymous BYO editing/preview, expiry/quota, secure sign-in migration | NOT_STARTED |
-| ACC-05 | Independent composer | BYO full journey without AI credit/account upfront | NOT_STARTED |
-| ACC-06 | Scene model | ordered edit layers/typography, stable mm transforms, immutable version snapshots | NOT_STARTED |
-| ACC-07 | Artwork security | private R2 uploads, scans/hash, owner download, expired presigned URL | NOT_STARTED |
+| ACC-04 | Guest onboarding | anonymous BYO editing/preview, expiry/quota, secure sign-in migration | IN_PROGRESS (local: guest draft, expiry, scoped capability, claim tests; no quota/rate limit, no real SSO) |
+| ACC-05 | Independent composer | BYO full journey without AI credit/account upfront | IN_PROGRESS (local browser journey without AI credit/account; checkout out of scope) |
+| ACC-06 | Scene model | ordered edit layers/typography, stable mm transforms, immutable version snapshots | IN_PROGRESS (local: ordered layers, exact text/font registry, mm geometry stable across reload, immutable versions; PG-verified) |
+| ACC-07 | Artwork security | private R2 uploads, scans/hash, owner download, expired presigned URL | IN_PROGRESS (local: private write-once objects, hash/ownership checks; no scanning, no expiring URLs, no staging round trip) |
 | ACC-08 | Medusa catalog | dedicated project, black tee size variants, real stock, separate merchant sandbox | NOT_STARTED |
 | ACC-09 | Personalized price | Medusa quote server validated; tampered zone/price rejected; distinct custom items | NOT_STARTED |
 | ACC-10 | Payments→Neon | captured order exactly once creates production job / paid entitlement | NOT_STARTED |
