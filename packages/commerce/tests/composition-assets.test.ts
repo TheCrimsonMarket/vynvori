@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { inspectImage, ImageRejectedError } from "../src/image-inspect";
 import { compositionAssetStorage } from "../src/composition-storage";
+import { SYNTHETIC_IMAGE_LIMITS } from "./composition-synthetic";
 import { png, jpeg, webp, sha256 } from "./composition-fixtures";
 
-const limits = { maxBytes: 1024 * 1024, maxPixels: 36_000_000, maxSide: 20_000 };
+const limits = SYNTHETIC_IMAGE_LIMITS;
 const reject = (bytes: Uint8Array, code: ImageRejectedError["code"]) => assert.throws(() => inspectImage(bytes, limits), (e: unknown) => e instanceof ImageRejectedError && e.code === code);
 
 test("image inspection decides type from magic bytes and reports exact dimensions + content hash", () => {
@@ -20,7 +21,7 @@ test("image inspection rejects empty, oversized, vector/other formats, animation
   reject(Buffer.from("%PDF-1.7 ..........................."), "UNSUPPORTED");
   reject(Buffer.from("GIF89a" + "\0".repeat(40)), "UNSUPPORTED");
   reject(webp(8, 8, true), "ANIMATED");
-  reject(png(25000, 10), "DIMENSIONS"); reject(png(20000, 20000), "DIMENSIONS"); reject(jpeg(40000, 40000), "DIMENSIONS");
+  reject(png(limits.maxSide + 1, 10), "DIMENSIONS"); reject(png(limits.maxSide, limits.maxSide), "DIMENSIONS"); reject(jpeg(40000, 40000), "DIMENSIONS");
   const damaged = Buffer.from(png()); damaged[20] = damaged[20]! ^ 0xff; reject(damaged, "MALFORMED");
   reject(Buffer.concat([png(), Buffer.from("PK\u0003\u0004")]), "MALFORMED");
   reject(png().subarray(0, png().length - 5), "MALFORMED");
