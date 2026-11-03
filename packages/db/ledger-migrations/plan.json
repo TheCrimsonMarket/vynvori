@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "purpose": "vynvori-credit-ledger",
+  "requires": ["vynvori_identity"],
+  "journalSchema": "vynvori_ledger_migrations",
+  "migrations": [
+    { "file": "0001_ledger_schema.sql", "sha256": "a8273f3fac59de2d0c2f1a661a852d22b9a360c9d9c83e672bd7f0d25d74ef4e" }
+  ]
+}
