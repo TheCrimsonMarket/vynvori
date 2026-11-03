@@ -1,4 +1,5 @@
 "use client";
+import "./zod-jitless";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CompositionReviewProjectionV1Schema } from "@vynvori/contracts";
