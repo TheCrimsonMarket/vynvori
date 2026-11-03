@@ -6,9 +6,13 @@ import net from "node:net";
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { launchEngine, resolveEngine } from "./browser-engine.mjs";
+import { runEditorScenarios } from "./browser-editor-scenarios.mjs";
+// Fail before anything is started: an unknown M0_BROWSER must never fall through to another engine.
+const engine = resolveEngine(process.env.M0_BROWSER);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(path.join(root, "design/reference/package.json"));
-const { chromium } = require("playwright");
+const playwright = require("playwright");
 const axe = await fs.readFile(require.resolve("axe-core/axe.min.js"), "utf8");
 const output = process.env.M0_EVIDENCE_DIR ?? await fs.mkdtemp(path.join(os.tmpdir(), "VYNVORI-M0-browser-"));
 if (path.resolve(output).startsWith(root + path.sep)) throw new Error("Browser evidence must be outside the checkout.");
@@ -22,7 +26,7 @@ const child = spawn(process.execPath, [path.join(root, "scripts/web.mjs"), "star
 let serverLog = "";
 child.stdout.on("data", bytes => { serverLog += bytes; });
 child.stderr.on("data", bytes => { serverLog += bytes; });
-const result = { date: new Date().toISOString(), mode: "Next.js production build", base, browser: "", checks: [], screenshots: [], errors: [], externalRequests: [], failedAssets: [] };
+const result = { date: new Date().toISOString(), mode: "Next.js production build", base, engine: engine.name, browser: "", checks: [], screenshots: [], errors: [], externalRequests: [], failedAssets: [] };
 async function check(name, fn) {
   try { await fn(); result.checks.push({ name, status: "PASSED" }); console.log(`PASS ${name}`); }
   catch (error) { result.checks.push({ name, status: "FAILED", error: error.message }); console.error(`FAIL ${name}: ${error.message}`); }
@@ -43,8 +47,9 @@ try {
     assert.match(response.headers.get("cache-control"), /no-store/);
     assert.equal(response.headers.get("x-content-type-options"), "nosniff");
   });
-  browser = await chromium.launch(process.env.M0_BROWSER === "chromium" ? { headless: true } : { headless: true, channel: "chrome" });
+  browser = await launchEngine(playwright, engine);
   result.browser = await browser.version();
+  console.log(`Engine ${engine.name} ${result.browser}`);
   const context = await browser.newContext();
   await context.route("**/*", async route => {
     if (new URL(route.request().url()).origin !== base) { result.externalRequests.push(route.request().url()); await route.abort(); }
@@ -132,6 +137,7 @@ try {
       assert.equal(await page.locator(".button").first().evaluate(el=>getComputedStyle(el).transitionDuration),"0s");
     }
   });
+  await runEditorScenarios({ page, base, check, output, result });
   await check("Missing route and unknown product return real 404 states", async () => {
     for (const route of ["/not-a-page","/products/not-a-product"]) {
       const response = await fetch(base+route); assert.equal(response.status,404);
