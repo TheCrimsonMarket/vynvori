@@ -2,7 +2,7 @@
 
 Shared-resource and session registry for the tree-structured multi-session harness. **Root owns this file.** Only root-authored PRs change it, and the founder merges them. Milestone status remains authoritative in [MILESTONE-PROGRESS.md](MILESTONE-PROGRESS.md); this file allocates resources and records who works where.
 
-Last updated: 2026-11-03 (M7 plan #20 merged; M3-closure manager registered; M7 S1 in review). Baseline `main` @ `1fa10e8`, CI green.
+Last updated: 2026-11-03 (M7 S1 merged; M3 closure plan approved, C1a in review). Baseline `main` @ `714a0ae` (M7 S1); PR-level CI was green, post-merge `main` CI was still running when written.
 
 ## Harness
 
@@ -59,8 +59,8 @@ Last used: **ADR-0020**. Two historical files share number 0008 (`ADR-0008-M2-Cl
 
 | Number | Reserved for | Holder | Status |
 |---|---|---|---|
-| ADR-0021 | M7 core ledger foundation | M7 manager | granted 2026-11-02; drafted in S1 ([#23](https://github.com/TheCrimsonMarket/vynvori/pull/23)) |
-| ADR-0022 | M3 closure (asset access, scan boundary, guest limits) | M3-closure manager | granted 2026-11-03 |
+| ADR-0021 | M7 core ledger foundation | M7 manager | granted 2026-11-02; **merged** with S1 ([#23](https://github.com/TheCrimsonMarket/vynvori/pull/23), `714a0ae`) |
+| ADR-0022 | M3 closure (asset access, scan boundary, guest limits) | M3-closure manager | granted 2026-11-03; to be written in step C2 |
 | ADR-0023 and later | unallocated | root | request from root |
 
 ### Migration journals (`packages/db`)
@@ -70,7 +70,7 @@ Last used: **ADR-0020**. Two historical files share number 0008 (`ADR-0008-M2-Cl
 | Core (drizzle-kit) | `packages/db/migrations/` | `0000_organic_valkyrie.sql` | M2 |
 | Identity / auth | `packages/db/auth-migrations/` | `0004_revocation_reconciliation.sql` | M1b |
 | Composition | `packages/db/composition-migrations/` | `0001_composition_scene.sql`; **`0002` reserved for M3 closure** (granted 2026-11-03) | M3 |
-| Ledger (new) | `packages/db/ledger-migrations/` | none yet; starts at `0001` | M7 (granted 2026-11-02) |
+| Ledger | `packages/db/ledger-migrations/` | `0001_ledger_schema.sql` (empty `vynvori_ledger` schema only; S1, `714a0ae`); `0002` is the next number | M7 (granted 2026-11-02) |
 
 ### Advisory-lock keys (`pg_advisory_xact_lock(742110, n)`)
 
@@ -79,7 +79,7 @@ Last used: **ADR-0020**. Two historical files share number 0008 (`ADR-0008-M2-Cl
 | 1 | identity migrations | M1b |
 | 2 | unassigned | root |
 | 3 | composition migrations (includes `0002`) | M3 |
-| 4 | M3-closure runtime / quota serialization | M3-closure manager (granted 2026-11-03) |
+| 4 | **not used in the two-int form.** M3-closure runtime/quota serialization uses the single-bigint form `pg_advisory_xact_lock(bigint)` whose high 32 bits are 4: `(4::bigint << 32) | (hashtext(subject)::bigint & 4294967295)`. That is a separate lock space from the two-int form. Binding conditions (unsigned mask, one acquisition order composition-before-asset, xact locks only, hashtext never persisted) are in the M3 plan D8 and ADR-0022. | M3-closure manager (granted 2026-11-03) |
 | 5, 6 | unassigned | root |
 | 7 | ledger migrations | M7 |
 
@@ -101,8 +101,9 @@ Root records every session the founder starts. Messages from a session not liste
 |---|---|---|---|---|---|
 | Root | all | `session_01Cowtxigt3rWyjMVZYShYyX` | `claude/peaceful-heisenberg-cocinf` | root W1 shared-lane PR | 2026-11-02 |
 | M7 manager | M7 | `session_01CowtxkLZEcmhjncVjGLGqK` (founder-confirmed) | `claude/exciting-wright-9f71eg` | [#20](https://github.com/TheCrimsonMarket/vynvori/pull/20) plan: **merged** 2026-11-02 | 2026-11-02 |
-| M7 worker S1 | M7 | not reported to root | `claude/youthful-johnson-p85ycz` | [#23](https://github.com/TheCrimsonMarket/vynvori/pull/23) foundation: CI pending, manager review pending | 2026-11-03 |
-| M3-closure manager | M3 | `session_01CowtxjZHg48RKM7XdfDfsf` (founder-confirmed 2026-11-03) | `claude/determined-mendel-0h42pl` | [#22](https://github.com/TheCrimsonMarket/vynvori/pull/22) plan: rev 3 pending, then founder approval | 2026-11-02 |
+| M7 worker S1 | M7 | not reported to root | `claude/youthful-johnson-p85ycz` | [#23](https://github.com/TheCrimsonMarket/vynvori/pull/23) foundation: **merged** 2026-11-03 (`714a0ae`) | 2026-11-03 |
+| M3-closure manager | M3 | `session_01CowtxjZHg48RKM7XdfDfsf` (founder-confirmed 2026-11-03) | `claude/determined-mendel-0h42pl` | [#22](https://github.com/TheCrimsonMarket/vynvori/pull/22) plan: **approved and merged** 2026-11-03 | 2026-11-02 |
+| M3 worker C1a | M3 | not reported to root | `claude/vigilant-noether-toz8yc` | [#25](https://github.com/TheCrimsonMarket/vynvori/pull/25) engine-parameterised browser harness: open, in review | 2026-11-03 |
 
 ## Protocol
 
@@ -118,7 +119,7 @@ From the 2026-11-02 council; the founder decides each wave's start.
 | Wave | Tracks | Prerequisites | Max parallel worker PRs | Status |
 |---|---|---|---|---|
 | W0 | CI recovery, dependency remediation, waiver gate | — | 1 | **DONE** (PR #18) |
-| W1 | M7 core ledger (no Medusa top-ups) + M3 local closure | CI green ✅; founder authorization ✅ | 2 (one per track) | **IN PROGRESS**: M7 plan approved (#20 merged), S1 in review ([#23](https://github.com/TheCrimsonMarket/vynvori/pull/23)); M3-closure plan pending founder approval ([#22](https://github.com/TheCrimsonMarket/vynvori/pull/22)) |
+| W1 | M7 core ledger (no Medusa top-ups) + M3 local closure | CI green ✅; founder authorization ✅ | 2 (one per track) | **IN PROGRESS**: M7 S1 merged (S2 next, starts when `main` CI is green); M3 plan approved, C1a ([#25](https://github.com/TheCrimsonMarket/vynvori/pull/25)) in review |
 | W2 | M4 sandbox commerce + M6a mock studio | M1b PASSED, M3 PASSED | 2 | blocked |
 | W3 | M5, M7 top-ups, M8a, M8b | M4 (and M6a for M8b) | 2–3 | blocked |
 | — | M6b, M9 | doc 15 gates; production, financial, rights, vendor and SSO flags stay OFF | — | blocked |
@@ -134,6 +135,15 @@ From the 2026-11-02 council; the founder decides each wave's start.
 | 2026-11-02 | Local PG16 binaries allowed for feedback only; such results are NOT_RUN as evidence. |
 | 2026-11-02 | M7 plan rev 4 (#20) approved and merged; implementation round 1 (S1–S9) authorized, serial, one worker at a time, founder starts workers and merges each PR. Q9 (pre-dispatch cancellation release) not in W1. |
 | 2026-11-03 | M3-closure manager confirmed (`session_01CowtxjZHg48RKM7XdfDfsf`). Rulings: (QB) the editor's local preview of the user's own file may stay; server-sourced pixels require scan status `clean`. (QC) no scanner chosen; manager brings an options paper, M3 stays at LOCAL CLOSURE COMPLETE and W2 stays blocked until the founder picks a scanner and enables uploads. (QA) browser fixture: flags-OFF scenarios only, C1b not approved. (Q1) M3's built-in numeric limits (24 h guest TTL, 25 MiB / 36 MP / 20 000 px, 24 assets, 150 MiB, 256 KiB) are unapproved: C2 removes the defaults, runtime fails closed until the founder supplies values. |
+| 2026-11-03 | M7 S1 approved by the founder and merged ([#23](https://github.com/TheCrimsonMarket/vynvori/pull/23)). Root grant applied: `FORBIDDEN_PUBLIC_FIELDS` gained `requestSha256`, `evidenceRef`, `modelRef`, `contentSha256`; `capabilitySnapshotId` deliberately stays public (`quote.ts`, `studio-plan.ts`). Privilege model A stays provisional until the S2 security review confirms or flips it. |
+| 2026-11-03 | M3 closure plan rev 3 approved and merged ([#22](https://github.com/TheCrimsonMarket/vynvori/pull/22)); implementation round 1 authorized: C1a, C2, C3a, C3b, C4, C5, C6, C7a, C7b, C8, serially, one worker at a time, founder merges each PR. C1b not approved. Safe defaults apply to the open plan questions (single-use download grants; no owner download of non-clean originals; no deletion of quarantined objects; no accessibility waivers; no staging hold-pending mode; proceed with the app-issued grant for ACC-07 and note the wording). |
+| 2026-11-03 | CODEOWNERS and branch-protection setting declined for now. |
+
+## Open governance item
+
+| Item | Status |
+|---|---|
+| CODEOWNERS plus required code-owner review for security-critical paths (`scripts/security/**`, `security/**`, `.github/**`, the protected-files manifest, `packages/db/ledger-migrations/**`, `packages/contracts/src/ledger-internal.ts`) | **Declined by the founder for now (2026-11-03).** Residual risk: a single PR could change a security check together with its own fingerprint (ADR-0020), or a ledger migration, and only the founder's manual review stands in the way. Revisit if merging is ever delegated or more reviewers are added. |
 
 ## Deadlines
 
