@@ -2,7 +2,7 @@
 
 Shared-resource and session registry for the tree-structured multi-session harness. **Root owns this file.** Only root-authored PRs change it, and the founder merges them. Milestone status remains authoritative in [MILESTONE-PROGRESS.md](MILESTONE-PROGRESS.md); this file allocates resources and records who works where.
 
-Last updated: 2026-11-03 (M7 S1 merged; M3 closure plan approved, C1a in review). Baseline `main` @ `714a0ae` (M7 S1); PR-level CI was green, post-merge `main` CI was still running when written.
+Last updated: 2026-11-03 (M7 S1, M3 C1a merged; M7 S2 draft in fix round for the model-B privilege design). Baseline `main` @ `43bb7aa`; `main` CI was green on `714a0ae`.
 
 ## Harness
 
@@ -103,7 +103,8 @@ Root records every session the founder starts. Messages from a session not liste
 | M7 manager | M7 | `session_01CowtxkLZEcmhjncVjGLGqK` (founder-confirmed) | `claude/exciting-wright-9f71eg` | [#20](https://github.com/TheCrimsonMarket/vynvori/pull/20) plan: **merged** 2026-11-02 | 2026-11-02 |
 | M7 worker S1 | M7 | not reported to root | `claude/youthful-johnson-p85ycz` | [#23](https://github.com/TheCrimsonMarket/vynvori/pull/23) foundation: **merged** 2026-11-03 (`714a0ae`) | 2026-11-03 |
 | M3-closure manager | M3 | `session_01CowtxjZHg48RKM7XdfDfsf` (founder-confirmed 2026-11-03) | `claude/determined-mendel-0h42pl` | [#22](https://github.com/TheCrimsonMarket/vynvori/pull/22) plan: **approved and merged** 2026-11-03 | 2026-11-02 |
-| M3 worker C1a | M3 | not reported to root | `claude/vigilant-noether-toz8yc` | [#25](https://github.com/TheCrimsonMarket/vynvori/pull/25) engine-parameterised browser harness: open, in review | 2026-11-03 |
+| M3 worker C1a | M3 | not reported to root | `claude/vigilant-noether-toz8yc` | [#25](https://github.com/TheCrimsonMarket/vynvori/pull/25) engine-parameterised browser harness: **merged** 2026-11-03 (`37021ba`) | 2026-11-03 |
+| M7 worker S2 | M7 | not reported to root | `claude/jolly-darwin-fpwkqu` | [#27](https://github.com/TheCrimsonMarket/vynvori/pull/27) wallet + ledger: **DRAFT**, privilege model A→B fix round | 2026-11-03 |
 
 ## Protocol
 
@@ -138,6 +139,18 @@ From the 2026-11-02 council; the founder decides each wave's start.
 | 2026-11-03 | M7 S1 approved by the founder and merged ([#23](https://github.com/TheCrimsonMarket/vynvori/pull/23)). Root grant applied: `FORBIDDEN_PUBLIC_FIELDS` gained `requestSha256`, `evidenceRef`, `modelRef`, `contentSha256`; `capabilitySnapshotId` deliberately stays public (`quote.ts`, `studio-plan.ts`). Privilege model A stays provisional until the S2 security review confirms or flips it. |
 | 2026-11-03 | M3 closure plan rev 3 approved and merged ([#22](https://github.com/TheCrimsonMarket/vynvori/pull/22)); implementation round 1 authorized: C1a, C2, C3a, C3b, C4, C5, C6, C7a, C7b, C8, serially, one worker at a time, founder merges each PR. C1b not approved. Safe defaults apply to the open plan questions (single-use download grants; no owner download of non-clean originals; no deletion of quarantined objects; no accessibility waivers; no staging hold-pending mode; proceed with the app-issued grant for ACC-07 and note the wording). |
 | 2026-11-03 | CODEOWNERS and branch-protection setting declined for now. |
+
+## Hard gates carried forward (do not lose)
+
+These are conditions found in review that must hold before the named point. Each is also recorded in the owning ADR; the registry keeps them visible across sessions.
+
+| Gate | Applies before | Owner | Recorded in |
+|---|---|---|---|
+| **No real credit grant source** may be registered by any means (migration, seed, runtime, operator script) until grant writes sit behind a SECURITY DEFINER command function bound to verified external evidence. Under the S2 design the runtime role keeps INSERT on ledger entries; with a source registered it could mint credits. W1 registers none, and tests prove the runtime role has no privilege on the source table, the table is empty, and an entry referencing no registered source is rejected. | M4, W3 top-ups, any wallet funding | M7 | ADR-0021 (S2 fix round), S9 grants proposal |
+| **Dedicated definer owner role.** The ledger's SECURITY DEFINER functions run with their owner's privileges. The known staging migration owner holds CREATEDB, CREATEROLE and BYPASSRLS, so rollout is not authorized until a dedicated NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE role owns them (`ALTER FUNCTION ... OWNER TO`, founder-executed). | any non-synthetic ledger rollout | M7 | ADR-0021, S9 grants proposal |
+| **S9 grants proposal contents** (founder-executed, never in migrations): column-level `GRANT UPDATE (user_id)` on wallets for the runtime role (needed for `SELECT ... FOR UPDATE`), EXECUTE grants on the definer functions, `REVOKE TEMPORARY` for the runtime role (PUBLIC holds TEMP by default, and revoking from a role alone does nothing), the dedicated owner role, and the grant-source gate above. | any non-synthetic ledger rollout | M7 | S9 |
+| **Scanner chosen and uploads enabled; the 31 M3 limit values supplied.** M3 stays at local closure and W2 stays blocked until both. | M3 PASSED, W2 | founder | M3 closure plan section 5.1, P1 |
+| **Topology-dependent assertions** must be validated against CI's Docker-service layout before being relied on (an `inet_server_addr()` loopback check failed CI in M7 S1). | every PG test step | all managers | ADR-0021 |
 
 ## Open governance item
 
