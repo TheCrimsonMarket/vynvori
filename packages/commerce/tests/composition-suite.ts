@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { canonicalSceneJson } from "@vynvori/contracts";
 import type { AssetRecord, CompositionAccess, CompositionRecord, CompositionStore, VersionRecord } from "@vynvori/contracts/composition-port";
-import { compositionService, defaultCompositionConfig, CompositionError, secretHash, draftProjection } from "../src/composition";
+import { compositionService, CompositionError, secretHash, draftProjection } from "../src/composition";
+import { SYNTHETIC_COMPOSITION_CONFIG, SYNTHETIC_GUEST_TTL_SECONDS } from "./composition-synthetic";
 import { imageLayer, memoryStorage, png, jpeg, sceneWith, sha256, textLayer, webp } from "./composition-fixtures";
 
 export type Harness = Readonly<{
@@ -62,7 +63,7 @@ export function compositionConformance(label: string, factory: () => Promise<Har
   let clock = new Date("2026-11-02T12:00:00Z");
   const setup = async (uploads = true) => {
     const h = await factory(), storage = memoryStorage();
-    const service = compositionService(h.store, storage, { ...defaultCompositionConfig, uploadsEnabled: uploads }, () => clock);
+    const service = compositionService(h.store, storage, { ...SYNTHETIC_COMPOSITION_CONFIG, uploadsEnabled: uploads }, () => clock);
     return { h, storage, service };
   };
   const guest = async (service: ReturnType<typeof compositionService>) => {
@@ -83,7 +84,7 @@ export function compositionConformance(label: string, factory: () => Promise<Har
     await code(service.get(a.id, { kind: "guest", capabilityHash: secretHash("x".repeat(43)) }), "NOT_FOUND");
     await code(service.saveDraft(a.id, b.access, 0, sceneWith()), "NOT_FOUND");
     assert.equal((await service.get(a.id, a.access)).id, a.id);
-    clock = new Date(clock.getTime() + 25 * 3600 * 1000);
+    clock = new Date(clock.getTime() + (SYNTHETIC_GUEST_TTL_SECONDS + 3600) * 1000);
     await code(service.get(a.id, a.access), "NOT_FOUND");
     await code(service.saveDraft(a.id, a.access, 0, sceneWith()), "NOT_FOUND");
     await code(service.freeze(a.id, a.access, 0), "NOT_FOUND");

@@ -19,6 +19,7 @@ const statuses: Record<CompositionError["code"], [number, string, boolean]> = {
   OWNER_REQUIRED: [401, "Sign in to continue.", false],
   ILLEGAL_TRANSITION: [409, "That change is not allowed in the current state.", false],
   STORAGE_UNAVAILABLE: [503, "Storage is temporarily unavailable.", true],
+  LIMITS_NOT_CONFIGURED: [503, "This feature is not configured yet.", false],
 };
 class HttpError extends Error { constructor(readonly status: number, readonly code: "INVALID_REQUEST" | "FORBIDDEN" | "AUTH_REQUIRED" | "DISABLED" | "UNAVAILABLE") { super(code); } }
 
@@ -26,7 +27,8 @@ export interface CompositionIdentityPort {
   verify(sessionSecret: string): Promise<Readonly<{ userId: string }>>;
   claimGuest(sessionSecret: string, draftId: string, capability: string): Promise<void>;
 }
-export type CompositionHttpConfig = Readonly<{ enabled: boolean; appOrigin: string; guestTtlSeconds: number; maxJsonBytes: number; maxUploadBytes: number }>;
+/** Limits come from typed `M3_LIMIT_*` configuration and have no default; `undefined` closes the route that needs them. */
+export type CompositionHttpConfig = Readonly<{ enabled: boolean; appOrigin: string; guestTtlSeconds: number | undefined; maxJsonBytes: number | undefined; maxUploadBytes: number | undefined }>;
 
 function cookie(request: Request, name: string): string | null {
   const values = (request.headers.get("cookie") ?? "").split(";").map(part => part.trim()).filter(part => part.slice(0, part.indexOf("=")) === name);
@@ -94,7 +96,10 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
 
   function wrapped(handler: (request: Request, params: Record<string, string>) => Promise<Response>) {
     return async (request: Request, params: Record<string, string> = {}): Promise<Response> => {
-      try { return await handler(request, params); }
+      try {
+        if (cfg.enabled && cfg.maxJsonBytes === undefined) throw new CompositionError("LIMITS_NOT_CONFIGURED");
+        return await handler(request, params);
+      }
       catch (error) {
         const correlationId = randomUUID();
         if (error instanceof CompositionError) {
@@ -113,7 +118,7 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
   const parseJson = async (request: Request): Promise<Record<string, unknown>> => {
     if (request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "application/json") throw new HttpError(400, "INVALID_REQUEST");
     try {
-      const value: unknown = JSON.parse(Buffer.from(await readBody(request, cfg.maxJsonBytes)).toString("utf8"));
+      const value: unknown = JSON.parse(Buffer.from(await readBody(request, cfg.maxJsonBytes ?? 0)).toString("utf8"));
       if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error();
       return value as Record<string, unknown>;
     } catch (error) { if (error instanceof HttpError) throw error; throw new HttpError(400, "INVALID_REQUEST"); }
@@ -135,6 +140,7 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
         return json(view(record, access), 201);
       }
       guardMutation(request, false);
+      if (cfg.guestTtlSeconds === undefined) throw new CompositionError("LIMITS_NOT_CONFIGURED");
       const { record, capability, expiresAt } = await service!.createGuest();
       const headers = new Headers({ "set-cookie": `${compositionCookies.guest}=${record.id}.${capability}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${cfg.guestTtlSeconds}` });
       void expiresAt;
@@ -197,6 +203,8 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
     }),
     uploadAsset: wrapped(async (request, params) => {
       const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true);
+      service!.assertUploadsAvailable();
+      if (cfg.maxUploadBytes === undefined) throw new CompositionError("LIMITS_NOT_CONFIGURED");
       const bytes = await readBody(request, cfg.maxUploadBytes);
       const asset = await service!.uploadAsset(compositionId, access, bytes, request.headers.get("content-type"));
       return json({ asset: { assetId: asset.id, sha256: asset.sha256, mime: asset.mime, widthPx: asset.widthPx, heightPx: asset.heightPx } }, 201);

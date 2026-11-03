@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { LICENSED_FONTS, SYNTHETIC_PREVIEW_PROFILE } from "@vynvori/contracts";
 import { publicConfig } from "@vynvori/shared/public";
-import { compositionSettings, editorCapabilities } from "../src/server/composition-runtime";
+import { compositionSettings, editorCapabilities, uploadLimitsFor } from "../src/server/composition-runtime";
 
 test("licensed font registry pins the exact bundled Archivo file", () => {
   const bytes = readFileSync(new URL("../src/fonts/archivo.ttf", import.meta.url));
@@ -24,4 +24,18 @@ test("flag-off state: the editor UI offers no artwork upload under any default o
     assert.equal(editorCapabilities(env).artworkUpload, false, JSON.stringify(env));
   // The UI answer is, by construction, never looser than the API's own gate.
   assert.equal(editorCapabilities({ M3_COMPOSITION_ENABLED: "true", M3_COMPOSITION_UPLOADS: "true" }).artworkUpload, compositionSettings({ M3_COMPOSITION_ENABLED: "true", M3_COMPOSITION_UPLOADS: "true" }).enabled);
+});
+test("M3_LIMIT_* variables alone never enable uploads or hand the editor any limit; unset limits give no editor limits", () => {
+  // SYNTHETIC values, not policy.
+  const SYNTHETIC_LIMIT_ENV = { M3_LIMIT_JSON_MAX_BYTES: "11", M3_LIMIT_GUEST_TTL_SECONDS: "12", M3_LIMIT_IMAGE_MAX_BYTES: "13", M3_LIMIT_IMAGE_MAX_PIXELS: "14", M3_LIMIT_IMAGE_MAX_SIDE_PX: "15", M3_LIMIT_MAX_ASSETS_PER_COMPOSITION: "16", M3_LIMIT_MAX_BYTES_PER_COMPOSITION: "17" };
+  for (const env of [SYNTHETIC_LIMIT_ENV, { ...SYNTHETIC_LIMIT_ENV, M3_COMPOSITION_UPLOADS: "true" }, { ...SYNTHETIC_LIMIT_ENV, M3_COMPOSITION_ENABLED: "true" }]) {
+    assert.deepEqual(editorCapabilities(env), { artworkUpload: false, uploadLimits: null }, JSON.stringify(Object.keys(env)));
+    assert.equal(compositionSettings(env).enabled, false);
+  }
+  assert.deepEqual(editorCapabilities({}), { artworkUpload: false, uploadLimits: null });
+  assert.equal(uploadLimitsFor({}), null);
+  assert.equal(uploadLimitsFor({ ...SYNTHETIC_LIMIT_ENV, M3_LIMIT_IMAGE_MAX_PIXELS: undefined }), null, "one unset key closes the editor limits");
+  assert.equal(uploadLimitsFor({ ...SYNTHETIC_LIMIT_ENV, M3_LIMIT_IMAGE_MAX_BYTES: "26214401" }), null, "above the structural ceiling is invalid");
+  assert.deepEqual(uploadLimitsFor(SYNTHETIC_LIMIT_ENV), { maxBytes: 13, maxPixels: 14, maxSidePx: 15 });
+  assert.equal(publicConfig.features["assets.production_uploads"], false);
 });

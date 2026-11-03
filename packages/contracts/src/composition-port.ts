@@ -37,3 +37,19 @@ export interface CompositionStore {
   listVersions(compositionId: string, access: CompositionAccess, now: Date): Promise<readonly VersionRecord[] | null>;
 }
 
+
+/**
+ * Malware-scan boundary (ADR-0022 D3). TYPES ONLY: no scanner is chosen, integrated or approximated, and nothing here is
+ * implemented by M3 yet. Current status is derived from an append-only event log (added by later steps); no event means "pending".
+ * Every outcome other than a well-formed clean/infected verdict for the same bytes maps to "unknown", never to "clean".
+ */
+export type ArtifactScanStatus = "pending" | "clean" | "quarantined" | "unknown";
+export type ArtifactScanRequest = Readonly<{ assetId: string; sha256: string; byteSize: number; mime: string; bytes: Uint8Array }>;
+export type ArtifactScanResult = Readonly<{
+  verdict: "clean" | "infected" | "error";
+  sha256: string; engineVersion: string; definitionsVersion: string; evidenceRef: string; scannedAt: string;
+}>;
+export interface ArtifactScanPort {
+  readonly scannerId: string;
+  scan(request: ArtifactScanRequest, signal: AbortSignal): Promise<ArtifactScanResult>;
+}
