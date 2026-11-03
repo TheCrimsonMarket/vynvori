@@ -36,13 +36,15 @@ export function assertDisposableTarget(connection: string, database: string, env
 }
 
 /**
- * Server-side check, run on the maintenance connection BEFORE any DROP/CREATE DATABASE: the session user must be `synthetic` and the
- * server address loopback. Residual risk (ADR-0021): a loopback SSH tunnel to a remote server still satisfies this; the database
- * names stay confined to the allow-list.
+ * Server-side check, run on the maintenance connection BEFORE any DROP/CREATE DATABASE: the session user must be `synthetic` and a
+ * superuser (CI's `synthetic` is the bootstrap superuser; managed databases normally give application roles no superuser). The
+ * server ADDRESS is deliberately not checked: a Docker-published port shows the container-side address, not 127.0.0.1.
+ * Residual risk (ADR-0021): a loopback SSH tunnel to a remote server on which `synthetic` is a superuser still passes; the
+ * database names stay confined to the allow-list.
  */
-export async function assertServerIsLoopbackSynthetic(client: { query(text: string): Promise<{ rows: { u: string; addr: string | null }[] }> }) {
-  const row = (await client.query("SELECT current_user::text AS u, host(inet_server_addr()) AS addr")).rows[0];
-  if (!row || row.u !== "synthetic" || (row.addr !== "127.0.0.1" && row.addr !== "::1")) throw new Error("Refusing non-disposable server");
+export async function assertServerIsDisposableSynthetic(client: { query(text: string): Promise<{ rows: { u: string; su: string }[] }> }) {
+  const row = (await client.query("SELECT current_user::text AS u, current_setting('is_superuser') AS su")).rows[0];
+  if (!row || row.u !== "synthetic" || row.su !== "on") throw new Error("Refusing non-disposable server");
 }
 
 /** Creates (drop + create) the caller's disposable database, rebuilds vynvori_identity, applies the ledger plan. */
@@ -52,7 +54,7 @@ export async function freshLedger(name: LedgerTestName, connection = ledgerTarge
   const admin = new URL(url.toString()); admin.pathname = "/postgres";
   const adminClient = new Client({ connectionString: admin.toString() }); await adminClient.connect();
   try {
-    await assertServerIsLoopbackSynthetic(adminClient);
+    await assertServerIsDisposableSynthetic(adminClient);
     await adminClient.query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`);
     await adminClient.query(`CREATE DATABASE ${database}`);
   } finally { await adminClient.end(); }
@@ -70,7 +72,7 @@ export async function dropLedger(name: LedgerTestName, connection = ledgerTarget
   if (!connection) return;
   const database = databaseFor(name), url = assertDisposableTarget(connection, database); url.pathname = "/postgres";
   const admin = new Client({ connectionString: url.toString() }); await admin.connect();
-  try { await assertServerIsLoopbackSynthetic(admin); await admin.query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`); } finally { await admin.end(); }
+  try { await assertServerIsDisposableSynthetic(admin); await admin.query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`); } finally { await admin.end(); }
 }
 
 /**

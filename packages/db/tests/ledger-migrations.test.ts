@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "pg";
 import { applyLedgerMigrations, ledgerMigrationPlan, LedgerMigrationError } from "../src/ledger-migrations";
-import { assertDisposableTarget, assertServerIsLoopbackSynthetic, databaseFor, dropLedger, freshLedger, ledgerPool, ledgerTarget, resolveLedgerTestUrl, POOL_CAPS, poolBudget } from "./ledger-fixture";
+import { assertDisposableTarget, assertServerIsDisposableSynthetic, databaseFor, dropLedger, freshLedger, ledgerPool, ledgerTarget, resolveLedgerTestUrl, POOL_CAPS, poolBudget } from "./ledger-fixture";
 
 const planDir = new URL("../ledger-migrations", import.meta.url).pathname;
 const code = (c: string) => (e: unknown) => e instanceof LedgerMigrationError && e.code === c;
@@ -143,10 +143,13 @@ test("ledger migration journal: apply, replay, drift, rollback guard, up-down-up
       const role = "m7_probe_" + randomBytes(6).toString("hex"); // roles are cluster-global: never a fixed name
       await client.query(`CREATE ROLE ${role} NOLOGIN`); await client.query(`SET ROLE ${role}`);
       try { await assert.rejects(applyLedgerMigrations(client, expected), code("TARGET_REJECTED")); } finally { await client.query("RESET ROLE"); await client.query(`DROP ROLE ${role}`); }
-      await assert.rejects(assertServerIsLoopbackSynthetic({ query: async () => ({ rows: [{ u: "postgres", addr: "127.0.0.1" }] }) }), /non-disposable server/);
-      await assert.rejects(assertServerIsLoopbackSynthetic({ query: async () => ({ rows: [{ u: "synthetic", addr: "10.0.0.5" }] }) }), /non-disposable server/);
-      await assert.rejects(assertServerIsLoopbackSynthetic({ query: async () => ({ rows: [{ u: "synthetic", addr: null }] }) }), /non-disposable server/);
-      await assertServerIsLoopbackSynthetic(client);
+      const fake = (u: string, su: string) => ({ query: async () => ({ rows: [{ u, su }] }) });
+      await assert.rejects(assertServerIsDisposableSynthetic(fake("postgres", "on")), /non-disposable server/, "wrong user");
+      await assert.rejects(assertServerIsDisposableSynthetic(fake("app", "on")), /non-disposable server/, "wrong user");
+      await assert.rejects(assertServerIsDisposableSynthetic(fake("synthetic", "off")), /non-disposable server/, "not a superuser");
+      await assert.rejects(assertServerIsDisposableSynthetic({ query: async () => ({ rows: [] }) }), /non-disposable server/, "no row");
+      await assertServerIsDisposableSynthetic(fake("synthetic", "on"));
+      await assertServerIsDisposableSynthetic(client);
     });
     await t.test("half state (schema without journal) is HISTORY_OR_SCHEMA_DRIFT", async () => {
       await client.query("DROP SCHEMA vynvori_ledger_migrations CASCADE");
