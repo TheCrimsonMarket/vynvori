@@ -36,7 +36,7 @@ The remaining keys (download-grant TTL, scan timeout and lease, live-guest cap, 
 - Connection budget (the fixture asserts the sum against `250 − 20` for tooling): **40** across at most five PostgreSQL test files. Each figure is the file's total peak, counting its pool, the fixture's own persistent client and one transient admin client: `composition.test.ts` 5, `composition-0002-ddl.test.ts` 5, `composition-0002-concurrency.test.ts` 20 (pool 18), `composition-pg.test.ts` 5, at most one further commerce PostgreSQL file 5. A sixth file or a larger pool requires re-declaring the budget here first.
 
 ## Values the founder must supply (31 keys)
-No value has a default in production code. Until the founder supplies one, the capability that needs it stays closed. Keys are environment variables; values are positive safe integers. **This ADR supplies no replacement numbers.** The right-hand column shows what C2 deletes so the founder can see what is being replaced. Example environment assignments are intentionally omitted: any example would be a number nobody approved.
+No value has a default in production code. Until the founder supplies one, the capability that needs it stays closed. Keys are environment variables; values are positive safe integers. **This ADR supplies no replacement numbers.** The right-hand column shows what C2 deletes so the founder can see what is being replaced. `.env.example` lists the 31 key names as commented, value-less lines (a test keeps it equal to the exported key list). Any example value would be a number nobody approved, so none is given.
 
 | # | Key | Unit | Used where | Code value removed, or new |
 |---|---|---|---|---|
