@@ -182,8 +182,13 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
           } finally { client.release(true); }
         });
         await assert.rejects(attach(rtPool), code("42501"), "without EXECUTE the trigger cannot even be created");
+        await assert.rejects(rtPool.query(`SELECT ${APPLY}`), code("42501"), "direct invocation without EXECUTE");
         await admin.query(`GRANT EXECUTE ON FUNCTION ${APPLY} TO ${q(rt)}`); // what a blanket schema-wide EXECUTE grant in the S9 proposal would do
-        try { await assert.rejects(attach(rtPool), code("23000", /unexpected context/)); } finally { await admin.query(`REVOKE EXECUTE ON FUNCTION ${APPLY} FROM ${q(rt)}`); }
+        try {
+          await assert.rejects(attach(rtPool), code("23000", /unexpected context/));
+          await assert.rejects(rtPool.query(`SELECT ${APPLY}`), code("0A000", /trigger functions can only be called as triggers/), "direct invocation WITH EXECUTE is still refused");
+          await assert.rejects(rtPool.query(`SELECT * FROM ${APPLY}`), either("0A000", "42804", "42809", "42883"), "and so is calling it as a table function");
+        } finally { await admin.query(`REVOKE EXECUTE ON FUNCTION ${APPLY} FROM ${q(rt)}`); }
         assert.deepEqual(await buckets(victim), before, "wallet unchanged, no entries minted");
         assert.equal((await admin.query("SELECT count(*)::int n FROM vynvori_ledger.ledger_entries WHERE user_id=$1", [victim])).rows[0].n, 1);
       });
@@ -244,6 +249,36 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
         await assert.rejects(admin.query("INSERT INTO su_exploit VALUES (1)"), code("23000", /only through ledger entries/), "superuser through a trigger");
         await admin.query("DROP TABLE su_exploit; DROP FUNCTION pg_temp.su_fn()");
         assert.deepEqual(await buckets(victim), before);
+      });
+
+      await t.test("the definer owner's privileges are EXACTLY USAGE on the schema + SELECT and UPDATE on wallets: the path works with only these, and fails when any one is removed", async () => {
+        const exact = "m7_exact_" + suffix;
+        await mkRole(exact);
+        const privileges: [string, string, string][] = [
+          ["USAGE on schema vynvori_ledger", `GRANT USAGE ON SCHEMA vynvori_ledger TO ${q(exact)}`, `REVOKE USAGE ON SCHEMA vynvori_ledger FROM ${q(exact)}`],
+          ["SELECT on vynvori_ledger.wallets", `GRANT SELECT ON vynvori_ledger.wallets TO ${q(exact)}`, `REVOKE SELECT ON vynvori_ledger.wallets FROM ${q(exact)}`],
+          ["UPDATE on vynvori_ledger.wallets", `GRANT UPDATE ON vynvori_ledger.wallets TO ${q(exact)}`, `REVOKE UPDATE ON vynvori_ledger.wallets FROM ${q(exact)}`],
+        ];
+        for (const [, grant] of privileges) await admin.query(grant);
+        await admin.query(`ALTER FUNCTION ${APPLY} OWNER TO ${q(exact)}`);
+        try {
+          const user = await profile(); await ensureWallet(rtPool, user);
+          let n = 0;
+          const attempt = () => grantSyntheticCredits(rtPool, { userId: user, grantSourceId: source, sourceRef: "exact-" + n++, units: SYNTHETIC_UNITS });
+          await attempt();
+          assert.equal((await buckets(user)).a, String(SYNTHETIC_UNITS), "works with exactly the listed privileges and nothing else");
+          const held = (await admin.query("SELECT has_table_privilege($1, 'vynvori_ledger.wallets', p) AS x, p FROM unnest(ARRAY['INSERT','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p", [exact])).rows;
+          assert.ok(held.every(r => r.x === false), "no other table privilege is held");
+          for (const [label, grant, revoke] of privileges) {
+            await admin.query(revoke);
+            const before = await buckets(user);
+            await assert.rejects(attempt(), (e: unknown) => (e as { sqlstate?: string }).sqlstate === "42501", `without ${label} the legitimate path fails (privilege not padded)`);
+            assert.deepEqual(await buckets(user), before, "nothing moved on the failed attempt");
+            await admin.query(grant);
+            await attempt();
+          }
+          assert.equal((await buckets(user)).a, String(4 * SYNTHETIC_UNITS), "restored after each removal");
+        } finally { await admin.query(`ALTER FUNCTION ${APPLY} OWNER TO ${q(definer)}`); }
       });
 
       await t.test("owner comparison is by NAME: a mixed-case or punctuated function owner works; a case-colliding attacker holding pg_write_all_data is rejected", async () => {
