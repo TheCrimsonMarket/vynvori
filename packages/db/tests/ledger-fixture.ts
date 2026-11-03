@@ -1,9 +1,11 @@
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Client, Pool } from "pg";
+import { appendGrantEntry, ensureWallet, runLedgerCommand, type LedgerDb } from "../src/ledger-core";
 import { applyLedgerMigrations, ledgerMigrationPlan, LEDGER_TEST_DATABASE } from "../src/ledger-migrations";
 
 /** Fixture allow-list (ADR-0021 D15). Later steps append their file's name here. */
-export const LEDGER_TEST_NAMES = ["migrations", "fixture", "concurrency"] as const;
+export const LEDGER_TEST_NAMES = ["migrations", "fixture", "concurrency", "core"] as const;
 export type LedgerTestName = (typeof LEDGER_TEST_NAMES)[number];
 export const databaseFor = (name: LedgerTestName) => `vynvori_m7_${name}_test`;
 
@@ -94,4 +96,27 @@ export async function ledgerPool(name: LedgerTestName, kind: keyof typeof POOL_C
 export function poolBudget(serverMax: number, kind: keyof typeof POOL_CAPS) {
   const cap = POOL_CAPS[kind], budget = serverMax - RESERVED_SUPERUSER_SLOTS;
   return { max: Math.min(cap, Math.max(1, budget)), degraded: budget < cap };
+}
+
+// ---- S2 test helpers. They live in tests/ only: the runtime role can never register a grant source, so neither can any src/ code. ----
+
+/** Inserts a synthetic_test grant source. Needs INSERT on the registry, i.e. the superuser test connection; production roles have none. */
+export async function registerSyntheticGrantSource(client: { query(text: string, values?: unknown[]): Promise<unknown> }, label = "synthetic test source") {
+  const grantSourceId = randomUUID();
+  await client.query("INSERT INTO vynvori_ledger.ledger_grant_sources(grant_source_id, kind, label) VALUES($1, 'synthetic_test', $2)", [grantSourceId, label]);
+  return grantSourceId;
+}
+/** Inserts a synthetic verified profile (issuer + subject) and its empty wallet. Returns the lowercase profile id. */
+export async function syntheticProfileWithWallet(client: Client) {
+  const profileId = randomUUID(), subject = "synthetic-" + profileId;
+  await client.query("INSERT INTO vynvori_identity.profiles(id, issuer, subject) VALUES($1, 'https://synthetic.invalid', $2)", [profileId, subject]);
+  await ensureWallet(client, profileId);
+  return profileId;
+}
+/** Grants through the ordinary internal path (runLedgerCommand + appendGrantEntry). Units are SYNTHETIC test values. */
+export function grantSyntheticCredits(db: LedgerDb, input: { userId: string; grantSourceId: string; sourceRef: string; units: number; idempotencyKey?: string }) {
+  return runLedgerCommand(db, {
+    actor: "system", component: "synthetic-test", expectedUserId: input.userId, userId: input.userId, commandKind: "grant_credits",
+    idempotencyKey: input.idempotencyKey ?? "grant-synthetic-" + input.sourceRef, payload: { grantSourceId: input.grantSourceId, sourceRef: input.sourceRef, units: input.units },
+  }, tx => appendGrantEntry(tx, { grantSourceId: input.grantSourceId, sourceRef: input.sourceRef, units: input.units }).then(() => undefined));
 }

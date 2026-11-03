@@ -4,6 +4,7 @@
   "requires": ["vynvori_identity"],
   "journalSchema": "vynvori_ledger_migrations",
   "migrations": [
-    { "file": "0001_ledger_schema.sql", "sha256": "a8273f3fac59de2d0c2f1a661a852d22b9a360c9d9c83e672bd7f0d25d74ef4e" }
+    { "file": "0001_ledger_schema.sql", "sha256": "a8273f3fac59de2d0c2f1a661a852d22b9a360c9d9c83e672bd7f0d25d74ef4e" },
+    { "file": "0002_wallet_ledger.sql", "sha256": "9d0d11fe70150d4858b751d09b091886662862da68e0c1e32d1b05350cb138d6" }
   ]
 }
