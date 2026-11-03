@@ -41,7 +41,7 @@
     "db:migrate": "npm run migrate -w @vynvori/db",
     "smoke:m2": "node --conditions=react-server --import tsx scripts/staging-smoke.ts",
     "smoke:m2-security": "node scripts/m2-security.mjs",
-    "test:lifecycle": "node --test scripts/tests/process-lifecycle.test.mjs scripts/tests/dependency-compat.test.mjs",
+    "test:lifecycle": "node --test scripts/tests/process-lifecycle.test.mjs scripts/tests/dependency-compat.test.mjs scripts/tests/browser-engine.test.mjs",
     "security:audit": "node scripts/security/run-audit.mjs",
     "security:review:m1b": "node scripts/security/m1b-collect-review.mjs",
     "test:security-policy": "node --test scripts/tests/security-policy.test.mjs scripts/tests/m1b-source-policy.test.mjs scripts/tests/dependency-waiver-policy.test.mjs"
