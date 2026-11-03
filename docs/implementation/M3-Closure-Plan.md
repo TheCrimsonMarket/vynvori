@@ -1,6 +1,6 @@
 # M3 closure plan — local closure of the BYO garment editor (W1)
 
-Status: **PROPOSED — awaiting founder review. No worker may start until the founder approves this plan** (registry rule 2: a plan is not authorization to implement). Author: M3-closure milestone manager. Base: `main` @ `1fa10e8` (CI green per root). Date: 2026-11-03. **Revision 3** (rev 1 = first draft; rev 2 = adversarial review applied, §12; rev 3 = founder rulings relayed by root applied, §0). No revision approves anything: the founder approves this plan directly.
+Status: **PROPOSED — awaiting founder review. No worker may start until the founder approves this plan** (registry rule 2: a plan is not authorization to implement). Author: M3-closure milestone manager. Base: `main` @ `1fa10e8` (CI green per root). Date: 2026-11-03. **Revision 4** (rev 1 = first draft; rev 2 = adversarial review applied, §12; rev 3 = founder rulings relayed by root applied, §0; **rev 4 = step C1c added after the first cross-engine CI run, §6 and §12; this amendment needs the founder's direct approval before any C1c worker starts**). No revision approves anything: the founder approves this plan directly.
 
 Authority: founder-authorized W1 scope as relayed in the M3-closure manager kickoff. ADR-0022 and migration number `0002` in `packages/db/composition-migrations/` were granted by root in that kickoff, and so were additive edits to the M3-owned contract files. The registry does not yet record them (§7 asks root to). This document changes no code, schema, flag, workflow or protected file.
 
@@ -190,11 +190,14 @@ Not supplied by the founder and not removed: *structural ceilings* (contracts an
 
 ## 6. Steps, dependencies and lanes
 
-One step = one branch = one PR = one worker. **One worker PR in flight for M3 closure** (W1 total 2; M7 holds the other). Strongest model tier for C3a, C3b, C5, C6 (security-critical); default for the rest. Serial order: **C1a → C2 → C3a → C3b → C4 → C5 → C6 → C7a → C7b → C8**. **C1b is not approved** (founder ruling QA, relayed by root) and is not in the order. **P1** (scanner options paper) is a docs-only deliverable, not a worker PR, and does not gate any code step.
+One step = one branch = one PR = one worker. **One worker PR in flight for M3 closure** (W1 total 2; M7 holds the other). Strongest model tier for C3a, C3b, C5, C6 (security-critical); default for the rest. Serial order: **C1a → C2 → C3a → C3b → C4 → C5 → C6 → C7a → C7b → C8**, with **C1c** (rev 4) inserted by the founder at the earliest point a worker slot is free: before C3a if C3a has not started, otherwise right after C3a merges. C1c must merge before root's workflow PR (#28), but C3a does not depend on it. **C1b is not approved** (founder ruling QA, relayed by root) and is not in the order. **P1** (scanner options paper) is a docs-only deliverable, not a worker PR, and does not gate any code step.
 
 ```mermaid
 flowchart LR
  C1a[C1a engine param + flags-OFF interactive scenarios] --> C7a
+ C1a --> C1c[C1c cross-engine triage and fix]
+ C1c -.must merge before.-> RR
+ C1c --> C7a
  C2[C2 ADR-0022 + limits + contract types] --> C3a[C3a migration 0002 DDL + 0001 down repair]
  C3a --> C3b[C3b store port + PG/in-memory + conformance]
  C3b --> C4[C4 quota + rate limits + pre-read ordering]
@@ -210,6 +213,7 @@ flowchart LR
 | Step | Title | Migration | Hard deps | Evidence source |
 |---|---|---|---|---|
 | C1a | Engine-parameterised harness + interactive scenarios with all flags OFF | — | — | `m0.yml` `browser` (Chromium); Firefox/WebKit only after root's CI step |
+| C1c (rev 4) | Cross-engine triage and fix: root-cause and fix the three Firefox/WebKit failures without loosening CSP or skipping a check | — | C1a (merged) | `m0.yml` `browser` on all three engines |
 | C1b (**not approved**) | Server-backed interactive fixture | — | founder ruling needed | — |
 | C2 | ADR-0022, typed limits, contract types, "24 hours" text | — | — | `m0.yml` `verify`, `m2.yml` |
 | C3a | Migration `0002` DDL, rollback, `0001` down repair | `0002` | C2 | `m2.yml` `foundation` |
@@ -228,6 +232,26 @@ flowchart LR
 *Files.* `scripts/browser-web.mjs`, helpers in `scripts/`, docs. No `apps/web/src` product code.
 *Verify.* `npm ci`; `npm run build:web`; `npm run test:browser:web` with `M0_BROWSER=chromium` (local result NOT_RUN as evidence); `npm run verify`; `npm run security:audit`.
 *Exit.* CI `browser` green on Chromium with the new scenarios; unknown engine rejected; Firefox/WebKit invocation documented. Firefox/WebKit stay **NOT_RUN** until root's workflow change merges and CI runs them.
+
+### C1c — Cross-engine triage and fix (added in rev 4; default model; needs the founder's direct approval)
+
+*Why a plan mutation.* Root's workflow PR (#28) ran Firefox and WebKit for the first time (run 41584515832, job 125746776865, head `d1e653a` on main `43bb7aa`, i.e. before C2). The manager read the job log. **Chromium 151.0.7922.34: 87/87. Firefox 153.0: 86/87. WebKit 26.5: 85/87.** All 36 C1a editor scenarios passed on all three engines (108 `PASS Editor (flags OFF)` lines), so the failures sit in pre-existing site behaviour and harness waits, not in the new scenarios. Per-engine harness time from the log timestamps: Chromium about 75 s, Firefox about 83 s, WebKit about 105 s.
+
+*The three failures (observed in the log; causes NOT yet established).*
+1. **Firefox, "No fatal runtime errors, missing assets or external requests":** 48 console errors, all `Content-Security-Policy: The page's settings blocked a JavaScript eval (script-src) … "script-src 'self' 'unsafe-inline'" (Missing 'unsafe-eval')`, source `_next/static/chunks/3639-aa266366393b902c.js` line 1. The source is an application chunk, not axe or Playwright.
+2. **WebKit, the same check:** `…/account?_rsc=… due to access control checks.` (a Fetch API failure on an RSC prefetch of `/account`).
+3. **WebKit, "Route, layout, assets and WCAG axe /gallery 320x480":** `page.waitForFunction: Timeout 30000ms exceeded`. The same route passes at 320x640, 390x568, 390x844, 768x1024 and 1440x900.
+*Unverified candidates, to be confirmed or discarded by evidence, not assumed:* (1) a library that feature-detects eval with the Function constructor (zod 4 has such a probe; the repository is on zod 4.x), whose removal by configuration would be a hardening, not a weakening; (2) an `/account` response that redirects across origin or host (`localhost` versus `127.0.0.1`); (3) a viewport-specific layout wait or a one-off flake.
+
+*Tasks.* (1) **Root cause first.** Download the uploaded artifacts `m0-browser-firefox` and `m0-browser-webkit`; for each failure write reproduction notes and the evidence that identifies the cause (for the Firefox chunk: search the built chunk and its source map for `new Function` and `eval`, name the module; for `/account`: record what the route answers to the RSC prefetch; for `/gallery`: separate a flake from a deterministic wait by repeated CI runs and report the counts). (2) Fix each cause where it lives, in the smallest way. (3) Keep every engine running every check.
+
+*Constraints (relayed by root, binding).* (a) **Never loosen the CSP** (no `'unsafe-eval'`, no additional `'unsafe-inline'`), and do not skip, filter or weaken an engine's check to get green. (b) The right fix for the eval source may be a library configuration or a code change; if a harness-side filter is truly the only option, bring the evidence to root first. (c) Allowed without a grant: the editor and the harness files (`apps/web/src/components/editor/**`, `scripts/browser-*.mjs`, `scripts/tests/browser-*.test.mjs`). Anything else (contracts, shared, `next.config`, account or other routes, auth) needs a root grant: ask, with the file list. Do not touch `.github/workflows/**` or `.env.example`.
+
+*How a worker can verify.* The worker's sandbox has Chromium only, and workers never edit workflows, so Firefox/WebKit results exist only in CI. The mechanism has to be agreed with root: root's workflow PR is stacked on the C1c branch (a pull request whose base is the C1c branch still runs `m0.yml`), so CI runs all three engines on the fix before C1c merges; C1c then merges to `main` first and #28 is retargeted. The plan does not assume this works; root decides.
+
+*Exit.* The `browser` job is green on Chromium, Firefox and WebKit with the C1a scenarios and the existing checks unchanged; the CSP header is byte-identical (a test or a diff shows no change); no check is skipped or filtered on any engine; each of the three failures has a documented root cause and, if one was a flake, repeated-run evidence. C1c merges before #28.
+
+*Evidence limits.* Everything above about the first cross-engine run is read from that run's job log by the manager; the manager has not read the uploaded artifacts.
 
 ### C1b — Server-backed interactive fixture (NOT APPROVED)
 
@@ -293,7 +317,7 @@ Founder ruling QA (relayed by root): **flags-OFF scenarios only; no identity can
 
 | Request | Status (relayed by root, 2026-11-03) | Notes |
 |---|---|---|
-| **RR-1 CI — `.github/workflows/m0.yml`, job `browser`** (Firefox + WebKit) | **Granted in principle.** Root makes the workflow PR after the C1a PR is open and this manager sends the exact step text below plus the measured Chromium run time. Root owns the edit; workers never touch workflows. | The C1a PR reports the **CI-measured** duration of the `browser` job. Local timings are not evidence. `timeout-minutes` is not guessed. |
+| **RR-1 CI — `.github/workflows/m0.yml`, job `browser`** (Firefox + WebKit) | **In progress (rev 4): root PR #28 ran all three engines once; Firefox and WebKit failed (see C1c). #28 stays unmerged until C1c is merged and the job is green on all three.** Originally: **Granted in principle.** Root makes the workflow PR after the C1a PR is open and this manager sends the exact step text below plus the measured Chromium run time. Root owns the edit; workers never touch workflows. | The C1a PR reports the **CI-measured** duration of the `browser` job. Local timings are not evidence. `timeout-minutes` is not guessed. |
 | **RR-2 Advisory-lock key** | **Granted: `(742110, 4)`** for M3 runtime/quota serialization; `0002` stays under `(742110,3)`. | The plan needs *per-subject* serialization; D8 proposes using class 4 as the high word of the single-bigint lock form and asks root to confirm that reading before C3b. |
 | **RR-3 Registry** | **Recorded** in root's next registry PR (ADR-0022, `0002`, DB-name pattern, connection budget). | M3 declares 40 connections at most, five files (D8). |
 | Migration `0003` | only if a later step proves schema is missing | ask then |
@@ -378,7 +402,7 @@ Prepared, not executed. Each item will list prerequisites, ordered steps, the ex
 | R2 | Shared Postgres connection and advisory-lock budget with M1b, M3, M7 | D8, RR-2, RR-3; ADR records the arithmetic |
 | R3 | Shared `packages/contracts` lane with M7 | M3 edits only its four files and `index.ts` export lines; rebase before merge; conflicts go to root |
 | R4 | Removing defaults (C2) changes many existing tests | one commit moving them to `SYNTHETIC_*` fixtures; flags are OFF, so no runtime path changes |
-| R5 | Firefox/WebKit may expose real defects and iterate through CI | evidence only from CI; failures fixed, never skipped; exceptions need written founder approval |
+| R5 | Firefox/WebKit may expose real defects and iterate through CI | **materialised on the first run (rev 4): C1c.** Evidence only from CI; failures fixed, never skipped; exceptions need written founder approval |
 | R6 | Scanner outage blocks the owner from their own original | by design (fail closed); status visible; rescan path; operator runbook in B5 |
 | R7 | Fixed-window limiter allows a boundary burst | documented and accepted in ADR-0022 |
 | R8 | `next build` ends with a Next.js "security upgrade" gate message after a successful compile (M3 evidence) | not touched here |
@@ -412,6 +436,8 @@ Adversarial review by an independent strongest-model reviewer (given the plan an
 | 19 App clock skew in windows | LOW | **Accepted.** D2 database clock |
 
 **Revision 3 (2026-11-03):** founder rulings relayed by root applied (§0): QB, QC, QA, Q1, RR-1 to RR-3. Changes: §0 rewritten as a record of rulings (not approval); outcome states LOCAL CLOSURE COMPLETE / W2 blocked; §5.1 value table; editor client limits routed through the same config (D1, C2); C1b marked not approved; P1 options-paper deliverable; D8 lock class 4 and the 40-connection budget; §7 and §8 updated. The review dispositions above are unchanged.
+
+**Revision 4 (2026-11-03):** step C1c added at root's request after the first cross-engine CI run (run 41584515832: Chromium 87/87, Firefox 86/87, WebKit 85/87). The manager verified the numbers and the failure messages in the job log. Mutation protocol: reason is the cross-engine failures; affected steps are C1a (extended, not rewritten), C7a/C7b (their engine evidence depends on C1c) and root's workflow PR #28 (must merge after C1c). The founder approves this amendment directly before any C1c worker starts.
 
 Fact-check corrections applied: F1, F3, F5, F7, F8, F10, F11 (marked ✎). Not changed: the reviewer found no unscanned-asset serving bypass in the revised choke points, and confirmed that charging only after the access check avoids an existence oracle.
 
