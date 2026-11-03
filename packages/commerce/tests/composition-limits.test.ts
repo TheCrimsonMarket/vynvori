@@ -27,6 +27,12 @@ test("the exported key list equals the keys in the ADR-0022 table", () => {
   const documented = [...adr.matchAll(/^\| \d+ \| `(M3_LIMIT_[A-Z0-9_]+)` \|/gm)].map(match => match[1]!);
   assert.deepEqual([...documented].sort(), [...COMPOSITION_LIMIT_KEYS].sort());
 });
+test(".env.example lists exactly the 31 keys, all commented out and without values", () => {
+  const lines = readFileSync(join(repo, ".env.example"), "utf8").split("\n").filter(line => line.includes("M3_LIMIT_"));
+  const listed = lines.map(line => /^# (M3_LIMIT_[A-Z0-9_]+)=$/.exec(line)?.[1]);
+  assert.ok(listed.every(Boolean), "every M3_LIMIT_ line must be a bare commented assignment with no value");
+  assert.deepEqual([...listed].sort(), [...COMPOSITION_LIMIT_KEYS].sort());
+});
 test("with an empty environment every key is missing and nothing has a default", () => {
   const parsed = parseCompositionLimits({});
   assert.deepEqual([...parsed.missing].sort(), [...COMPOSITION_LIMIT_KEYS].sort());
