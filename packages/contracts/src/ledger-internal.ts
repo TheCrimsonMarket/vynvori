@@ -47,25 +47,34 @@ export const LEDGER_ERROR_TO_CUSTOMER: Readonly<Record<LedgerErrorCodeV1, Custom
   EVIDENCE_INVALID: null, INVALID_TRANSITION: null, NOT_FOUND: null, LEDGER_OUTCOME_UNKNOWN: null,
 });
 
-/** Customer actors act only as themselves; internal transitions carry a component and the user they expect to own the row. */
-export const LedgerActorV1Schema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("customer"), userId: UserIdSchema }).strict(),
-  z.object({ kind: z.literal("system"), component: z.string().regex(/^[a-z][a-z0-9_-]*$/), expectedUserId: UserIdSchema }).strict(),
-]);
+/** Internal transitions carry a component and the user they expect to own the row. There is deliberately NO customer actor shape. */
+export const LedgerSystemActorV1Schema = z.object({ kind: z.literal("system"), component: z.string().regex(/^[a-z][a-z0-9_-]*$/), expectedUserId: UserIdSchema }).strict();
 
 /** Idempotency key: URL-safe token characters only. The bounds are a format limit, not a business value. */
 export const IdempotencyKeySchema = z.string().regex(/^[A-Za-z0-9._:-]{16,128}$/);
 const CommandKindSchema = z.string().regex(/^[a-z][a-z0-9_]{0,63}$/);
-
-/** D4: scope = `{userId}:{commandKind}`. No email, no Medusa customer id. */
-export const LedgerCommandEnvelopeV1Schema = z.object({
+const commandFields = {
   idempotencyScope: z.string(), idempotencyKey: IdempotencyKeySchema, requestSha256: HashSha256Schema,
-  userId: UserIdSchema, commandKind: CommandKindSchema, actor: LedgerActorV1Schema,
-}).strict().superRefine((value, ctx) => {
+  userId: UserIdSchema, commandKind: CommandKindSchema,
+};
+const scopeMatches = (value: { idempotencyScope: string; userId: string; commandKind: string }, ctx: z.RefinementCtx) => {
   if (value.idempotencyScope !== `${value.userId}:${value.commandKind}`) ctx.addIssue({ code: "custom", path: ["idempotencyScope"], message: "scope must be {userId}:{commandKind}" });
-  if (value.actor.kind === "customer" ? value.actor.userId !== value.userId : value.actor.expectedUserId !== value.userId) ctx.addIssue({ code: "custom", path: ["actor"], message: "actor must match the command user" });
+};
+
+/**
+ * D4: scope = `{userId}:{commandKind}`. No email, no Medusa customer id. Customer-facing command: carries NO actor field — the
+ * caller derives the actor from the authenticated session, and `userId` is set from that session, never from a request body.
+ * `requestSha256` is likewise recomputed by the ledger from the canonical request (S2 must not trust a caller-supplied hash).
+ */
+export const LedgerCustomerCommandV1Schema = z.object(commandFields).strict().superRefine(scopeMatches);
+export type LedgerCustomerCommandV1 = z.infer<typeof LedgerCustomerCommandV1Schema>;
+
+/** Internal (server-to-server) command: only a `system` actor is representable, and it must name the user it expects. */
+export const LedgerInternalCommandV1Schema = z.object({ ...commandFields, actor: LedgerSystemActorV1Schema }).strict().superRefine((value, ctx) => {
+  scopeMatches(value, ctx);
+  if (value.actor.expectedUserId !== value.userId) ctx.addIssue({ code: "custom", path: ["actor"], message: "actor must match the command user" });
 });
-export type LedgerCommandEnvelopeV1 = z.infer<typeof LedgerCommandEnvelopeV1Schema>;
+export type LedgerInternalCommandV1 = z.infer<typeof LedgerInternalCommandV1Schema>;
 
 export const LedgerOperationKindV1Schema = z.enum(["concept_bundle_3x2", "promo_single_preview", "final_standard", "final_premium"]);
 

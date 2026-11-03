@@ -6,7 +6,7 @@ import { QuoteViewV3Schema } from "../src/quote";
 import * as barrel from "../src/index";
 import { findLeakedInternalFields, CustomerErrorCodeSchema } from "../src/errors";
 import {
-  DEFERRED_CAPABILITIES, GrantSourceKindV1Schema, HoldReasonV1Schema, LEDGER_ERROR_TO_CUSTOMER, LedgerCommandEnvelopeV1Schema, LedgerActorV1Schema, EligibilityDecisionV1Schema, LedgerOperationKindV1Schema,
+  DEFERRED_CAPABILITIES, GrantSourceKindV1Schema, HoldReasonV1Schema, LEDGER_ERROR_TO_CUSTOMER, LedgerCustomerCommandV1Schema, LedgerInternalCommandV1Schema, LedgerSystemActorV1Schema, EligibilityDecisionV1Schema, LedgerOperationKindV1Schema,
   LedgerEntryKindV1Schema, LedgerErrorCodeV1Schema, LedgerQuoteRecordV1Schema, QuoteAllocationV1Schema, ReservationStateV1Schema,
   TransitionEvidenceV1Schema, type AuthorizationEligibilityPort, type PricePolicyPort, type ProviderOutcomeEvidencePort,
 } from "../src/ledger-internal";
@@ -14,10 +14,11 @@ import {
 // SYNTHETIC_* numeric fixtures live in tests only and are never exported from src/ (M7 plan constraint 2).
 const SYNTHETIC_USER = "aaaaaaaa-1111-4111-8111-bbbbbbbbbbbb";
 const SYNTHETIC_HASH = "a".repeat(64);
-const envelope = (over: Record<string, unknown> = {}) => ({
+const customer = (over: Record<string, unknown> = {}) => ({
   idempotencyScope: `${SYNTHETIC_USER}:authorize`, idempotencyKey: "synthetic-key-0001", requestSha256: SYNTHETIC_HASH,
-  userId: SYNTHETIC_USER, commandKind: "authorize", actor: { kind: "customer", userId: SYNTHETIC_USER }, ...over,
+  userId: SYNTHETIC_USER, commandKind: "authorize", ...over,
 });
+const system = (over: Record<string, unknown> = {}) => customer({ commandKind: "settle", idempotencyScope: `${SYNTHETIC_USER}:settle`, actor: { kind: "system", component: "m6b-delivery", expectedUserId: SYNTHETIC_USER }, ...over });
 const SYNTHETIC_QUOTE = (over: Record<string, unknown> = {}, viewOver: Record<string, unknown> = {}) => {
   const view = conceptBundleQuoteFixture(viewOver);
   return {
@@ -28,19 +29,34 @@ const SYNTHETIC_QUOTE = (over: Record<string, unknown> = {}, viewOver: Record<st
 };
 const ok = (schema: { safeParse(v: unknown): { success: boolean } }, value: unknown) => schema.safeParse(value).success;
 
-test("command envelope: scope binds to user + kind, key charset/length enforced, strict", () => {
-  assert.ok(ok(LedgerCommandEnvelopeV1Schema, envelope()));
-  assert.ok(!ok(LedgerCommandEnvelopeV1Schema, envelope({ idempotencyScope: "other:authorize" })), "scope must be {userId}:{commandKind}");
-  assert.ok(!ok(LedgerCommandEnvelopeV1Schema, envelope({ idempotencyScope: `${SYNTHETIC_USER}:settle` })), "scope kind must match commandKind");
-  for (const key of ["", "short", "has space in key!!", "x".repeat(129), "émoji-key-0000000", "line\nbreak-0000000"]) assert.ok(!ok(LedgerCommandEnvelopeV1Schema, envelope({ idempotencyKey: key })), key);
-  assert.ok(!ok(LedgerCommandEnvelopeV1Schema, envelope({ requestSha256: "ABC" })));
+test("customer command: scope binds to user + kind, key charset/length enforced, strict, and NO actor can be supplied", () => {
+  const C = LedgerCustomerCommandV1Schema;
+  assert.ok(ok(C, customer()));
+  assert.ok(!ok(C, customer({ idempotencyScope: "other:authorize" })), "scope must be {userId}:{commandKind}");
+  assert.ok(!ok(C, customer({ idempotencyScope: `${SYNTHETIC_USER}:settle` })), "scope kind must match commandKind");
+  for (const key of ["", "short", "has space in key!!", "x".repeat(129), "émoji-key-0000000", "line\nbreak-0000000"]) assert.ok(!ok(C, customer({ idempotencyKey: key })), key);
+  assert.ok(!ok(C, customer({ requestSha256: "ABC" })));
   const upper = SYNTHETIC_USER.toUpperCase();
-  assert.ok(!ok(LedgerCommandEnvelopeV1Schema, envelope({ userId: upper, idempotencyScope: `${upper}:authorize`, actor: { kind: "customer", userId: upper } })), "uppercase uuid would fork idempotency scopes");
-  assert.ok(!ok(LedgerCommandEnvelopeV1Schema, envelope({ email: "a@b.c" })), "strict: no email or unknown keys");
-  assert.ok(!ok(LedgerCommandEnvelopeV1Schema, envelope({ userId: "not-a-uuid", idempotencyScope: "not-a-uuid:authorize" })));
-  assert.ok(ok(LedgerCommandEnvelopeV1Schema, envelope({ commandKind: "settle", idempotencyScope: `${SYNTHETIC_USER}:settle`, actor: { kind: "system", component: "m6b-delivery", expectedUserId: SYNTHETIC_USER } })));
-  assert.ok(!ok(LedgerCommandEnvelopeV1Schema, envelope({ actor: { kind: "system", component: "" , expectedUserId: SYNTHETIC_USER } })));
-  assert.ok(!ok(LedgerCommandEnvelopeV1Schema, envelope({ actor: { kind: "customer", userId: "22222222-2222-4222-8222-222222222222" } })), "customer actor must be the command user");
+  assert.ok(!ok(C, customer({ userId: upper, idempotencyScope: `${upper}:authorize` })), "uppercase uuid would fork idempotency scopes");
+  assert.ok(!ok(C, customer({ email: "a@b.c" })), "strict: no email or unknown keys");
+  assert.ok(!ok(C, customer({ userId: "not-a-uuid", idempotencyScope: "not-a-uuid:authorize" })));
+  for (const actor of [{ kind: "system", component: "m6b-delivery", expectedUserId: SYNTHETIC_USER }, { kind: "customer", userId: SYNTHETIC_USER }, {}, null])
+    assert.ok(!ok(C, customer({ actor })), "a customer-parseable body can never carry an actor: " + JSON.stringify(actor));
+  const parsed = C.safeParse(customer());
+  assert.ok(parsed.success && !("actor" in parsed.data), "parsed customer output has no actor field");
+});
+
+test("internal command: system actor only, consistent with the command user", () => {
+  const I = LedgerInternalCommandV1Schema;
+  assert.ok(ok(I, system()));
+  assert.ok(!ok(I, customer({ commandKind: "settle", idempotencyScope: `${SYNTHETIC_USER}:settle` })), "actor is required");
+  assert.ok(!ok(I, system({ actor: { kind: "customer", userId: SYNTHETIC_USER } })), "no customer kind on the internal wire");
+  assert.ok(!ok(I, system({ actor: { kind: "system", component: "", expectedUserId: SYNTHETIC_USER } })));
+  assert.ok(!ok(I, system({ actor: { kind: "system", component: "m6b-delivery", expectedUserId: "22222222-2222-4222-8222-222222222222" } })), "expectedUserId must equal the command user");
+  assert.ok(!ok(I, system({ idempotencyScope: "other:settle" })));
+  assert.ok(!ok(I, system({ extra: 1 })));
+  const parsed = I.safeParse(system());
+  assert.ok(parsed.success && parsed.data.actor.kind === "system");
 });
 
 test("enumerations match the plan (D2, D6) and cannot enter operator_remedy via an entry kind", () => {
@@ -89,11 +105,12 @@ test("transition evidence: settle/release/hold variants are exact; a vendor char
   assert.ok(!ok(TransitionEvidenceV1Schema, { ...settle, privateVendorCostUsd: 1 }), "strict");
 });
 
-test("actor and eligibility decisions are strict and exact", () => {
-  assert.ok(ok(LedgerActorV1Schema, { kind: "customer", userId: SYNTHETIC_USER }));
-  assert.ok(!ok(LedgerActorV1Schema, { kind: "customer", userId: SYNTHETIC_USER.toUpperCase() }));
-  assert.ok(!ok(LedgerActorV1Schema, { kind: "system", component: "Bad Name", expectedUserId: SYNTHETIC_USER }));
-  assert.ok(!ok(LedgerActorV1Schema, { kind: "admin", userId: SYNTHETIC_USER }));
+test("system actor and eligibility decisions are strict and exact", () => {
+  assert.ok(ok(LedgerSystemActorV1Schema, { kind: "system", component: "m6b-delivery", expectedUserId: SYNTHETIC_USER }));
+  assert.ok(!ok(LedgerSystemActorV1Schema, { kind: "system", component: "m6b-delivery", expectedUserId: SYNTHETIC_USER.toUpperCase() }));
+  assert.ok(!ok(LedgerSystemActorV1Schema, { kind: "system", component: "Bad Name", expectedUserId: SYNTHETIC_USER }));
+  assert.ok(!ok(LedgerSystemActorV1Schema, { kind: "customer", userId: SYNTHETIC_USER }));
+  assert.ok(!ok(LedgerSystemActorV1Schema, { kind: "admin", userId: SYNTHETIC_USER }));
   assert.ok(ok(EligibilityDecisionV1Schema, { ok: true, cancellationWindowDisclosed: true }));
   assert.ok(!ok(EligibilityDecisionV1Schema, { ok: true, cancellationWindowDisclosed: false }), "undisclosed window can never authorize");
   assert.ok(!ok(EligibilityDecisionV1Schema, { ok: true }));
@@ -109,8 +126,21 @@ test("deferred capabilities carry names only: no method shapes, no flags added, 
   assert.ok(DEFERRED_CAPABILITIES.every(c => c.governingFlag === null || ["credits.purchasing", "payments.live", "exports.paid"].includes(c.governingFlag)));
 });
 
-test("leak scan: the idempotency envelope is detected, public projections stay clean, ports are types only", () => {
-  assert.deepEqual(findLeakedInternalFields(envelope()).sort(), ["idempotencyKey", "idempotencyScope"]);
+test("leak scan over the parsed output of EVERY exported ledger schema: each internal key is detected, nothing unexpected appears", () => {
+  const detect = (schema: { parse(v: unknown): unknown }, sample: unknown) => findLeakedInternalFields(schema.parse(sample)).sort();
+  // Expected sets document exactly which internal keys each shape carries; a new field that is a forbidden public key shows up here.
+  assert.deepEqual(detect(LedgerCustomerCommandV1Schema, customer()), ["idempotencyKey", "idempotencyScope", "requestSha256"]);
+  assert.deepEqual(detect(LedgerInternalCommandV1Schema, system()), ["idempotencyKey", "idempotencyScope", "requestSha256"]);
+  assert.deepEqual(detect(LedgerSystemActorV1Schema, { kind: "system", component: "m6b-delivery", expectedUserId: SYNTHETIC_USER }), []);
+  assert.deepEqual(detect(LedgerQuoteRecordV1Schema, SYNTHETIC_QUOTE()), ["contentSha256", "modelRef"]);
+  assert.deepEqual(detect(QuoteAllocationV1Schema, { quoteVersionId: "qv-1", operationIndex: 0, holdUnits: 3, chargeUnits: 2 }), []);
+  const base = { operationId: "op-1", evidenceRef: "ref-1" };
+  assert.deepEqual(detect(TransitionEvidenceV1Schema, { ...base, transition: "settle", evidenceKind: "persisted_delivered", hasVerifiedManifestHash: true, ownerAndRightsVerified: true }), ["evidenceRef"]);
+  assert.deepEqual(detect(TransitionEvidenceV1Schema, { ...base, transition: "release", evidenceKind: "verified_zero_charge_failure" }), ["evidenceRef"]);
+  assert.deepEqual(detect(TransitionEvidenceV1Schema, { ...base, transition: "hold", evidenceKind: "outcome_unknown", reason: "outcome_unknown" }), ["evidenceRef"]);
+  assert.deepEqual(detect(EligibilityDecisionV1Schema, { ok: true, cancellationWindowDisclosed: true }), []);
+  assert.deepEqual(detect(EligibilityDecisionV1Schema, { ok: false, code: "RIGHTS_INELIGIBLE" }), []);
+  assert.deepEqual(findLeakedInternalFields(DEFERRED_CAPABILITIES), []);
   assert.deepEqual(findLeakedInternalFields({ summary: { wallet: 1 } }), []);
   const src = readFileSync(new URL("../src/ledger-internal.ts", import.meta.url), "utf8");
   assert.doesNotMatch(src, /\.default\(\s*\d/, "no numeric defaults");
