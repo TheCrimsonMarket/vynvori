@@ -1,6 +1,6 @@
 # M3 C1c — Cross-engine triage (root causes)
 
-Status: **triage only. No fix is described here as verified on Firefox or WebKit.** Firefox and WebKit results exist only in root's CI; every claim about those engines below is either read from the first cross-engine run or is labelled a hypothesis.
+Status: **triage plus fixes for failures 1 and 3; failure 2 open; no fix verified on WebKit.** Firefox is verified by root's integrated run 41600819289 (87/87). Firefox and WebKit results exist only in root's CI; every other claim about those engines below is either read from the first cross-engine run or is labelled a hypothesis.
 
 Base: `main` @ `7a51d8e` (C2 merged, CI green: M0 foundation run 41597015812, M2 backend foundation run 41597015746).
 Source run: workflow run **41584515832**, job **125746776865**, head `6def9d1` of root's branch `claude/peaceful-heisenberg-cocinf` (PR #28). Chromium 151.0.7922.34: 87/87. Firefox 153.0: 86/87. WebKit 26.5: 85/87.
@@ -34,7 +34,7 @@ This is `allowsEval` in `node_modules/zod/v4/core/util.js` (zod 4.6.7, the only 
 
 The chunk also contains the code-generating `compile()` (`new Function(...)`) that the probe guards; with `jitless` it is never reached.
 
-**Why only Firefox reported it.** The violation happens on every engine. Reproduced in Chromium by listening for the DOM `securitypolicyviolation` event on the production build:
+**Why only Firefox reported it.** The violation was observed on Chromium (DOM event) and Firefox (console error); it is not verified on WebKit. Reproduced in Chromium by listening for the DOM `securitypolicyviolation` event on the production build:
 
 | Route | Violations (Chromium) |
 | --- | --- |
