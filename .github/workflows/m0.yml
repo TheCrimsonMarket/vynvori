@@ -58,9 +58,9 @@ jobs:
           retention-days: 14
   browser:
     runs-on: ubuntu-latest
-    # Three engines in one job. 25 min is a deliberately generous upper bound set before any Firefox/WebKit
-    # measurement (Chromium alone takes ~3.5 min); tighten it from the CI-measured per-engine durations.
-    timeout-minutes: 25
+    # Three engines in one job. Measured in CI (run 41584515832): the whole job took about 7 min
+    # (harness ~75 s Chromium, ~83 s Firefox, ~105 s WebKit, plus install and build); 15 min keeps about 2x headroom.
+    timeout-minutes: 15
     env:
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
