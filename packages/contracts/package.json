@@ -20,6 +20,7 @@
     "./state-machines": "./src/state-machines.ts",
     "./invariants": "./src/invariants.ts",
     "./internal": "./src/internal.ts",
+    "./ledger-internal": "./src/ledger-internal.ts",
     ".": "./src/index.ts"
   },
   "scripts": {
