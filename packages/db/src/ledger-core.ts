@@ -15,11 +15,15 @@ const S = "vynvori_ledger";
 const SAFE_MAX = BigInt(Number.MAX_SAFE_INTEGER);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const SOURCE_REF = /^[A-Za-z0-9._:-]{1,128}$/;
+/** Technical bounds, not business values (ADR-0021 S2 addendum). Private on purpose: the package exports no numeric constants. */
+const LOCK_TIMEOUT_MS = 10_000, STATEMENT_TIMEOUT_MS = 30_000, IDLE_IN_TRANSACTION_TIMEOUT_MS = 30_000;
+const CANONICAL_NODE_BUDGET = 10_000, CANONICAL_MAX_DEPTH = 32;
 
 /** Internal-only failure codes beyond the contract enum. None of them reaches a customer projection. */
 export type LedgerFailureCode = LedgerErrorCodeV1 | "INVALID_INPUT" | "GRANT_SOURCE_UNREGISTERED" | "DUPLICATE_CAUSE" | "DATABASE_REJECTED" | "DATABASE_ERROR" | "TRANSIENT";
+/** Carries only a code, a SQLSTATE and a constraint name. It never keeps the raw driver error: that can contain the idempotency key. */
 export class LedgerError extends Error {
-  constructor(readonly code: LedgerFailureCode, readonly sqlstate?: string, cause?: unknown) { super(code, cause === undefined ? undefined : { cause }); this.name = "LedgerError"; }
+  constructor(readonly code: LedgerFailureCode, readonly sqlstate?: string, readonly constraint?: string) { super(code); this.name = "LedgerError"; }
 }
 
 /** Business rejections that may be persisted under an idempotency key. Conflicts, absence and unknown outcomes never are. */
@@ -56,43 +60,67 @@ function assertUuid(value: unknown): string {
 }
 
 type Json = null | boolean | number | string | readonly Json[] | { readonly [key: string]: Json };
-function canonicalize(value: unknown, depth = 0): string {
-  if (depth > 32) throw new LedgerError("INVALID_INPUT"); // also stops cyclic payloads
+/** Canonical JSON with a node budget and ancestor tracking, so cycles and shared sub-structures cannot fan out exponentially. */
+function canonicalize(value: unknown, budget = { nodes: 0 }, ancestors: object[] = []): string {
+  if (++budget.nodes > CANONICAL_NODE_BUDGET || ancestors.length > CANONICAL_MAX_DEPTH) throw new LedgerError("INVALID_INPUT");
   if (value === null || typeof value === "boolean" || typeof value === "string") return JSON.stringify(value);
   if (typeof value === "number") { if (!Number.isFinite(value) || (Number.isInteger(value) && !Number.isSafeInteger(value))) throw new LedgerError("INVALID_INPUT"); return JSON.stringify(value); }
-  if (Array.isArray(value)) return "[" + value.map(item => canonicalize(item, depth + 1)).join(",") + "]";
-  if (typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+  if (Array.isArray(value) || (typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype)) {
+    if (ancestors.includes(value as object)) throw new LedgerError("INVALID_INPUT");
+    const next = [...ancestors, value as object];
+    if (Array.isArray(value)) return "[" + value.map(item => canonicalize(item, budget, next)).join(",") + "]";
     const record = value as Record<string, unknown>;
-    return "{" + Object.keys(record).sort().map(key => { if (record[key] === undefined) throw new LedgerError("INVALID_INPUT"); return JSON.stringify(key) + ":" + canonicalize(record[key], depth + 1); }).join(",") + "}";
+    return "{" + Object.keys(record).sort().map(key => { if (record[key] === undefined) throw new LedgerError("INVALID_INPUT"); return JSON.stringify(key) + ":" + canonicalize(record[key], budget, next); }).join(",") + "}";
   }
   throw new LedgerError("INVALID_INPUT"); // undefined, bigint, functions, class instances, symbols
 }
 /** Sorted-key canonical JSON -> SHA-256 hex. The ledger computes this itself; a caller-supplied hash is never accepted. */
 export function canonicalRequestHash(payload: Json): string { return createHash("sha256").update(canonicalize(payload)).digest("hex"); }
 
+const SQLSTATE = /^[0-9A-Z]{5}$/;
 /**
- * ADR-0021 D10 outcome classification for an error raised while COMMIT is in flight: definite ONLY for a server-reported
- * ERROR in SQLSTATE class 23 (integrity) or 40001/40002/40P01 (serialization/deadlock; 40003 is unknown). Everything else -- connection errors, no SQLSTATE,
- * FATAL, class 08/57 -- is unknown and is resolved only by replaying the same idempotency key.
+ * ADR-0021 D10, while COMMIT is in flight: definite ONLY for a server-reported ERROR in SQLSTATE class 23 (integrity) or 40
+ * (serialization/deadlock). Everything else -- connection errors, no SQLSTATE, FATAL, classes 08/57 -- is unknown and is
+ * resolved only by replaying the same idempotency key. Stricter than the class rule by one code: 40003
+ * (statement_completion_unknown) is by definition an unknown outcome and is never definite.
  */
 export function classifyCommitFailure(error: unknown): "definite" | "unknown" {
   if (typeof error !== "object" || error === null) return "unknown";
   const { code, severity } = error as { code?: unknown; severity?: unknown };
-  if (severity !== "ERROR" || typeof code !== "string" || !/^[0-9A-Z]{5}$/.test(code)) return "unknown";
-  return code.startsWith("23") || code === "40001" || code === "40002" || code === "40P01" ? "definite" : "unknown"; // 40003 (statement_completion_unknown) is an unknown outcome
+  if (severity !== "ERROR" || typeof code !== "string" || !SQLSTATE.test(code) || code === "40003") return "unknown";
+  return code.startsWith("23") || code.startsWith("40") ? "definite" : "unknown";
 }
-/** Errors raised BEFORE COMMIT is sent are definite rollbacks when the server reported them (any SQLSTATE with severity ERROR). */
+/**
+ * ADR-0021 D10, before COMMIT is sent: an error carrying a SQLSTATE and severity ERROR is a DEFINITE rollback in every class
+ * (including 57014 and server-reported 08xxx ERRORs). No SQLSTATE, no severity, any FATAL, and the driver's own client-level
+ * failures ("not queryable", "Client was closed", "Connection terminated") are unknown, in every phase. Relies on the server's
+ * English severity string; an unrecognised locale degrades to unknown, never to a wrong "definite".
+ */
 export function classifyStatementFailure(error: unknown): "definite" | "unknown" {
   if (typeof error !== "object" || error === null) return "unknown";
   const { code, severity } = error as { code?: unknown; severity?: unknown };
-  return severity === "ERROR" && typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? "definite" : "unknown";
+  return severity === "ERROR" && typeof code === "string" && SQLSTATE.test(code) ? "definite" : "unknown";
+}
+/** Errors that came back from a connection (tagged by the connection wrapper); a callback's own TypeError is never in this set. */
+const connectionErrors = new WeakSet<object>();
+function isOutcomeUnknown(error: unknown): boolean {
+  if (error instanceof LedgerError) return error.code === "LEDGER_OUTCOME_UNKNOWN";
+  if (error instanceof LedgerBusinessRejection || typeof error !== "object" || error === null) return false;
+  if (typeof (error as { severity?: unknown }).severity === "string") return classifyStatementFailure(error) === "unknown";
+  return connectionErrors.has(error); // no server report at all: the client cannot know what the server did
 }
 function mapDefinite(error: unknown): LedgerError {
   if (error instanceof LedgerError || error instanceof LedgerBusinessRejection) return error as LedgerError;
-  const code = typeof error === "object" && error !== null && typeof (error as { code?: unknown }).code === "string" ? (error as { code: string }).code : "";
-  if (code === "40001" || code === "40P01" || code === "55P03") return new LedgerError("TRANSIENT", code, error);
-  if (code.startsWith("23")) return new LedgerError("DATABASE_REJECTED", code, error);
-  return new LedgerError("DATABASE_ERROR", code || undefined, error);
+  const { code, constraint } = typeof error === "object" && error !== null ? (error as { code?: unknown; constraint?: unknown }) : {};
+  const sqlstate = typeof code === "string" ? code : undefined, name = typeof constraint === "string" ? constraint : undefined;
+  if (sqlstate === "40001" || sqlstate === "40P01" || sqlstate === "55P03" || sqlstate === "57014") return new LedgerError("TRANSIENT", sqlstate, name);
+  if (sqlstate?.startsWith("23")) return new LedgerError("DATABASE_REJECTED", sqlstate, name);
+  return new LedgerError("DATABASE_ERROR", sqlstate, name);
+}
+/** Server-reported errors map by SQLSTATE; anything else thrown by a callback (a bug of its own) is a generic DATABASE_ERROR without its message. */
+function toLedgerError(error: unknown): LedgerError | LedgerBusinessRejection {
+  if (error instanceof LedgerError || error instanceof LedgerBusinessRejection) return error;
+  return typeof error === "object" && error !== null && typeof (error as { severity?: unknown }).severity === "string" ? mapDefinite(error) : new LedgerError("DATABASE_ERROR");
 }
 const unknownOutcome = () => new LedgerError("LEDGER_OUTCOME_UNKNOWN");
 
@@ -104,8 +132,16 @@ export interface LedgerConn extends LedgerQueryable { release?(destroy?: boolean
 /** A pool, or an object that hands out an exclusive connection (fault-injection tests). A bare Client is deliberately not accepted: it cannot be destroyed and cannot isolate concurrent commands. */
 export type LedgerDb = Pool | { acquire(): Promise<LedgerConn> };
 async function acquire(db: LedgerDb): Promise<LedgerConn> {
-  if (db instanceof Pool) return (await db.connect()) as unknown as LedgerConn;
-  return db.acquire();
+  let conn: LedgerConn;
+  if (db instanceof Pool) {
+    const client = await db.connect();
+    // A checked-out pg client emits 'error' when its connection ends. Without a listener that crashes the process; with one
+    // the next statement fails ("not queryable") and is classified. A client that saw an error is never returned to the pool.
+    let broken = false; const onError = () => { broken = true; };
+    client.on("error", onError);
+    conn = { query: (text, values) => client.query(text, values as never) as unknown as Promise<LedgerQueryResult>, release: destroy => { client.off("error", onError); client.release(destroy || broken); } };
+  } else conn = await db.acquire();
+  return { query: async (text, values) => { try { return await conn.query(text, values); } catch (error) { if (typeof error === "object" && error !== null) connectionErrors.add(error); throw error; } }, release: destroy => conn.release?.(destroy) };
 }
 
 // ---- wallets -------------------------------------------------------------------------------------------------------
@@ -140,6 +176,8 @@ export async function getWalletSummary(db: LedgerQueryable, userId: string): Pro
 export type LedgerCommandSpec =
   | { readonly actor: "system"; readonly component: string; readonly expectedUserId: string; readonly userId: string; readonly commandKind: string; readonly idempotencyKey: string; readonly payload: Json }
   | { readonly actor: "customer"; readonly userId: string; readonly commandKind: string; readonly idempotencyKey: string; readonly payload: Json };
+/** Options can only SHORTEN the lock wait (tests, callers with tighter budgets); they can never lengthen it. */
+export interface LedgerCommandOptions { readonly lockTimeoutMs?: number }
 
 export interface LedgerEntryRecord {
   readonly entryId: string; readonly commandId: string; readonly entryKind: LedgerEntryKindV1;
@@ -147,12 +185,15 @@ export interface LedgerEntryRecord {
   readonly causeKind: string; readonly causeRef: string;
 }
 export interface LedgerCommandResult { readonly commandId: string; readonly replayed: boolean; readonly entries: readonly LedgerEntryRecord[] }
-/** Handle given to a command callback: the open transaction, scoped to one command. Internal code only. */
-export interface LedgerTx extends LedgerQueryable { readonly commandId: string; readonly userId: string; readonly actor: "system" | "customer" }
+/** Handle given to a command callback: the open transaction, scoped to one command. Only runLedgerCommand can issue one; it dies when the command ends. */
+export interface LedgerTx extends LedgerQueryable { readonly commandId: string; readonly userId: string; readonly actor: "system" | "customer"; readonly requestSha256: string }
+const issuedHandles = new WeakSet<object>();
 
+/** The idempotency hash binds the actor kind as well as the payload, so a customer command can never replay a system command's result. */
+const requestHashFor = (actor: "system" | "customer", payload: Json) => canonicalRequestHash({ actor, payload });
 function parseCommand(spec: LedgerCommandSpec) {
   const base = {
-    idempotencyScope: `${spec.userId}:${spec.commandKind}`, idempotencyKey: spec.idempotencyKey, requestSha256: canonicalRequestHash(spec.payload),
+    idempotencyScope: `${spec.userId}:${spec.commandKind}`, idempotencyKey: spec.idempotencyKey, requestSha256: requestHashFor(spec.actor, spec.payload),
     userId: spec.userId, commandKind: spec.commandKind,
   };
   const parsed = spec.actor === "system"
@@ -192,7 +233,7 @@ const lockWallet = async (conn: LedgerQueryable, userId: string) => {
 /** COMMIT with D10 classification. `SET CONSTRAINTS ALL IMMEDIATE` runs first so deterministic deferred failures are definite. */
 async function finish(conn: LedgerConn): Promise<void> {
   try { await conn.query("SET CONSTRAINTS ALL IMMEDIATE"); }
-  catch (error) { throw classifyStatementFailure(error) === "definite" ? mapDefinite(error) : unknownOutcome(); }
+  catch (error) { throw isOutcomeUnknown(error) ? unknownOutcome() : mapDefinite(error); }
   try { await conn.query("COMMIT"); }
   catch (error) { throw classifyCommitFailure(error) === "definite" ? mapDefinite(error) : unknownOutcome(); }
 }
@@ -200,56 +241,53 @@ async function finish(conn: LedgerConn): Promise<void> {
 /**
  * The single place that opens a ledger transaction. Wallet row locked first; the command row is inserted next (ON CONFLICT DO
  * NOTHING); a prior row with the same key replays (same canonical hash) or conflicts (different hash) without running the
- * callback. Terminal business rejections are recorded under the key in their own small transaction and replayed identically;
- * transient failures and unknown outcomes are NOT recorded -- retry the same key. The returned entries are reconstructed from
- * the ledger, never from the callback. A connection that produced an unknown outcome is destroyed, never reused.
+ * callback. A terminal business rejection is recorded under the key IN THE SAME TRANSACTION (rolled back to a savepoint, the
+ * rejected row inserted, committed) while the wallet lock is still held, so no top-up can slip in between the decision and its
+ * record. Guarantee: once a key is recorded, its callback never runs again. Transient failures and unknown outcomes are NOT
+ * recorded -- retry the same key. Returned entries are reconstructed from the ledger, never from the callback. A connection that
+ * produced an unknown outcome is destroyed, never reused.
  */
-export async function runLedgerCommand(db: LedgerDb, spec: LedgerCommandSpec, callback: (tx: LedgerTx) => Promise<void>): Promise<LedgerCommandResult> {
+export async function runLedgerCommand(db: LedgerDb, spec: LedgerCommandSpec, callback: (tx: LedgerTx) => Promise<void>, options: LedgerCommandOptions = {}): Promise<LedgerCommandResult> {
   const command = parseCommand(spec);
+  const lockMs = options.lockTimeoutMs === undefined ? LOCK_TIMEOUT_MS : Math.min(LOCK_TIMEOUT_MS, assertPositiveUnits(options.lockTimeoutMs));
   const conn = await acquire(db);
-  let destroy = false;
-  const rollback = () => conn.query("ROLLBACK").then(() => undefined, () => { destroy = true; });
-  const fail = async (error: unknown): Promise<never> => {
-    if (isOutcomeUnknown(error)) { destroy = true; throw unknownOutcome(); }
-    await rollback();
-    throw error instanceof LedgerError || error instanceof LedgerBusinessRejection ? error : mapDefinite(error);
-  };
+  const state = { destroy: false, done: false };
   try {
-    try { return await attempt(conn, command, spec, callback); }
-    catch (error) {
-      if (error instanceof LedgerBusinessRejection && !error.replayed) {
-        await rollback();
-        if (destroy) throw error; // the connection is broken: surface the original rejection, record nothing
-        try { return await recordRejection(conn, command, error.code); } catch (inner) { return await fail(inner); }
-      }
-      return await fail(error);
-    }
-  } finally { conn.release?.(destroy); }
+    return await attempt(conn, command, spec, callback, lockMs, state);
+  } catch (error) {
+    if (isOutcomeUnknown(error)) { state.destroy = true; throw unknownOutcome(); }
+    if (!state.done) await conn.query("ROLLBACK").then(() => undefined, () => { state.destroy = true; });
+    throw toLedgerError(error);
+  } finally { conn.release?.(state.destroy); }
 }
 
-/** A failure after which the caller cannot know whether the transaction committed: lost connection, FATAL, class 08/57, or an already-classified unknown. */
-function isOutcomeUnknown(error: unknown): boolean {
-  if (error instanceof LedgerError) return error.code === "LEDGER_OUTCOME_UNKNOWN";
-  if (error instanceof LedgerBusinessRejection || typeof error !== "object" || error === null) return false;
-  const { code, severity, message } = error as { code?: unknown; severity?: unknown; message?: unknown };
-  if (typeof severity === "string") return severity !== "ERROR" || (typeof code === "string" && (code.startsWith("08") || code.startsWith("57")));
-  return (typeof code === "string" && /^E(CONNRESET|PIPE|TIMEDOUT|CONNREFUSED|NOTFOUND)$/.test(code)) || (typeof message === "string" && /connection (terminated|closed|ended)|terminating connection/i.test(message));
-}
-
-async function attempt(conn: LedgerConn, command: ReturnType<typeof parseCommand>, spec: LedgerCommandSpec, callback: (tx: LedgerTx) => Promise<void>): Promise<LedgerCommandResult> {
+async function attempt(conn: LedgerConn, command: ReturnType<typeof parseCommand>, spec: LedgerCommandSpec, callback: (tx: LedgerTx) => Promise<void>, lockMs: number, state: { destroy: boolean; done: boolean }): Promise<LedgerCommandResult> {
   await conn.query("BEGIN");
+  await conn.query(`SET LOCAL lock_timeout = '${lockMs}ms'`);
+  await conn.query(`SET LOCAL statement_timeout = '${STATEMENT_TIMEOUT_MS}ms'`);
+  await conn.query(`SET LOCAL idle_in_transaction_session_timeout = '${IDLE_IN_TRANSACTION_TIMEOUT_MS}ms'`);
   await lockWallet(conn, command.userId);
+  await conn.query("SAVEPOINT ledger_command");
   const commandId = await insertCommand(conn, command, "applied", null);
-  if (!commandId) { // same scope + key already exists (serialized by the wallet lock): replay or conflict, never execute
+  if (!commandId) { // same scope + key already recorded (serialized by the wallet lock): replay or conflict, never execute
     const result = await replay(conn, command);
-    await conn.query("ROLLBACK");
+    await conn.query("ROLLBACK").catch(() => { state.destroy = true; }); state.done = true;
     return result;
   }
   let open = true;
-  try { await callback({ commandId, userId: command.userId, actor: spec.actor, query: (text, values) => open ? conn.query(text, values) : Promise.reject(new LedgerError("INVALID_TRANSITION")) }); }
-  finally { open = false; } // a retained handle must never reach a connection that has moved on
+  const tx: LedgerTx = { commandId, userId: command.userId, actor: spec.actor, requestSha256: command.requestSha256, query: (text, values) => open ? conn.query(text, values) : Promise.reject(new LedgerError("INVALID_TRANSITION")) };
+  issuedHandles.add(tx);
+  try { await callback(tx); }
+  catch (error) {
+    open = false;
+    if (!(error instanceof LedgerBusinessRejection) || error.replayed) throw error;
+    await conn.query("ROLLBACK TO SAVEPOINT ledger_command");
+    if (!await insertCommand(conn, command, "rejected", error.code)) throw unknownOutcome(); // cannot happen under the wallet lock; fail closed
+    await finish(conn); state.done = true;
+    throw new LedgerBusinessRejection(error.code);
+  } finally { open = false; } // a retained handle must never reach a connection that has moved on
   const entries = await entriesOf(conn, commandId, command.userId);
-  await finish(conn);
+  await finish(conn); state.done = true;
   return { commandId, replayed: false, entries };
 }
 
@@ -261,26 +299,20 @@ async function replay(conn: LedgerQueryable, command: ReturnType<typeof parseCom
   return { commandId: prior.commandId, replayed: true, entries: await entriesOf(conn, prior.commandId, command.userId) };
 }
 
-/** Records the rejection in its own small transaction, then throws it. If a concurrent same-key command won meanwhile, its result is returned instead. */
-async function recordRejection(conn: LedgerConn, command: ReturnType<typeof parseCommand>, code: PersistableRejectionCode): Promise<LedgerCommandResult> {
-  await conn.query("BEGIN");
-  await lockWallet(conn, command.userId);
-  const commandId = await insertCommand(conn, command, "rejected", code);
-  if (!commandId) { const result = await replay(conn, command); await conn.query("ROLLBACK"); return result; }
-  await finish(conn);
-  throw new LedgerBusinessRejection(code);
-}
-
 // ---- grants --------------------------------------------------------------------------------------------------------
 
 /**
- * Appends a `grant` entry. System actor only, and only against an already-registered grant source: this module has no function that
- * registers one, so with no source registered no credit can be created. A grant never authorizes anything (D7).
+ * Appends a `grant` entry. System actor only, only through a handle issued by runLedgerCommand, and only against an
+ * already-registered grant source: this module has no function that registers one, so with no source registered no credit can
+ * be created. The command's idempotency hash must equal the hash of THIS entry (actor + source + ref + amount), so a caller
+ * cannot record one effect under a key and write another. A grant never authorizes anything (D7).
  */
 export async function appendGrantEntry(tx: LedgerTx, input: { grantSourceId: string; sourceRef: string; units: number }): Promise<{ entryId: string }> {
-  if (tx.actor !== "system") throw new LedgerError("INVALID_TRANSITION");
   const units = assertPositiveUnits(input.units), sourceId = assertUuid(input.grantSourceId);
   if (typeof input.sourceRef !== "string" || !SOURCE_REF.test(input.sourceRef)) throw new LedgerError("INVALID_INPUT");
+  if (tx.actor !== "system") throw new LedgerError("INVALID_TRANSITION");
+  if (!issuedHandles.has(tx)) throw new LedgerError("INVALID_INPUT"); // hand-built or copied handles are rejected
+  if (requestHashFor("system", { grantSourceId: sourceId, sourceRef: input.sourceRef, units }) !== tx.requestSha256) throw new LedgerError("INVALID_INPUT");
   if ((await tx.query(`SELECT 1 FROM ${S}.ledger_grant_sources WHERE grant_source_id = $1`, [sourceId])).rows.length !== 1) throw new LedgerError("GRANT_SOURCE_UNREGISTERED");
   const entryId = randomUUID();
   try {
@@ -288,7 +320,7 @@ export async function appendGrantEntry(tx: LedgerTx, input: { grantSourceId: str
       `INSERT INTO ${S}.ledger_entries(entry_id, user_id, command_id, entry_kind, delta_available, delta_reserved, delta_held, delta_consumed, delta_external, grant_source_id, source_ref, cause_kind, cause_ref)
        VALUES($1,$2,$3,'grant',$4::bigint,0,0,0,-$4::bigint,$5::uuid,$6::text,'grant',$5::uuid::text || ':' || $6::text)`, [entryId, tx.userId, tx.commandId, String(units), sourceId, input.sourceRef]);
   } catch (error) {
-    if ((error as { code?: string; constraint?: string }).code === "23505" && (error as { constraint?: string }).constraint === "ledger_entries_cause_unique") throw new LedgerError("DUPLICATE_CAUSE", "23505");
+    if ((error as { code?: string; constraint?: string }).code === "23505" && (error as { constraint?: string }).constraint === "ledger_entries_cause_unique") throw new LedgerError("DUPLICATE_CAUSE", "23505", "ledger_entries_cause_unique");
     throw error;
   }
   return { entryId };

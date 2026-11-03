@@ -5,7 +5,7 @@ import { appendGrantEntry, ensureWallet, runLedgerCommand, type LedgerDb } from 
 import { applyLedgerMigrations, ledgerMigrationPlan, LEDGER_TEST_DATABASE } from "../src/ledger-migrations";
 
 /** Fixture allow-list (ADR-0021 D15). Later steps append their file's name here. */
-export const LEDGER_TEST_NAMES = ["migrations", "fixture", "concurrency", "core"] as const;
+export const LEDGER_TEST_NAMES = ["migrations", "fixture", "concurrency", "core", "privileges"] as const;
 export type LedgerTestName = (typeof LEDGER_TEST_NAMES)[number];
 export const databaseFor = (name: LedgerTestName) => `vynvori_m7_${name}_test`;
 
@@ -47,6 +47,22 @@ export function assertDisposableTarget(connection: string, database: string, env
 export async function assertServerIsDisposableSynthetic(client: { query(text: string): Promise<{ rows: { u: string; su: string }[] }> }) {
   const row = (await client.query("SELECT current_user::text AS u, current_setting('is_superuser') AS su")).rows[0];
   if (!row || row.u !== "synthetic" || row.su !== "on") throw new Error("Refusing non-disposable server");
+}
+
+/** Creates (drop + create) the caller's EMPTY disposable database and returns a superuser-fixture connection to it. Same guards as freshLedger. */
+export async function freshEmptyDatabase(name: LedgerTestName, connection = ledgerTarget.url): Promise<Client> {
+  if (!connection) throw new Error("CI_REQUIRE_PG_TESTS=1 requires M7_TEST_POSTGRES_URL or M2_CREATIVE_DATABASE_URL");
+  const database = databaseFor(name), url = assertDisposableTarget(connection, database);
+  const admin = new URL(url.toString()); admin.pathname = "/postgres";
+  const adminClient = new Client({ connectionString: admin.toString() }); await adminClient.connect();
+  try {
+    await assertServerIsDisposableSynthetic(adminClient);
+    await adminClient.query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`);
+    await adminClient.query(`CREATE DATABASE ${database}`);
+  } finally { await adminClient.end(); }
+  url.pathname = "/" + database;
+  const client = new Client({ connectionString: url.toString() }); await client.connect();
+  return client;
 }
 
 /** Creates (drop + create) the caller's disposable database, rebuilds vynvori_identity, applies the ledger plan. */
@@ -91,6 +107,19 @@ export async function ledgerPool(name: LedgerTestName, kind: keyof typeof POOL_C
   const pool = new Pool({ connectionString: url.toString(), max: sized.max });
   pool.on("error", () => undefined); // an idle-client error must not crash the test process; the failing query surfaces it
   return { pool, ...sized, serverMax };
+}
+/** Standard-cap pool whose every connection runs as `role` (SET ROLE from the superuser fixture login) with an optional search_path. */
+export async function ledgerPoolAs(name: LedgerTestName, role: string, options: { searchPath?: string; max?: number } = {}, connection = ledgerTarget.url) {
+  if (!connection) throw new Error("no test database configured");
+  if (!/^[a-z][a-z0-9_]{2,62}$/.test(role)) throw new Error("bad role name");
+  const database = databaseFor(name), url = assertDisposableTarget(connection, database); url.pathname = "/" + database;
+  const pool = new Pool({ connectionString: url.toString(), max: Math.min(options.max ?? POOL_CAPS.standard, POOL_CAPS.standard) });
+  pool.on("error", () => undefined);
+  pool.on("connect", client => { // queued ahead of any caller statement on the same client
+    client.on("error", () => undefined);
+    void client.query(`SET ROLE ${role}`).then(() => options.searchPath ? client.query(`SET search_path = ${options.searchPath}`) : undefined).catch(() => undefined);
+  });
+  return pool;
 }
 /** Pure D15 sizing: the cap clamped to max_connections minus the reserved superuser slots; degraded when the cap does not fit. */
 export function poolBudget(serverMax: number, kind: keyof typeof POOL_CAPS) {

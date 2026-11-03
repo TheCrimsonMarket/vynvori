@@ -1,4 +1,5 @@
 import test from "node:test";
+import { inspect } from "node:util";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { Client, Pool, PoolClient } from "pg";
@@ -46,7 +47,32 @@ test("commit-failure classifier: definite only for server ERROR in SQLSTATE clas
   for (const odd of [null, undefined, "boom", 7]) assert.equal(classifyCommitFailure(odd), "unknown");
   // before COMMIT is sent, any server-reported ERROR is a definite rollback
   assert.equal(classifyStatementFailure(dbError("23505")), "definite"); assert.equal(classifyStatementFailure(dbError("22003")), "definite");
+  assert.equal(classifyStatementFailure(dbError("57014")), "definite", "statement timeout / cancel is a server-reported ERROR");
+  assert.equal(classifyStatementFailure(dbError("08006")), "definite", "a server-reported 08xxx ERROR is definite before COMMIT");
   assert.equal(classifyStatementFailure(dbError("57P01", "FATAL")), "unknown"); assert.equal(classifyStatementFailure(new Error("socket")), "unknown");
+  for (const message of ["Client has encountered a connection error and is not queryable", "Client was closed and is not queryable", "Connection terminated unexpectedly", "Connection terminated"])
+    for (const classify of [classifyStatementFailure, classifyCommitFailure]) assert.equal(classify(new Error(message)), "unknown", message);
+  assert.equal(classifyStatementFailure(Object.assign(new Error("x"), { severity: "ERROR" })), "unknown", "no SQLSTATE");
+  assert.equal(classifyStatementFailure(Object.assign(new Error("x"), { code: "22003" })), "unknown", "no severity");
+});
+
+test("canonicalRequestHash bounds work: cycles, shared deep structures and huge payloads are rejected quickly", () => {
+  const cyclic: Record<string, unknown> = {}; cyclic["self"] = cyclic;
+  assert.throws(() => canonicalRequestHash(cyclic as never), ledgerCode("INVALID_INPUT"));
+  let shared: unknown = { leaf: 1 };
+  for (let i = 0; i < 40; i++) shared = { a: shared, b: shared }; // 2^40 paths without a budget
+  const started = Date.now();
+  assert.throws(() => canonicalRequestHash(shared as never), ledgerCode("INVALID_INPUT"));
+  assert.throws(() => canonicalRequestHash(Array.from({ length: 20_000 }, () => 1)), ledgerCode("INVALID_INPUT"));
+  assert.ok(Date.now() - started < 2000, "rejected without exponential work");
+});
+
+test("a hand-built or copied transaction handle cannot append a grant", async () => {
+  const userId = randomUUID(), grantSourceId = randomUUID(), units = SYNTHETIC_UNITS, sourceRef = "ref-handle";
+  let touched = 0;
+  const forged: LedgerTx = { commandId: randomUUID(), userId, actor: "system", requestSha256: canonicalRequestHash({ actor: "system", payload: { grantSourceId, sourceRef, units } }), query: async () => { touched++; throw new Error("no"); } };
+  await assert.rejects(appendGrantEntry(forged, { grantSourceId, sourceRef, units }), ledgerCode("INVALID_INPUT"));
+  assert.equal(touched, 0);
 });
 
 test("business rejections: only persistable codes can be constructed", () => {
@@ -69,7 +95,7 @@ test("invalid input is rejected before any connection or SQL is used", async () 
   await assert.rejects(run({ ...base, payload: { n: NaN } }), ledgerCode("INVALID_INPUT"));
   await assert.rejects(run({ actor: "customer", userId, commandKind: "x_y", idempotencyKey: key("unit"), payload: { n: 2 ** 53 } }), ledgerCode("INVALID_INPUT"));
   assert.equal(touched, 0);
-  const tx: LedgerTx = { commandId: randomUUID(), userId, actor: "system", query: async () => { touched++; throw new Error("must not query"); } };
+  const tx: LedgerTx = { commandId: randomUUID(), userId, actor: "system", requestSha256: "a".repeat(64), query: async () => { touched++; throw new Error("must not query"); } };
   const grant = { grantSourceId: randomUUID(), sourceRef: "ref-1", units: SYNTHETIC_UNITS };
   for (const bad of [{ ...grant, units: NaN }, { ...grant, units: -1 }, { ...grant, units: 0 }, { ...grant, units: 1.5 }, { ...grant, units: 2 ** 53 }, { ...grant, units: "5" as never }, { ...grant, sourceRef: "bad ref!" }, { ...grant, sourceRef: "" }, { ...grant, grantSourceId: "nope" }])
     await assert.rejects(appendGrantEntry(tx, bad), ledgerCode("INVALID_INPUT"));
@@ -260,7 +286,7 @@ test("wallet, command log and ledger enforce their invariants in disposable Post
 
     await t.test("transient and unexpected failures roll back fully and are not recorded; the same key works afterwards", async () => {
       const user = await syntheticProfileWithWallet(client), k = key("transient");
-      const spec = { actor: "system" as const, component: "synthetic-test", expectedUserId: user, userId: user, commandKind: "grant_credits", idempotencyKey: k, payload: { n: 1 } };
+      const spec = { actor: "system" as const, component: "synthetic-test", expectedUserId: user, userId: user, commandKind: "grant_credits", idempotencyKey: k, payload: { grantSourceId: source, sourceRef: "tr-1", units: SYNTHETIC_UNITS } };
       const grant = (ref: string) => (tx: LedgerTx) => appendGrantEntry(tx, { grantSourceId: source, sourceRef: ref, units: SYNTHETIC_UNITS }).then(() => undefined);
       const count = async () => (await raw(client, "SELECT (SELECT count(*) FROM vynvori_ledger.ledger_commands WHERE user_id=$1)::int c, (SELECT count(*) FROM vynvori_ledger.ledger_entries WHERE user_id=$1)::int e", [user])).rows[0];
       await assert.rejects(runLedgerCommand(pool, spec, async tx => { await grant("tr-1")(tx); throw dbError("40001"); }), ledgerCode("TRANSIENT"));
@@ -332,6 +358,107 @@ test("wallet, command log and ledger enforce their invariants in disposable Post
       assert.equal(replay.replayed, false); assert.equal(await entriesFor(user), 1);
       assert.equal((await grantSyntheticCredits(pool, { userId: user, grantSourceId: source, sourceRef: "kill-1", units: SYNTHETIC_UNITS, idempotencyKey: k })).replayed, true);
       assert.equal(await entriesFor(user), 1);
+    });
+
+    const rejectionSpec = (user: string, idempotencyKey: string) => ({ actor: "customer" as const, userId: user, commandKind: "synthetic_press", idempotencyKey, payload: { need: SYNTHETIC_UNITS } });
+    const terminate = async (pid: number) => {
+      await raw(client, "SELECT pg_terminate_backend($1)", [pid]);
+      for (let i = 0; i < 100 && (await raw(client, "SELECT 1 FROM pg_stat_activity WHERE pid=$1", [pid])).rows.length; i++) await new Promise(resolve => setTimeout(resolve, 50));
+    };
+
+    await t.test("a rejection is recorded in the SAME transaction while the wallet lock is held; a concurrent top-up cannot interleave", async () => {
+      const user = await syntheticProfileWithWallet(client), k = key("samertx");
+      let release!: () => void, entered!: () => void;
+      const latch = new Promise<void>(resolve => { release = resolve; }), inCallback = new Promise<void>(resolve => { entered = resolve; });
+      const rejected = runLedgerCommand(pool, rejectionSpec(user, k), async () => { entered(); await latch; throw new LedgerBusinessRejection("INSUFFICIENT_CREDITS"); }).catch((e: unknown) => e);
+      await inCallback;
+      let topUpDone = false, observed: unknown[] = [];
+      const effect = { grantSourceId: source, sourceRef: "race-topup", units: 5 * SYNTHETIC_UNITS };
+      const topUp = runLedgerCommand(pool, { actor: "system", component: "synthetic-test", expectedUserId: user, userId: user, commandKind: "grant_credits", idempotencyKey: key("topup"), payload: effect }, async tx => {
+        observed = (await tx.query("SELECT outcome FROM vynvori_ledger.ledger_commands WHERE user_id=$1 AND command_kind='synthetic_press'", [user])).rows; // first statement after the wallet lock was granted
+        await appendGrantEntry(tx, effect);
+      }).then(() => { topUpDone = true; });
+      await new Promise(resolve => setTimeout(resolve, 300));
+      assert.equal(topUpDone, false, "the top-up waits on the wallet lock for the whole decision");
+      release(); const outcome = await rejected; await topUp;
+      assert.ok(outcome instanceof LedgerBusinessRejection && outcome.code === "INSUFFICIENT_CREDITS");
+      assert.deepEqual(observed, [{ outcome: "rejected" }], "by the time the top-up holds the lock, the rejection is already durable: no gap between decision and record");
+      assert.equal((await getWalletSummary(client, user)).availableUnits, 5 * SYNTHETIC_UNITS);
+    });
+
+    await t.test("two concurrent same-key commands whose callback rejects run the callback exactly once", async () => {
+      const user = await syntheticProfileWithWallet(client), k = key("once");
+      let executions = 0;
+      const results = await Promise.all(Array.from({ length: 5 }, () => runLedgerCommand(pool, rejectionSpec(user, k), async () => { executions++; await new Promise(resolve => setTimeout(resolve, 50)); throw new LedgerBusinessRejection("INSUFFICIENT_CREDITS"); }).catch((e: unknown) => e)));
+      assert.equal(executions, 1);
+      assert.ok(results.every(r => r instanceof LedgerBusinessRejection && r.code === "INSUFFICIENT_CREDITS"));
+      assert.equal(results.filter(r => !(r as LedgerBusinessRejection).replayed).length, 1, "exactly one original, the rest replays");
+    });
+
+    await t.test("a stalled lock holder makes a waiter fail transiently and releases its connection", async () => {
+      const user = await syntheticProfileWithWallet(client);
+      await raw(client, "BEGIN"); await raw(client, "SELECT 1 FROM vynvori_ledger.wallets WHERE user_id=$1 FOR UPDATE", [user]);
+      try {
+        const waiters = await Promise.allSettled(Array.from({ length: 4 }, (_, i) => runLedgerCommand(pool, { actor: "customer", userId: user, commandKind: "stalled_probe", idempotencyKey: key("stall" + i), payload: {} }, async () => undefined, { lockTimeoutMs: 200 })));
+        for (const w of waiters) assert.ok(w.status === "rejected" && (w.reason as LedgerError).code === "TRANSIENT" && (w.reason as LedgerError).sqlstate === "55P03");
+      } finally { await raw(client, "ROLLBACK"); }
+      assert.equal((await runLedgerCommand(pool, { actor: "customer", userId: user, commandKind: "stalled_probe", idempotencyKey: key("after"), payload: {} }, async () => undefined)).replayed, false, "the pool was not pinned");
+      await assert.rejects(runLedgerCommand(pool, { actor: "customer", userId: user, commandKind: "stalled_probe", idempotencyKey: key("opt"), payload: {} }, async () => undefined, { lockTimeoutMs: 0 }), ledgerCode("INVALID_INPUT"));
+    });
+
+    await t.test("the idempotency hash binds the actor kind and the grant's own effect", async () => {
+      const user = await syntheticProfileWithWallet(client), k = key("bind"), effect = { grantSourceId: source, sourceRef: "bind-1", units: SYNTHETIC_UNITS };
+      const original = await grantSyntheticCredits(pool, { userId: user, ...effect, idempotencyKey: k });
+      await assert.rejects(runLedgerCommand(pool, { actor: "customer", userId: user, commandKind: "grant_credits", idempotencyKey: k, payload: effect }, async () => undefined), ledgerCode("IDEMPOTENCY_CONFLICT"), "a customer command cannot replay a system grant's result");
+      await assert.rejects(runLedgerCommand(pool, { actor: "system", component: "synthetic-test", expectedUserId: user, userId: user, commandKind: "grant_credits", idempotencyKey: k, payload: {} },
+        tx => appendGrantEntry(tx, { ...effect, units: SYNTHETIC_UNITS + 1 }).then(() => undefined)), ledgerCode("IDEMPOTENCY_CONFLICT"), "same key, different effect, empty caller payload: never a silent replay");
+      await assert.rejects(runLedgerCommand(pool, { actor: "system", component: "synthetic-test", expectedUserId: user, userId: user, commandKind: "grant_credits", idempotencyKey: key("empty"), payload: {} },
+        tx => appendGrantEntry(tx, { ...effect, sourceRef: "bind-2" }).then(() => undefined)), ledgerCode("INVALID_INPUT"), "an empty payload cannot hide the entry being written");
+      await assert.rejects(runLedgerCommand(pool, { actor: "system", component: "synthetic-test", expectedUserId: user, userId: user, commandKind: "grant_credits", idempotencyKey: key("smuggle"), payload: { ...effect, units: SYNTHETIC_UNITS } },
+        tx => appendGrantEntry(tx, { ...effect, units: SYNTHETIC_UNITS + 1 }).then(() => undefined)), ledgerCode("INVALID_INPUT"), "the entry written must be the entry declared");
+      assert.equal(original.replayed, false); assert.equal((await getWalletSummary(client, user)).availableUnits, SYNTHETIC_UNITS);
+    });
+
+    await t.test("TRUNCATE ... CASCADE through the identity table hits the live append-only triggers, not PostgreSQL's FK refusal", async () => {
+      await grantSyntheticCredits(pool, { userId: alice, grantSourceId: source, sourceRef: "cascade-seed", units: SYNTHETIC_UNITS });
+      await assert.rejects(raw(client, "TRUNCATE vynvori_identity.profiles CASCADE"), sqlstate("23000", /append-only/));
+      await assert.rejects(raw(client, "TRUNCATE vynvori_ledger.ledger_entries"), sqlstate("23000", /append-only/));
+    });
+
+    await t.test("a REAL pool without any test listener survives a connection ended mid-command: LEDGER_OUTCOME_UNKNOWN, then recovery", async () => {
+      const user = await syntheticProfileWithWallet(client);
+      await assert.rejects(runLedgerCommand(pool, { actor: "customer", userId: user, commandKind: "kill_idle", idempotencyKey: key("killidle"), payload: {} }, async tx => {
+        const pid = (await tx.query("SELECT pg_backend_pid() AS pid")).rows[0]!["pid"] as number;
+        await terminate(pid); await new Promise(resolve => setTimeout(resolve, 200)); // the connection ends while NO query is pending: this is the unhandled 'error' event case
+      }), ledgerCode("LEDGER_OUTCOME_UNKNOWN"));
+      await assert.rejects(runLedgerCommand(pool, { actor: "customer", userId: user, commandKind: "kill_query", idempotencyKey: key("killquery"), payload: {} }, async tx => {
+        const pid = (await tx.query("SELECT pg_backend_pid() AS pid")).rows[0]!["pid"] as number;
+        await terminate(pid); await tx.query("SELECT 1");
+      }), ledgerCode("LEDGER_OUTCOME_UNKNOWN"), "a connection killed inside the callback");
+      assert.equal((await runLedgerCommand(pool, { actor: "customer", userId: user, commandKind: "kill_idle", idempotencyKey: key("recover"), payload: {} }, async () => undefined)).replayed, false, "the pool recovered");
+    });
+
+    await t.test("D10 branches inside the callback: a server ERROR (57014) is definite; the callback's own bug is not a database outcome", async () => {
+      const user = await syntheticProfileWithWallet(client);
+      const run = (kind: string, callback: (tx: LedgerTx) => Promise<void>) => runLedgerCommand(pool, { actor: "customer", userId: user, commandKind: kind, idempotencyKey: key(kind), payload: {} }, callback);
+      await assert.rejects(run("stmt_timeout", async tx => { await tx.query("SET LOCAL statement_timeout = '50ms'"); await tx.query("SELECT pg_sleep(2)"); }), (e: unknown) => e instanceof LedgerError && e.code === "TRANSIENT" && e.sqlstate === "57014", "real statement timeout: definite rollback");
+      await assert.rejects(run("synthetic_57014", async () => { throw dbError("57014"); }), ledgerCode("TRANSIENT"));
+      await assert.rejects(run("synthetic_08006", async () => { throw dbError("08006"); }), ledgerCode("DATABASE_ERROR"), "server-reported 08xxx ERROR is definite before COMMIT");
+      await assert.rejects(run("synthetic_fatal", async () => { throw dbError("57P01", "FATAL"); }), ledgerCode("LEDGER_OUTCOME_UNKNOWN"));
+      await assert.rejects(run("own_bug", async () => { throw new TypeError("callback bug"); }), ledgerCode("DATABASE_ERROR"));
+      await assert.rejects(run("not_an_error", async () => { throw null; }), ledgerCode("DATABASE_ERROR"));
+      assert.equal((await raw(client, "SELECT count(*)::int n FROM vynvori_ledger.ledger_commands WHERE user_id=$1", [user])).rows[0].n, 0, "none of these was recorded");
+    });
+
+    await t.test("a thrown LedgerError never exposes the idempotency key (inspect, JSON, stack, cause)", async () => {
+      const user = await syntheticProfileWithWallet(client), k = key("secretkey") + "-do-not-leak";
+      const spec = { actor: "customer" as const, userId: user, commandKind: "leak_probe", idempotencyKey: k, payload: {} };
+      const error = await runLedgerCommand(pool, spec, async tx => { // unique violation whose server DETAIL contains the key
+        await tx.query("INSERT INTO vynvori_ledger.ledger_commands(command_id,scope,idempotency_key,request_sha256,user_id,command_kind,outcome) VALUES($1,$2,$3,$4,$5,'leak_probe','applied')", [randomUUID(), `${user}:leak_probe`, k, "b".repeat(64), user]);
+      }).then(() => undefined, (e: unknown) => e);
+      assert.ok(error instanceof LedgerError && error.code === "DATABASE_REJECTED" && error.sqlstate === "23505");
+      for (const rendered of [inspect(error, { depth: 10, showHidden: true }), JSON.stringify(error), String(error.stack), error.message]) assert.ok(!rendered.includes(k) && !rendered.includes("do-not-leak"));
+      assert.equal((error as { cause?: unknown }).cause, undefined);
     });
   } finally { await pool?.end().catch(() => undefined); await client.end().catch(() => undefined); await dropLedger("core"); }
 });

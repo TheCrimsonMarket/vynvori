@@ -18,9 +18,9 @@ test("ledger plan loads, pins the reviewed SQL and lists 0001 (schema only) then
 });
 
 // Golden digests: ANY change to plan.json or the pinned SQL forces a visible edit here (the planSha256 argument alone is circular).
-const GOLDEN_PLAN_JSON_SHA256 = "ddf6392d6faccbabe0193ca8dcce3a8acd6553c2d92a6bdd157f269af9f9d7e8";
+const GOLDEN_PLAN_JSON_SHA256 = "0b0abf7ba52c0905fba08ba6ae1eb85793d5e9a08ebcaf046fcc24cc64900c92";
 const GOLDEN_0001_SQL_SHA256 = "a8273f3fac59de2d0c2f1a661a852d22b9a360c9d9c83e672bd7f0d25d74ef4e";
-const GOLDEN_0002_SQL_SHA256 = "9d0d11fe70150d4858b751d09b091886662862da68e0c1e32d1b05350cb138d6";
+const GOLDEN_0002_SQL_SHA256 = "474b12f4394258ce8e83723d5340c404a926dac5c63361f2ab925bb266f075e4";
 const sha = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
 test("golden digests pin plan.json, 0001 and 0002 independently of the loader", () => {
   assert.equal(sha(join(planDir, "plan.json")), GOLDEN_PLAN_JSON_SHA256);
@@ -80,14 +80,25 @@ test("0001 is additive: schema only, no grants, drops, table DDL or identity alt
   assert.match(sql, /CREATE\s+SCHEMA\s+vynvori_ledger\s*;/i);
 });
 
-test("0002 is additive: ledger-schema objects only, no grants, no SECURITY DEFINER, no rows, no identity alteration, no Medusa", () => {
-  const sql = readFileSync(join(planDir, "0002_wallet_ledger.sql"), "utf8").replace(/--.*$/gm, "").replace(/'[^']*'/g, "''");
-  assert.doesNotMatch(sql, /\b(GRANT|REVOKE|DROP|ALTER|SECURITY\s+DEFINER|CREATE\s+(SCHEMA|ROLE|EXTENSION)|INSERT\s+INTO|DELETE\s+FROM|medusa)\b/i);
+test("0002 is additive: ledger-schema objects only; exactly one SECURITY DEFINER; only function-level REVOKE FROM PUBLIC; no grants, roles, owners, rows, identity alteration or Medusa", () => {
+  const original = readFileSync(join(planDir, "0002_wallet_ledger.sql"), "utf8").replace(/--.*$/gm, "");
+  const sql = original.replace(/'[^']*'/g, "''");
+  const revokes = [...sql.matchAll(/REVOKE\s+ALL\s+ON\s+FUNCTION\s+(vynvori_ledger\.\w+\(\))\s+FROM\s+PUBLIC\s*;/gi)].map(m => m[1]!);
+  const functions = [...sql.matchAll(/CREATE\s+FUNCTION\s+(vynvori_ledger\.\w+\(\))/gi)].map(m => m[1]!);
+  assert.ok(functions.length >= 5);
+  assert.deepEqual([...revokes].sort(), [...functions].sort(), "every created function is revoked from PUBLIC, and nothing else is revoked");
+  const rest = sql.replace(/REVOKE\s+ALL\s+ON\s+FUNCTION\s+vynvori_ledger\.\w+\(\)\s+FROM\s+PUBLIC\s*;/gi, "");
+  assert.doesNotMatch(rest, /\b(GRANT|REVOKE|DROP|ALTER|OWNER\s+TO|CREATE\s+(SCHEMA|ROLE|EXTENSION|USER)|INSERT\s+INTO|DELETE\s+FROM|medusa)\b/i);
+  assert.equal([...rest.matchAll(/SECURITY\s+DEFINER/gi)].length, 1, "exactly one SECURITY DEFINER function");
+  assert.match(rest, /CREATE\s+FUNCTION\s+vynvori_ledger\.ledger_entries_apply_to_wallet\(\)[^$]*SECURITY\s+DEFINER\s+SET\s+search_path\s*=\s*pg_catalog,\s*pg_temp\s+AS/i, "the definer is the apply function and pins search_path with pg_temp last");
+  for (const fn of rest.matchAll(/CREATE\s+FUNCTION[^$]*?AS\s+\$fn\$/gi)) assert.match(fn[0], /SET\s+search_path\s*=\s*pg_catalog,\s*pg_temp\s+AS/i, "every function pins search_path");
+  assert.doesNotMatch(rest, /\bEXECUTE\s+(format|'|\$)/i, "no dynamic SQL");
   // Every created object is schema-qualified into vynvori_ledger; the identity schema is only ever the target of a foreign key.
   for (const match of sql.matchAll(/CREATE\s+(?:TABLE|FUNCTION)\s+([\w.]+)/gi)) assert.match(match[1]!, /^vynvori_ledger\./);
   for (const match of sql.matchAll(/vynvori_identity[\w.]*/g)) assert.equal(match[0], "vynvori_identity.profiles");
   for (const match of sql.matchAll(/REFERENCES\s+(\S+?)\s*\(/g)) assert.match(match[1]!, /^vynvori_(ledger|identity)\./);
-  assert.match(readFileSync(join(planDir, "0002_wallet_ledger.sql"), "utf8").replace(/--.*$/gm, ""), /CONSTRAINT\s+ledger_entries_s2_grant_only\s+CHECK\s*\(entry_kind = 'grant'\)/, "temporary S5-droppable constraint present");
+  assert.match(original, /CONSTRAINT\s+ledger_entries_s2_grant_only\s+CHECK\s*\(entry_kind = 'grant'\)/, "temporary S5-droppable constraint present");
+  assert.match(original, /current_user::pg_catalog\.regrole::pg_catalog\.oid\s*<>\s*\(SELECT c\.relowner FROM pg_catalog\.pg_class c WHERE c\.oid = TG_RELID\)/, "wallet guard requires the table owner");
   assert.doesNotMatch(readFileSync(join(planDir, "rollback/0002_wallet_ledger.down.sql"), "utf8").replace(/--.*$/gm, ""), /\b(CASCADE|TRUNCATE|DELETE\s+FROM\s+vynvori_ledger\.)/i);
 });
 

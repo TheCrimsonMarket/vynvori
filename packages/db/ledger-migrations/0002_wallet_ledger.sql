@@ -1,15 +1,19 @@
 -- 0002_wallet_ledger (ADR-0021, M7 S2). Wallet, immutable command log, append-only ledger, grant-source registry.
 -- Additive: creates objects in vynvori_ledger only. No GRANT/REVOKE, nothing in vynvori_identity is altered, no rows are inserted
 -- (in particular NO grant source is registered: after this migration no credit can be minted by anyone).
--- Privilege model A (ADR-0021): every function below is a plain invoker-rights function (no SECURITY DEFINER). Each pins
--- search_path and schema-qualifies every object so a caller-controlled search_path cannot redirect it.
+-- Privilege model B (ADR-0021, confirmed by the S2 security review). Exactly ONE function is SECURITY DEFINER:
+-- ledger_entries_apply_to_wallet(). Its effective privilege is the OWNER's, so the owner must be a dedicated NOLOGIN,
+-- NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE role before any rollout (ADR-0021 S2 addendum, S9 grants proposal). Every function
+-- pins search_path = pg_catalog, pg_temp (pg_temp LAST) and schema-qualifies every object; none uses dynamic SQL. Every
+-- function gets REVOKE ALL ... FROM PUBLIC (hardening only; the migration grants nothing and names no role).
 --
 -- Wallet buckets change ONLY through ledger entries:
 --   * ledger_entries rejects UPDATE/DELETE/TRUNCATE;
---   * wallets rejects a non-zero INSERT, DELETE and TRUNCATE, and rejects UPDATE unless pg_trigger_depth() > 1. A direct
---     UPDATE statement fires wallets_update_guard at depth 1; the UPDATE issued from the AFTER INSERT trigger on
---     ledger_entries fires it at depth 2. (A caller who can create their own trigger could also reach depth 2: that is why the
---     runtime role must never hold CREATE/TRIGGER rights -- see the ADR-0021 S2 addendum.)
+--   * wallets rejects a non-zero INSERT, DELETE and TRUNCATE, and rejects UPDATE unless BOTH pg_trigger_depth() > 1 AND the
+--     current user is the table owner. A direct UPDATE fires wallets_update_guard at depth 1. The UPDATE issued by the
+--     SECURITY DEFINER apply function runs as the owner at depth 2. A trigger created by any other role (even one holding
+--     pg_write_all_data) runs as that role and is rejected; the depth check alone is NOT sufficient (a pg_temp trigger
+--     reaches depth 2).
 --
 -- TEMPORARY CONSTRAINT: ledger_entries_s2_grant_only restricts entries to kind 'grant' until S5 adds the entry<->reservation
 -- binding trigger. S5's migration drops it; S5's rollback re-adds it. Do not remove it earlier.
@@ -42,7 +46,7 @@ CREATE TRIGGER wallets_insert_guard BEFORE INSERT ON vynvori_ledger.wallets FOR 
 
 CREATE FUNCTION vynvori_ledger.wallets_update_guard() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $fn$
 BEGIN
-  IF pg_trigger_depth() <= 1 THEN
+  IF pg_trigger_depth() <= 1 OR current_user::pg_catalog.regrole::pg_catalog.oid <> (SELECT c.relowner FROM pg_catalog.pg_class c WHERE c.oid = TG_RELID) THEN
     RAISE EXCEPTION 'wallet balances change only through ledger entries' USING ERRCODE = 'integrity_constraint_violation';
   END IF;
   IF NEW.user_id <> OLD.user_id OR NEW.created_at <> OLD.created_at THEN
@@ -133,7 +137,7 @@ CREATE TRIGGER ledger_entries_check_command BEFORE INSERT ON vynvori_ledger.ledg
 
 -- Applies the five-bucket deltas to the wallet. delta_external is the counter-side of a grant and has no wallet column.
 -- The wallet CHECKs (>= 0, <= safe integer) are the backstop against a negative or overflowing result.
-CREATE FUNCTION vynvori_ledger.ledger_entries_apply_to_wallet() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $fn$
+CREATE FUNCTION vynvori_ledger.ledger_entries_apply_to_wallet() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $fn$
 BEGIN
   UPDATE vynvori_ledger.wallets w SET
     available_units = w.available_units + NEW.delta_available,
@@ -150,3 +154,9 @@ CREATE TRIGGER ledger_entries_apply_to_wallet AFTER INSERT ON vynvori_ledger.led
 
 CREATE TRIGGER ledger_entries_immutable BEFORE UPDATE OR DELETE ON vynvori_ledger.ledger_entries FOR EACH ROW EXECUTE FUNCTION vynvori_ledger.reject_mutation();
 CREATE TRIGGER ledger_entries_no_truncate BEFORE TRUNCATE ON vynvori_ledger.ledger_entries FOR EACH STATEMENT EXECUTE FUNCTION vynvori_ledger.reject_mutation();
+
+REVOKE ALL ON FUNCTION vynvori_ledger.reject_mutation() FROM PUBLIC;
+REVOKE ALL ON FUNCTION vynvori_ledger.wallets_insert_guard() FROM PUBLIC;
+REVOKE ALL ON FUNCTION vynvori_ledger.wallets_update_guard() FROM PUBLIC;
+REVOKE ALL ON FUNCTION vynvori_ledger.ledger_entries_check_command() FROM PUBLIC;
+REVOKE ALL ON FUNCTION vynvori_ledger.ledger_entries_apply_to_wallet() FROM PUBLIC;
