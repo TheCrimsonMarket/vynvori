@@ -7,7 +7,7 @@ M3's own code shipped policy numbers no founder approved: a 24-hour guest TTL, 2
 
 ## Decisions
 
-**D1 — Typed limits, no defaults (implemented in C2).** `parseCompositionLimits(env)` (`packages/commerce/src/composition-limits.ts`) reads the 31 `M3_LIMIT_*` variables below. A value is valid only as a canonical positive decimal integer string (no sign, spaces, leading zeros, decimals, exponents or underscores) that is a safe integer. `M3_LIMIT_IMAGE_MAX_BYTES` and `M3_LIMIT_IMAGE_MAX_SIDE_PX` above their structural ceilings (the `0001` CHECKs) are invalid. The result lists missing and invalid **keys** and never echoes a value. Invalid counts as missing for closing purposes. Capabilities and the keys each needs:
+**D1 — Typed limits, no defaults (implemented in C2).** `parseCompositionLimits(env)` (`packages/commerce/src/composition-limits.ts`) reads the 31 `M3_LIMIT_*` variables below. A value is valid only as a canonical positive decimal integer string (no sign, spaces, leading zeros, decimals, exponents or underscores) that is a safe integer. `M3_LIMIT_IMAGE_MAX_BYTES` and `M3_LIMIT_IMAGE_MAX_SIDE_PX` above their structural ceilings (the `0001` CHECKs), and any `*_SECONDS` key above the Date-range bound, are invalid. The closed check runs after authentication, so unauthenticated callers get 401/403, not a configuration answer; the flag answer (`UPLOADS_DISABLED`) comes before the configuration answer. The result lists missing and invalid **keys** and never echoes a value. Invalid counts as missing for closing purposes. Capabilities and the keys each needs:
 
 | Capability | Keys | Closed answer |
 |---|---|---|
@@ -78,6 +78,7 @@ Related decisions that are not numbers: single-use grants (default in force), th
 
 ## Classification of every other number in the code
 **Structural ceilings** (contracts and database CHECKs; additive-only, they stay): `SCENE_LIMITS` in `composition-scene.ts` (5000 mm position and size, 64 layers per scene, 2000 text characters, 360° rotation); the 2000 mm zone-size schema cap; the `0001` CHECKs of 26214400 bytes and 20000 px on `assets`, mirrored by `IMAGE_BYTES_STRUCTURAL_CEILING` and `IMAGE_SIDE_STRUCTURAL_CEILING` in `composition-limits.ts` (a test reads the SQL and fails on drift); and the synthetic preview profile's 16 layers per zone, 280 text characters and 150 PPI, all labelled synthetic and not supplier data.
+Also a **technical bound, not policy**: any `*_SECONDS` key above `SECONDS_STRUCTURAL_CEILING` is invalid, because it would make an expiry an invalid JavaScript `Date` (a request-time error instead of a closed capability).
 **Engineering constants** (documented, not policy): the 30 s request-body deadline; R2 request timeouts of 20 s and 5 s; `LIMIT 100` on owned-composition listing; the 1500 ms autosave debounce; the 100-step undo depth.
 
 ## Rejected options

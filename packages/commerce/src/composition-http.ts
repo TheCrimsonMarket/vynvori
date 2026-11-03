@@ -73,7 +73,14 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
     }
   }
   /** Resolve who is calling. A present-but-invalid session is a 401, never a silent downgrade to guest. */
-  async function actor(request: Request, compositionId: string | null, mutating: boolean): Promise<{ access: CompositionAccess; session: string | null }> {
+  /** The API as a whole needs the JSON limit. Checked only AFTER the caller is authenticated, so unauthenticated callers learn nothing about configuration. */
+  const requireApiLimits = () => { if (cfg.maxJsonBytes === undefined) throw new CompositionError("LIMITS_NOT_CONFIGURED"); };
+  async function actor(request: Request, compositionId: string | null, mutating: boolean, needsApi = true): Promise<{ access: CompositionAccess; session: string | null }> {
+    const resolved = await resolveActor(request, compositionId, mutating);
+    if (needsApi) requireApiLimits();
+    return resolved;
+  }
+  async function resolveActor(request: Request, compositionId: string | null, mutating: boolean): Promise<{ access: CompositionAccess; session: string | null }> {
     if (!cfg.enabled) throw new HttpError(503, "DISABLED");
     const session = cookie(request, compositionCookies.session);
     if (mutating) guardMutation(request, session !== null);
@@ -97,7 +104,6 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
   function wrapped(handler: (request: Request, params: Record<string, string>) => Promise<Response>) {
     return async (request: Request, params: Record<string, string> = {}): Promise<Response> => {
       try {
-        if (cfg.enabled && cfg.maxJsonBytes === undefined) throw new CompositionError("LIMITS_NOT_CONFIGURED");
         return await handler(request, params);
       }
       catch (error) {
@@ -115,10 +121,11 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
       }
     };
   }
+  const requireJsonLimit = (): number => { if (cfg.maxJsonBytes === undefined) throw new CompositionError("LIMITS_NOT_CONFIGURED"); return cfg.maxJsonBytes; };
   const parseJson = async (request: Request): Promise<Record<string, unknown>> => {
     if (request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "application/json") throw new HttpError(400, "INVALID_REQUEST");
     try {
-      const value: unknown = JSON.parse(Buffer.from(await readBody(request, cfg.maxJsonBytes ?? 0)).toString("utf8"));
+      const value: unknown = JSON.parse(Buffer.from(await readBody(request, requireJsonLimit())).toString("utf8"));
       if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error();
       return value as Record<string, unknown>;
     } catch (error) { if (error instanceof HttpError) throw error; throw new HttpError(400, "INVALID_REQUEST"); }
@@ -140,6 +147,7 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
         return json(view(record, access), 201);
       }
       guardMutation(request, false);
+      requireApiLimits();
       if (cfg.guestTtlSeconds === undefined) throw new CompositionError("LIMITS_NOT_CONFIGURED");
       const { record, capability, expiresAt } = await service!.createGuest();
       const headers = new Headers({ "set-cookie": `${compositionCookies.guest}=${record.id}.${capability}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${cfg.guestTtlSeconds}` });
@@ -202,8 +210,9 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
       return json(view(record, resolved.access), 200, headers);
     }),
     uploadAsset: wrapped(async (request, params) => {
-      const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true);
-      service!.assertUploadsAvailable();
+      const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true, false);
+      service!.assertUploadsAvailable(); // flag first (UPLOADS_DISABLED), then configuration
+      requireApiLimits();
       if (cfg.maxUploadBytes === undefined) throw new CompositionError("LIMITS_NOT_CONFIGURED");
       const bytes = await readBody(request, cfg.maxUploadBytes);
       const asset = await service!.uploadAsset(compositionId, access, bytes, request.headers.get("content-type"));

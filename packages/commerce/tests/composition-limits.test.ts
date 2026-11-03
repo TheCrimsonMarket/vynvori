@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
-  COMPOSITION_LIMIT_KEYS, IMAGE_BYTES_STRUCTURAL_CEILING, IMAGE_SIDE_STRUCTURAL_CEILING, parseCompositionLimits, resolveApiLimits,
+  COMPOSITION_LIMIT_KEYS, IMAGE_BYTES_STRUCTURAL_CEILING, IMAGE_SIDE_STRUCTURAL_CEILING, SECONDS_STRUCTURAL_CEILING, parseCompositionLimits, resolveApiLimits,
   resolveGuestCreateLimits, resolveUploadLimits,
 } from "../src/composition-limits";
 import { compositionService, CompositionError } from "../src/composition";
@@ -97,12 +97,27 @@ async function assertClosed(response: Response) {
   assert.equal(body.error.code, "COMPOSITION_LIMITS_NOT_CONFIGURED"); assert.equal(body.error.retryable, false);
   assert.equal(response.headers.get("set-cookie"), null);
 }
-test("HTTP: unset JSON limit closes every route, including reads", async () => {
-  const closed = http({ maxJsonBytes: undefined });
+test("*_SECONDS values above the Date-range bound are invalid (an expiry must stay a valid Date)", () => {
+  const over = parseCompositionLimits({ ...syntheticLimitEnv(), M3_LIMIT_GUEST_TTL_SECONDS: String(SECONDS_STRUCTURAL_CEILING + 1) });
+  assert.deepEqual(over.invalid, ["M3_LIMIT_GUEST_TTL_SECONDS"]); assert.equal(resolveGuestCreateLimits(over), null);
+  assert.ok(resolveGuestCreateLimits(parseCompositionLimits({ ...syntheticLimitEnv(), M3_LIMIT_GUEST_TTL_SECONDS: String(SECONDS_STRUCTURAL_CEILING) })));
+});
+test("HTTP: unset JSON limit closes the API for authenticated callers; unauthenticated and cross-origin callers still get 401/403", async () => {
+  const closed = http({ maxJsonBytes: undefined }), session = `${compositionCookies.session}=${SESSION}`;
   await assertClosed(await closed.create(post()));
-  await assertClosed(await closed.get(get(), { id: randomUUID() }));
-  await assertClosed(await closed.list(get()));
-  await assertClosed(await closed.save(post(), { id: randomUUID() }));
+  await assertClosed(await closed.list(get(session)));
+  assert.equal((await closed.get(get(), { id: randomUUID() })).status, 401);
+  assert.equal((await closed.list(get())).status, 401);
+  assert.equal((await closed.create(new Request(ORIGIN + "/x", { method: "POST", headers: { origin: "https://evil.test" } }))).status, 403);
+});
+test("HTTP: with uploads off the flag answer comes before the configuration answer", async () => {
+  const h = memoryHarness(), storage = memoryStorage(), identity: CompositionIdentityPort = { async verify() { return { userId: randomUUID() }; }, async claimGuest() {} };
+  const service = compositionService(h.store, storage, { ...SYNTHETIC_COMPOSITION_CONFIG, uploadsEnabled: false });
+  const open = compositionHttpHandlers({ enabled: true, appOrigin: ORIGIN, ...SYNTHETIC_HTTP_LIMITS }, service, identity);
+  const closed = compositionHttpHandlers({ enabled: true, appOrigin: ORIGIN, ...SYNTHETIC_HTTP_LIMITS, maxJsonBytes: undefined, maxUploadBytes: undefined }, service, identity);
+  const created = await open.create(post()), cookie = created.headers.get("set-cookie")!.split(";")[0]!, id = (await created.json() as { draft: { compositionId: string } }).draft.compositionId;
+  const response = await closed.uploadAsset(new Request(ORIGIN + "/x", { method: "POST", headers: { origin: ORIGIN, cookie, "content-type": "image/png" }, body: Buffer.alloc(8) }), { id });
+  assert.equal(response.status, 503); assert.equal((await response.json() as { error: { code: string } }).error.code, "COMPOSITION_UPLOADS_DISABLED");
 });
 test("HTTP: unset guest TTL refuses guest creation with no cookie, while other routes stay open", async () => {
   const closed = http({ guestTtlSeconds: undefined });

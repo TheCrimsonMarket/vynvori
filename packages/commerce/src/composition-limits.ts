@@ -41,8 +41,10 @@ export type ParsedCompositionLimits = Readonly<{
 }>;
 
 const canonicalPositiveInteger = /^[1-9][0-9]*$/;
+/** Any "seconds" value is added to a clock to make a Date; this keeps that Date valid (JS Date range). Technical bound, not policy. */
+export const SECONDS_STRUCTURAL_CEILING = 8_000_000_000_000;
 function ceilingOf(name: CompositionLimitName): number {
-  return name === "IMAGE_MAX_BYTES" ? IMAGE_BYTES_STRUCTURAL_CEILING : name === "IMAGE_MAX_SIDE_PX" ? IMAGE_SIDE_STRUCTURAL_CEILING : Number.MAX_SAFE_INTEGER;
+  return name === "IMAGE_MAX_BYTES" ? IMAGE_BYTES_STRUCTURAL_CEILING : name === "IMAGE_MAX_SIDE_PX" ? IMAGE_SIDE_STRUCTURAL_CEILING : name.endsWith("_SECONDS") ? SECONDS_STRUCTURAL_CEILING : Number.MAX_SAFE_INTEGER;
 }
 
 /** A value is valid only as a canonical positive decimal integer string that is a safe integer and within its structural ceiling. */
