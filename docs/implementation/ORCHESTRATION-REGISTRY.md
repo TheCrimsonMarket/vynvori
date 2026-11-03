@@ -2,7 +2,7 @@
 
 Shared-resource and session registry for the tree-structured multi-session harness. **Root owns this file.** Only root-authored PRs change it, and the founder merges them. Milestone status remains authoritative in [MILESTONE-PROGRESS.md](MILESTONE-PROGRESS.md); this file allocates resources and records who works where.
 
-Last updated: 2026-11-02 (W1 started; founder authorized W1 and confirmed the M7 manager session). Baseline `main` @ `92c8114`, CI green.
+Last updated: 2026-11-03 (M7 plan #20 merged; M3-closure manager registered; M7 S1 in review). Baseline `main` @ `1fa10e8`, CI green.
 
 ## Harness
 
@@ -59,7 +59,9 @@ Last used: **ADR-0020**. Two historical files share number 0008 (`ADR-0008-M2-Cl
 
 | Number | Reserved for | Holder | Status |
 |---|---|---|---|
-| ADR-0021 | M7 core ledger foundation | M7 manager | granted 2026-11-02 |
+| ADR-0021 | M7 core ledger foundation | M7 manager | granted 2026-11-02; drafted in S1 ([#23](https://github.com/TheCrimsonMarket/vynvori/pull/23)) |
+| ADR-0022 | M3 closure (asset access, scan boundary, guest limits) | M3-closure manager | granted 2026-11-03 |
+| ADR-0023 and later | unallocated | root | request from root |
 
 ### Migration journals (`packages/db`)
 
@@ -67,8 +69,27 @@ Last used: **ADR-0020**. Two historical files share number 0008 (`ADR-0008-M2-Cl
 |---|---|---|---|
 | Core (drizzle-kit) | `packages/db/migrations/` | `0000_organic_valkyrie.sql` | M2 |
 | Identity / auth | `packages/db/auth-migrations/` | `0004_revocation_reconciliation.sql` | M1b |
-| Composition | `packages/db/composition-migrations/` | `0001_composition_scene.sql` | M3 |
+| Composition | `packages/db/composition-migrations/` | `0001_composition_scene.sql`; **`0002` reserved for M3 closure** (granted 2026-11-03) | M3 |
 | Ledger (new) | `packages/db/ledger-migrations/` | none yet; starts at `0001` | M7 (granted 2026-11-02) |
+
+### Advisory-lock keys (`pg_advisory_xact_lock(742110, n)`)
+
+| n | Use | Holder |
+|---|---|---|
+| 1 | identity migrations | M1b |
+| 2 | unassigned | root |
+| 3 | composition migrations (includes `0002`) | M3 |
+| 4 | M3-closure runtime / quota serialization | M3-closure manager (granted 2026-11-03) |
+| 5, 6 | unassigned | root |
+| 7 | ledger migrations | M7 |
+
+### Postgres test databases and connection budget (`m2.yml` foundation job)
+
+- Job Postgres: `max_connections = 250` (asserted in the workflow); 20 are held back for tooling, so test files may use at most 230 combined.
+- `node --test` runs at most `availableParallelism - 1` files at once (a handful on standard GitHub runners), so the real peak is the sum of the largest concurrently running files, not of all files. Each manager declares per-file peaks **including each file's own persistent client and transient admin/probe connections**, not only pool caps. Declared so far: M7 about 112 (one concurrency file) and about 7 per other ledger file (about 175 if all ran at once, about 191 with the existing suites); M3 closure 20 (one file) + 5 per other DB file. Existing suites (M2 creative, M3 composition, M1b identity) also count.
+- Fixtures check their own pool against `SHOW max_connections` and fail under `CI_REQUIRE_PG_TESTS=1` when it does not fit; they cannot see other files' usage. Managers record the CI-measured number at close.
+- If a runner change or new suites make the realistic worst case exceed the ceiling, root serializes the Postgres suites with `--test-concurrency=1` in a workflow PR instead of shrinking tests (M7 has agreed this is acceptable).
+- Database naming: M3 closure `vynvori_m3_<name>_test`, one database per DB test file; M7 uses one database per ledger test file. CI's `synthetic` superuser creates them. No test may drop another file's schemas.
 
 New journals or new sequence numbers in an existing journal are allocated by root on request. A milestone never appends to another milestone's journal without a root grant. Every migration needs a documented, non-destructive rollback (AGENTS.md §4).
 
@@ -79,7 +100,9 @@ Root records every session the founder starts. Messages from a session not liste
 | Role | Milestone | Session | Branch | Open PR | Since |
 |---|---|---|---|---|---|
 | Root | all | `session_01Cowtxigt3rWyjMVZYShYyX` | `claude/peaceful-heisenberg-cocinf` | root W1 shared-lane PR | 2026-11-02 |
-| M7 manager | M7 | `session_01CowtxkLZEcmhjncVjGLGqK` (founder-confirmed) | `claude/exciting-wright-9f71eg` | [#20](https://github.com/TheCrimsonMarket/vynvori/pull/20) plan (awaiting founder approval) | 2026-11-02 |
+| M7 manager | M7 | `session_01CowtxkLZEcmhjncVjGLGqK` (founder-confirmed) | `claude/exciting-wright-9f71eg` | [#20](https://github.com/TheCrimsonMarket/vynvori/pull/20) plan: **merged** 2026-11-02 | 2026-11-02 |
+| M7 worker S1 | M7 | not reported to root | `claude/youthful-johnson-p85ycz` | [#23](https://github.com/TheCrimsonMarket/vynvori/pull/23) foundation: CI pending, manager review pending | 2026-11-03 |
+| M3-closure manager | M3 | `session_01CowtxjZHg48RKM7XdfDfsf` (founder-confirmed 2026-11-03) | `claude/determined-mendel-0h42pl` | [#22](https://github.com/TheCrimsonMarket/vynvori/pull/22) plan: rev 3 pending, then founder approval | 2026-11-02 |
 
 ## Protocol
 
@@ -95,7 +118,7 @@ From the 2026-11-02 council; the founder decides each wave's start.
 | Wave | Tracks | Prerequisites | Max parallel worker PRs | Status |
 |---|---|---|---|---|
 | W0 | CI recovery, dependency remediation, waiver gate | — | 1 | **DONE** (PR #18) |
-| W1 | M7 core ledger (no Medusa top-ups) + M3 local closure | CI green ✅; founder authorization ✅ | 2 (M7: 1 until root frees the second) | **IN PROGRESS**: M7 plan under review; M3-closure track not yet staffed |
+| W1 | M7 core ledger (no Medusa top-ups) + M3 local closure | CI green ✅; founder authorization ✅ | 2 (one per track) | **IN PROGRESS**: M7 plan approved (#20 merged), S1 in review ([#23](https://github.com/TheCrimsonMarket/vynvori/pull/23)); M3-closure plan pending founder approval ([#22](https://github.com/TheCrimsonMarket/vynvori/pull/22)) |
 | W2 | M4 sandbox commerce + M6a mock studio | M1b PASSED, M3 PASSED | 2 | blocked |
 | W3 | M5, M7 top-ups, M8a, M8b | M4 (and M6a for M8b) | 2–3 | blocked |
 | — | M6b, M9 | doc 15 gates; production, financial, rights, vendor and SSO flags stay OFF | — | blocked |
@@ -109,10 +132,13 @@ From the 2026-11-02 council; the founder decides each wave's start.
 | 2026-11-02 | Q7 contract gap: root fixes it. Additive: guarded C-02 reopen edge plus the internal → customer package-state mapping. No rename, because the canonical v1.1 reference contract and protected fixtures use `refinements_open`. |
 | 2026-11-02 | CI Postgres coverage: root wires the M3 composition suites and the M1b identity harness into `m2.yml`, sets `CI_REQUIRE_PG_TESTS=1` and `max_connections=250`. The flag avoids the reserved `VYNVORI_*` prefix, which must always be `false`. |
 | 2026-11-02 | Local PG16 binaries allowed for feedback only; such results are NOT_RUN as evidence. |
+| 2026-11-02 | M7 plan rev 4 (#20) approved and merged; implementation round 1 (S1–S9) authorized, serial, one worker at a time, founder starts workers and merges each PR. Q9 (pre-dispatch cancellation release) not in W1. |
+| 2026-11-03 | M3-closure manager confirmed (`session_01CowtxjZHg48RKM7XdfDfsf`). Rulings: (QB) the editor's local preview of the user's own file may stay; server-sourced pixels require scan status `clean`. (QC) no scanner chosen; manager brings an options paper, M3 stays at LOCAL CLOSURE COMPLETE and W2 stays blocked until the founder picks a scanner and enables uploads. (QA) browser fixture: flags-OFF scenarios only, C1b not approved. (Q1) M3's built-in numeric limits (24 h guest TTL, 25 MiB / 36 MP / 20 000 px, 24 assets, 150 MiB, 256 KiB) are unapproved: C2 removes the defaults, runtime fails closed until the founder supplies values. |
 
 ## Deadlines
 
 | Date | Item | Owner |
 |---|---|---|
+| founder, before W2 | Choose a malware scanner (or an interim approach) and supply the M3 limit values; both gate M3 PASSED and therefore W2 | founder |
 | early December 2026 | Re-triage the dependency waiver (remove fixed advisories, re-check Medusa releases) | root → founder |
 | 2026-12-17T23:59:59Z | Dependency waiver expires; `security:audit` fails closed afterwards ([ADR-0020](ADR-0020-Dated-Dependency-Advisory-Waiver.md)) | founder decision |
