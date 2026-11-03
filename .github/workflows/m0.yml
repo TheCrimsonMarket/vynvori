@@ -71,6 +71,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium firefox webkit
+      # Unit test of the harness's lazy-image settle helper (M3 C1c). It needs Playwright's Chromium, which only this job installs,
+      # so it runs here and not under `npm test` (the verify job has no browsers).
+      - run: node --test scripts/tests/browser-settle.test.mjs
       - run: npm run build:web
       # Each engine runs even if an earlier one failed, so one run reports every engine; the job fails if any fails.
       - run: npm run test:browser:web
