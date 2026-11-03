@@ -5,13 +5,12 @@ import { CompositionSceneV1Schema, EMPTY_SYNTHETIC_SCENE, LICENSED_FONTS, runPre
 import { Button } from "@/components/ui/button";
 import {
   PT_TO_MM, addImageLayer, addTextLayer, commit, deleteLayer, duplicateLayer, font, isOutside, keyStep, layersOf, moveInStack, nudge, parseMm, profile,
-  redo, resizeKeepingAspect, sceneKey, startHistory, undo, updateLayer, zoneOf, type EditorAsset, type LayerPatch,
+  redo, resizeKeepingAspect, sceneKey, startHistory, undo, updateLayer, zoneOf, checkUploadDimensions, checkUploadFileSize, describeExpiry, type EditorAsset, type LayerPatch, type UploadLimits,
 } from "./model";
 
-type ServerState = { compositionId: string | null; revision: number; owner: "guest" | "owner" | null; autosave: "idle" | "pending" | "conflict" | "failed" | "unavailable"; lastSavedKey: string | null; versions: VersionView[]; currentVersionId: string | null };
+type ServerState = { compositionId: string | null; revision: number; owner: "guest" | "owner" | null; autosave: "idle" | "pending" | "conflict" | "failed" | "unavailable"; lastSavedKey: string | null; expiresAt: string | null; versions: VersionView[]; currentVersionId: string | null };
 type VersionView = { versionId: string; versionNo: number; sceneHashSha256: string; frozenAt: string; preflight: { state: "preview_only" | "blocked"; issues: { code: string; severity: string; layerId?: string; zoneId?: string }[] } };
 const ACCEPT = "image/png,image/jpeg,image/webp";
-const LOCAL_LIMIT = 25 * 1024 * 1024;
 const ISSUE_TEXT: Record<string, string> = {
   PROFILE_MISMATCH: "The composition does not match the print profile.", ZONE_UNKNOWN: "Unknown print zone.", TOO_MANY_LAYERS: "Too many layers in this zone.",
   TEXT_TOO_LONG: "Text is too long.", LAYER_OUT_OF_BOUNDS: "Layer extends outside the zone.", LAYER_OUTSIDE_SAFE_MARGIN: "Layer is inside the safety margin.",
@@ -36,12 +35,13 @@ async function api(path: string, method: string, body?: unknown, raw?: { bytes: 
   return { ok: response.ok, status: response.status, data };
 }
 
-export function Editor({ compositionId: initialId, artworkUpload }: Readonly<{ compositionId?: string; artworkUpload: boolean }>) {
+export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }: Readonly<{ compositionId?: string; artworkUpload: boolean; uploadLimits: UploadLimits | null }>) {
+  const canUpload = artworkUpload && uploadLimits !== null;
   const [history, setHistory] = useState(() => startHistory(EMPTY_SYNTHETIC_SCENE()));
   const [assets, setAssets] = useState<ReadonlyMap<string, EditorAsset>>(new Map());
   const [zoneId, setZoneId] = useState("front"), [selected, setSelected] = useState<string | null>(null), [aspectLock, setAspectLock] = useState(true);
   const [message, setMessage] = useState(""), [busy, setBusy] = useState(false);
-  const [server, setServer] = useState<ServerState>({ compositionId: initialId ?? null, revision: 0, owner: null, autosave: "idle", lastSavedKey: null, versions: [], currentVersionId: null });
+  const [server, setServer] = useState<ServerState>({ compositionId: initialId ?? null, revision: 0, owner: null, autosave: "idle", lastSavedKey: null, expiresAt: null, versions: [], currentVersionId: null });
   const bytes = useRef(new Map<string, { data: ArrayBuffer; type: string }>()), svgRef = useRef<SVGSVGElement | null>(null);
   const drag = useRef<{ layerId: string; startX: number; startY: number; originX: number; originY: number; start: CompositionSceneV1 } | null>(null);
   const scene = history.present, zone = zoneOf(zoneId), layers = layersOf(scene, zoneId), current = layers.find(layer => layer.layerId === selected) ?? null;
@@ -63,7 +63,7 @@ export function Editor({ compositionId: initialId, artworkUpload }: Readonly<{ c
       const next = new Map<string, EditorAsset>();
       for (const a of loaded.data.assets as { assetId: string; sha256: string; widthPx: number; heightPx: number }[]) next.set(a.assetId, { assetId: a.assetId, sha256: a.sha256, widthPx: a.widthPx, heightPx: a.heightPx, name: "Artwork", url: `/api/v1/compositions/${id}/assets/${a.assetId}`, persisted: true });
       setAssets(next); setHistory(startHistory(parsed.data));
-      setServer({ compositionId: id, revision: loaded.data.draft.draftRevision, owner: loaded.data.draft.ownerKind === "authenticated_owner" ? "owner" : "guest", autosave: "idle", lastSavedKey: sceneKey(parsed.data), versions: loaded.data.versions, currentVersionId: loaded.data.currentVersionId });
+      setServer({ compositionId: id, revision: loaded.data.draft.draftRevision, owner: loaded.data.draft.ownerKind === "authenticated_owner" ? "owner" : "guest", autosave: "idle", lastSavedKey: sceneKey(parsed.data), expiresAt: loaded.data.expiresAt ?? null, versions: loaded.data.versions, currentVersionId: loaded.data.currentVersionId });
       notify("Draft restored.");
     })().catch(() => {});
     return () => { cancelled = true; };
@@ -81,10 +81,13 @@ export function Editor({ compositionId: initialId, artworkUpload }: Readonly<{ c
       let working = scene, last: string | null = null; const next = new Map(assets);
       for (const file of Array.from(files)) {
         if (!ACCEPT.split(",").includes(file.type)) { notify(`${file.name}: use a PNG, JPEG or WebP image.`); continue; }
-        if (file.size > LOCAL_LIMIT) { notify(`${file.name}: that file is too large (25 MB maximum).`); continue; }
+        if (!uploadLimits) { notify("Artwork upload is not configured yet."); continue; }
+        const sizeCheck = checkUploadFileSize(file.name, file.size, uploadLimits);
+        if (!sizeCheck.ok) { notify(sizeCheck.message); continue; }
         const data = await file.arrayBuffer(), sha = await sha256Hex(data), url = await toDataUrl(new Blob([data], { type: file.type }));
         let size; try { size = await decodeSize(url); } catch { notify(`${file.name}: this image could not be read.`); continue; }
-        if (size.w * size.h > 36_000_000) { notify(`${file.name}: image dimensions are too large.`); continue; }
+        const dimensionCheck = checkUploadDimensions(file.name, size.w, size.h, uploadLimits);
+        if (!dimensionCheck.ok) { notify(dimensionCheck.message); continue; }
         const existing = [...next.values()].find(asset => asset.sha256 === sha);
         const asset: EditorAsset = existing ?? { assetId: `local_${sha.slice(0, 16)}`, sha256: sha, widthPx: size.w, heightPx: size.h, name: file.name.slice(0, 80), url, persisted: false };
         if (!existing) { next.set(asset.assetId, asset); bytes.current.set(asset.assetId, { data, type: file.type }); }
@@ -124,7 +127,7 @@ export function Editor({ compositionId: initialId, artworkUpload }: Readonly<{ c
     const created = await api("/api/v1/compositions", "POST");
     if (!created.ok) { notify(created.status === 503 ? "Saving is not available in this preview. Your work stays in this tab only." : "Could not start a saved draft."); setServer(s => ({ ...s, autosave: created.status === 503 ? "unavailable" : "failed" })); return null; }
     const id = created.data.draft.compositionId as string; try { sessionStorage.setItem("vynvori.byo.compositionId", id); } catch { /* optional */ }
-    setServer(s => ({ ...s, compositionId: id, revision: 0, owner: created.data.draft.ownerKind === "authenticated_owner" ? "owner" : "guest" }));
+    setServer(s => ({ ...s, compositionId: id, revision: 0, expiresAt: created.data.expiresAt ?? null, owner: created.data.draft.ownerKind === "authenticated_owner" ? "owner" : "guest" }));
     return { id, revision: 0 };
   }
   async function saveDraft(): Promise<boolean> {
@@ -142,8 +145,8 @@ export function Editor({ compositionId: initialId, artworkUpload }: Readonly<{ c
     if (saved.status === 409) { setServer(s => ({ ...s, autosave: "conflict" })); notify("This draft changed elsewhere. Reload to continue without losing your copy."); return false; }
     if (!saved.ok) { setServer(s => ({ ...s, autosave: "failed" })); notify(saved.status === 401 ? "Your draft expired or you were signed out. Start a new draft or sign in." : "Could not save. Your edits are still here."); return false; }
     setAssets(remap); setHistory(h => ({ ...h, present: working }));
-    setServer(s => ({ ...s, compositionId: target.id, revision: saved.data.draft.draftRevision, autosave: "idle", lastSavedKey: sceneKey(working), owner: saved.data.draft.ownerKind === "authenticated_owner" ? "owner" : "guest" }));
-    notify(saved.data.draft.ownerKind === "authenticated_owner" ? "Saved to your account." : "Draft saved on this device for 24 hours. Sign in to keep it."); return true;
+    setServer(s => ({ ...s, compositionId: target.id, revision: saved.data.draft.draftRevision, autosave: "idle", lastSavedKey: sceneKey(working), expiresAt: saved.data.expiresAt ?? s.expiresAt, owner: saved.data.draft.ownerKind === "authenticated_owner" ? "owner" : "guest" }));
+    notify(saved.data.draft.ownerKind === "authenticated_owner" ? "Saved to your account." : `Draft saved on this device ${describeExpiry(saved.data.expiresAt ?? server.expiresAt)}. Sign in to keep it.`); return true;
   }
   const saveRef = useRef<() => Promise<boolean>>(async () => false);
   useEffect(() => { saveRef.current = saveDraft; });
@@ -198,7 +201,7 @@ export function Editor({ compositionId: initialId, artworkUpload }: Readonly<{ c
       <p className="eyebrow">THE INDEPENDENT EDITOR / YOUR ORIGINAL ART</p>
       <h1>{initialId ? "YOUR COMPOSITION." : "YOUR ART. YOUR CANVAS."}</h1>
       <p className="notice" role="note">PREVIEW ONLY. This editor uses a synthetic coordinate frame ({zone.widthMm} × {zone.heightMm} mm), not a manufacturer print area. Nothing here is approved for printing, priced, or ordered. No AI credits required. No account is needed to edit.</p>
-      <p className="ed-status" role="status" aria-live="polite">{message || (server.owner === "guest" ? "Guest draft — expires in 24 hours unless you sign in." : "")}</p>
+      <p className="ed-status" role="status" aria-live="polite">{message || (server.owner === "guest" ? `Guest draft — kept ${describeExpiry(server.expiresAt)} unless you sign in.` : "")}</p>
       <div className="ed-grid">
         <div className="ed-stage">
           <div className="ed-tabs" role="tablist" aria-label="Garment side">
@@ -227,7 +230,7 @@ export function Editor({ compositionId: initialId, artworkUpload }: Readonly<{ c
         </div>
         <div className="ed-panel">
           <div className="ed-row">
-            {artworkUpload
+            {canUpload
               ? <label className="button button-primary ed-file"><input type="file" accept={ACCEPT} multiple disabled={busy} onChange={e => { void addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} /><span>Upload artwork</span></label>
               : <Button disabled aria-describedby="ed-upload-off">Upload artwork — unavailable</Button>}
             <Button variant="outline" onClick={() => { const r = addTextLayer(scene, zoneId); edit(r.scene); setSelected(r.layerId); }}>Add text</Button>
@@ -275,7 +278,7 @@ export function Editor({ compositionId: initialId, artworkUpload }: Readonly<{ c
             <Button variant="outline" onClick={() => void freeze()} disabled={busy || server.autosave === "unavailable" || server.autosave === "conflict"}>Freeze version</Button>
             {server.owner === "guest" && <Button variant="outline" onClick={() => void claim()} disabled={busy}>Keep in my account</Button>}
           </div>
-          {!artworkUpload && <p className="notice" id="ed-upload-off">Artwork upload is not enabled in this preview. You can still add text; nothing is uploaded or stored.</p>}
+          {!canUpload && <p className="notice" id="ed-upload-off">{artworkUpload ? "Artwork upload is not configured yet: its limits have not been set." : "Artwork upload is not enabled in this preview."} You can still add text; nothing is uploaded or stored.</p>}
           {server.autosave === "unavailable" && <p className="notice">Saving is not enabled in this preview. Edits and previews work, but they are not stored.</p>}
           {server.autosave === "conflict" && <p className="notice" role="alert">This draft changed in another tab or device. <button className="ed-link" onClick={() => location.reload()}>Reload</button> to continue.</p>}
           {server.versions.length > 0 && (

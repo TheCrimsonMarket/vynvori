@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { compositionHttpHandlers, compositionService, compositionAssetStorage, defaultCompositionConfig } from "@vynvori/commerce/composition";
+import { compositionHttpHandlers, compositionService, compositionAssetStorage, parseCompositionLimits, resolveApiLimits, resolveGuestCreateLimits, resolveUploadLimits } from "@vynvori/commerce/composition";
 import { compositionStore } from "@vynvori/db/composition";
 import { getIdentityRuntime } from "./auth-runtime";
 import { identitySettings } from "./identity-settings";
@@ -19,24 +19,39 @@ export function compositionSettings(env: Env): CompositionSettings {
   return Object.freeze({ enabled: true, appOrigin: identity.appOrigin, uploads: env.M3_COMPOSITION_UPLOADS === "true" });
 }
 
+/** Upload limits for the editor, from the SAME parsed `M3_LIMIT_*` configuration the API enforces; null while any needed key is unset. */
+export function uploadLimitsFor(env: Env): Readonly<{ maxBytes: number; maxPixels: number; maxSidePx: number }> | null {
+  const limits = resolveUploadLimits(parseCompositionLimits(env));
+  return limits ? Object.freeze({ maxBytes: limits.imageLimits.maxBytes, maxPixels: limits.imageLimits.maxPixels, maxSidePx: limits.imageLimits.maxSide }) : null;
+}
+
 /**
  * What the editor UI may offer. Derived from the SAME settings the API routes gate on, never from a separate client default:
  * with any flag OFF (the default) artwork upload is unavailable, and an invalid private configuration also fails closed.
+ * `uploadLimits` is the only source of the editor's client-side pre-check numbers; it is null unless uploads are enabled AND
+ * every needed limit is configured. The server stays authoritative.
  */
-export function editorCapabilities(env: Env): Readonly<{ artworkUpload: boolean }> {
-  try { const settings = compositionSettings(env); return Object.freeze({ artworkUpload: settings.enabled && settings.uploads }); }
-  catch { return Object.freeze({ artworkUpload: false }); }
+export function editorCapabilities(env: Env): Readonly<{ artworkUpload: boolean; uploadLimits: Readonly<{ maxBytes: number; maxPixels: number; maxSidePx: number }> | null }> {
+  try {
+    const settings = compositionSettings(env), artworkUpload = settings.enabled && settings.uploads;
+    return Object.freeze({ artworkUpload, uploadLimits: artworkUpload ? uploadLimitsFor(env) : null });
+  } catch { return Object.freeze({ artworkUpload: false, uploadLimits: null }); }
 }
 
 export function createCompositionRuntime(env: Env) {
   const settings = compositionSettings(env);
-  const config = { enabled: settings.enabled, appOrigin: settings.enabled ? settings.appOrigin : "", guestTtlSeconds: defaultCompositionConfig.guestTtlMs / 1000, maxJsonBytes: 256 * 1024, maxUploadBytes: defaultCompositionConfig.imageLimits.maxBytes };
+  const parsed = parseCompositionLimits(env), api = resolveApiLimits(parsed), guest = resolveGuestCreateLimits(parsed), uploads = resolveUploadLimits(parsed);
+  // Unset or invalid keys leave the field undefined, which closes the capability (COMPOSITION_LIMITS_NOT_CONFIGURED). No fallback.
+  const config = { enabled: settings.enabled, appOrigin: settings.enabled ? settings.appOrigin : "", guestTtlSeconds: guest?.guestTtlSeconds, maxJsonBytes: api?.jsonMaxBytes, maxUploadBytes: uploads?.imageLimits.maxBytes };
   if (!settings.enabled) return compositionHttpHandlers(config);
   const identity = getIdentityRuntime();
   if (!identity.enabled || !identity.sessions || !identity.pool) throw new Error("Composition requires the identity runtime");
   const sessions = identity.sessions;
   const storage = settings.uploads ? compositionAssetStorage({ ...env, M2_ENV: "staging" } as never) : null;
-  const service = compositionService(compositionStore(identity.pool), storage, { ...defaultCompositionConfig, uploadsEnabled: settings.uploads });
+  const service = compositionService(compositionStore(identity.pool), storage, {
+    uploadsEnabled: settings.uploads, guestTtlMs: guest ? guest.guestTtlSeconds * 1000 : undefined, imageLimits: uploads?.imageLimits,
+    maxAssetsPerComposition: uploads?.maxAssetsPerComposition, maxBytesPerComposition: uploads?.maxBytesPerComposition,
+  });
   return compositionHttpHandlers(config, service, {
     async verify(secret) { const session = await sessions.verify(secret); return { userId: session.userId }; },
     claimGuest: (secret, draftId, capability) => sessions.claimGuest(secret, draftId, capability),
