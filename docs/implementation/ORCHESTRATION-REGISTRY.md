@@ -86,8 +86,9 @@ Last used: **ADR-0020**. Two historical files share number 0008 (`ADR-0008-M2-Cl
 ### Postgres test databases and connection budget (`m2.yml` foundation job)
 
 - Job Postgres: `max_connections = 250` (asserted in the workflow); 20 are held back for tooling, so test files may use at most 230 combined.
-- `node --test` runs files in parallel, so peaks add up. Each manager declares its peak connections per test file in its plan, and fixtures assert against `SHOW max_connections`. M7 declared 110 (one concurrency file) + 45 (other ledger files). M3 closure declared 20 (one file) + 5 per other DB file. Existing suites (M2 creative, M3 composition, M1b identity) also count.
-- If the combined worst case does not fit, root serializes the Postgres suites with `--test-concurrency=1` in a workflow PR instead of shrinking tests.
+- `node --test` runs at most `availableParallelism - 1` files at once (a handful on standard GitHub runners), so the real peak is the sum of the largest concurrently running files, not of all files. Each manager declares per-file peaks **including each file's own persistent client and transient admin/probe connections**, not only pool caps. Declared so far: M7 about 112 (one concurrency file) and about 7 per other ledger file (about 175 if all ran at once, about 191 with the existing suites); M3 closure 20 (one file) + 5 per other DB file. Existing suites (M2 creative, M3 composition, M1b identity) also count.
+- Fixtures check their own pool against `SHOW max_connections` and fail under `CI_REQUIRE_PG_TESTS=1` when it does not fit; they cannot see other files' usage. Managers record the CI-measured number at close.
+- If a runner change or new suites make the realistic worst case exceed the ceiling, root serializes the Postgres suites with `--test-concurrency=1` in a workflow PR instead of shrinking tests (M7 has agreed this is acceptable).
 - Database naming: M3 closure `vynvori_m3_<name>_test`, one database per DB test file; M7 uses one database per ledger test file. CI's `synthetic` superuser creates them. No test may drop another file's schemas.
 
 New journals or new sequence numbers in an existing journal are allocated by root on request. A milestone never appends to another milestone's journal without a root grant. Every migration needs a documented, non-destructive rollback (AGENTS.md §4).
