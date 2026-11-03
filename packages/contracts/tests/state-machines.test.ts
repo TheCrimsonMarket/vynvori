@@ -5,6 +5,7 @@ import {
   canTransitionPlaneCBundle, canTransitionPlaneCCommand, canTransitionPlaneCPromo, canTransitionPlaneD,
   canTransitionPlaneE, isCancellableBeforeRelease, isPreReleaseState,
 } from "../src/state-machines";
+import { PackageStateV1Schema, toCustomerPackageState } from "../src/operations";
 
 test("Plane A follows the documented stage chain and rejects skipping/rewinding where forbidden", () => {
   assert.equal(canTransitionPlaneA("brief_draft", "brief_ready"), true);
@@ -41,6 +42,26 @@ test("Plane C bundle: no automatic completion from partial, closure_pending gate
   assert.equal(canTransitionPlaneCBundle("partial", "delivered_3_of_3"), true);
   assert.equal(canTransitionPlaneCBundle("open_for_refinements", "closed"), false);
   assert.equal(canTransitionPlaneCBundle("closure_pending", "closed"), true);
+});
+
+test("Plane C bundle C-02: only a verified-uncharged first final with a durable release receipt reopens", () => {
+  const ok = { finalAttempt: "first_final", outcome: "verified_uncharged", releaseReceiptDurable: true } as const;
+  assert.equal(canTransitionPlaneCBundle("closure_pending", "open_for_refinements"), false); // default deny without context
+  assert.equal(canTransitionPlaneCBundle("closure_pending", "open_for_refinements", ok), true);
+  assert.equal(canTransitionPlaneCBundle("closure_pending", "open_for_refinements", { ...ok, finalAttempt: "later_revision" }), false);
+  assert.equal(canTransitionPlaneCBundle("closure_pending", "open_for_refinements", { ...ok, outcome: "unknown" }), false);
+  assert.equal(canTransitionPlaneCBundle("closure_pending", "open_for_refinements", { ...ok, outcome: "charged" }), false);
+  assert.equal(canTransitionPlaneCBundle("closure_pending", "open_for_refinements", { ...ok, releaseReceiptDurable: false }), false);
+  assert.equal(canTransitionPlaneCBundle("closed", "open_for_refinements", ok), false); // a closed package never reopens
+  assert.equal(canTransitionPlaneCBundle("closure_pending", "closed", ok), true); // context never changes other edges
+});
+
+test("internal bundle state maps exhaustively onto the customer PackageStateV1 names", () => {
+  assert.equal(toCustomerPackageState("open_for_refinements"), "refinements_open");
+  for (const state of ["quoted", "authorized", "partial", "delivered_3_of_3", "closure_pending", "closed", "remedy_pending"] as const) {
+    assert.equal(toCustomerPackageState(state), state);
+    assert.equal(PackageStateV1Schema.parse(toCustomerPackageState(state)), state);
+  }
 });
 
 test("Plane C promo: a verified_uncharged_failure claim is terminal, never silently reconsumed", () => {

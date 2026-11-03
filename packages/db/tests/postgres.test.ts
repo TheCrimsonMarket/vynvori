@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { connectDatabase } from "../src/index";
-test("PostgreSQL constraints, transaction rollback and migration readiness", { skip: !process.env.M2_CREATIVE_DATABASE_URL }, async () => {
+// CI sets CI_REQUIRE_PG_TESTS=1 so a missing database fails the run instead of silently skipping.
+const requirePg = process.env.CI_REQUIRE_PG_TESTS === "1";
+test("PostgreSQL constraints, transaction rollback and migration readiness", { skip: !process.env.M2_CREATIVE_DATABASE_URL && !requirePg }, async () => {
   const connection = connectDatabase(process.env);
   try {
     await connection.ready();

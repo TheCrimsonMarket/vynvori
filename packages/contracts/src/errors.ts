@@ -21,6 +21,7 @@ export const FORBIDDEN_PUBLIC_FIELDS = Object.freeze([
   "providerJobId", "privateVendorCostUsd", "vendorCostEvidence", "internalInvoice", "staffNotes",
   "verifiedCaptureId", "authorizingStaffActorId", "staffAuthorizationEvidenceId",
   "privateLedgerAdjustmentId", "medusaRefundId", "idempotencyKey", "idempotencyScope",
+  "requestSha256", "evidenceRef", "modelRef", "contentSha256",
 ] as const);
 
 export const CapabilitySchema = z.enum(["available", "unavailable", "under_review"]);

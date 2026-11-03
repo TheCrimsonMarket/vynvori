@@ -2,20 +2,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { compositionHttpHandlers, compositionCookies, type CompositionIdentityPort } from "../src/composition-http";
-import { compositionService, defaultCompositionConfig } from "../src/composition";
+import { compositionService } from "../src/composition";
+import { SYNTHETIC_COMPOSITION_CONFIG, SYNTHETIC_HTTP_LIMITS, SYNTHETIC_GUEST_TTL_SECONDS } from "./composition-synthetic";
 import { memoryHarness } from "./composition-suite";
 import { memoryStorage, png, sceneWith, textLayer } from "./composition-fixtures";
 
 const ORIGIN = "https://staging.vynvori.test", CSRF = "c".repeat(43), SESSION = "s".repeat(43);
 function setup(enabled = true, uploads = true) {
   const h = memoryHarness(), storage = memoryStorage();
-  const service = compositionService(h.store, storage, { ...defaultCompositionConfig, uploadsEnabled: uploads });
+  const service = compositionService(h.store, storage, { ...SYNTHETIC_COMPOSITION_CONFIG, uploadsEnabled: uploads });
   const users = new Map<string, string>([[SESSION, randomUUID()]]), claims: string[] = [];
   const identity: CompositionIdentityPort = {
     async verify(secret) { const userId = users.get(secret); if (!userId) throw new Error("no session"); return { userId }; },
     async claimGuest(secret, draftId) { const userId = users.get(secret)!; claims.push(draftId); await h.m1bClaim(draftId, userId); },
   };
-  const http = compositionHttpHandlers({ enabled, appOrigin: ORIGIN, guestTtlSeconds: 86400, maxJsonBytes: 256 * 1024, maxUploadBytes: 25 * 1024 * 1024 }, enabled ? service : undefined, enabled ? identity : undefined);
+  const http = compositionHttpHandlers({ enabled, appOrigin: ORIGIN, ...SYNTHETIC_HTTP_LIMITS }, enabled ? service : undefined, enabled ? identity : undefined);
   return { http, users, claims, h };
 }
 const req = (path: string, init: { method?: string; cookie?: string; body?: unknown; raw?: Uint8Array; type?: string; headers?: Record<string, string> } = {}) => new Request(ORIGIN + path, {
@@ -31,7 +32,7 @@ test("disabled by default: every route answers 503 and touches nothing", async (
 test("guest create sets an HttpOnly Strict __Host- capability cookie and never returns the capability in JSON", async () => {
   const { http } = setup();
   const response = await http.create(req("/api/v1/compositions", { method: "POST" })); assert.equal(response.status, 201);
-  const cookie = response.headers.get("set-cookie")!; assert.match(cookie, /^__Host-vynvori_guest=[0-9a-f-]{36}\.[A-Za-z0-9_-]{43}; Path=\/; HttpOnly; Secure; SameSite=Strict; Max-Age=86400$/);
+  const cookie = response.headers.get("set-cookie")!; assert.match(cookie, new RegExp(`^__Host-vynvori_guest=[0-9a-f-]{36}\\.[A-Za-z0-9_-]{43}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SYNTHETIC_GUEST_TTL_SECONDS}$`));
   const text = await response.text(), capability = cookie.split("=")[1]!.split(".")[1]!.split(";")[0]!;
   assert.equal(text.includes(capability), false); assert.equal(response.headers.get("cache-control")?.includes("no-store"), true);
   assert.equal(JSON.parse(text).draft.ownerKind, "guest_capability");

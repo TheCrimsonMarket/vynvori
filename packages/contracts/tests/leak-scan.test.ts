@@ -24,3 +24,14 @@ test("findLeakedInternalFields detects every forbidden key, however deeply neste
   assert.deepEqual(findLeakedInternalFields("not-an-object"), []);
   assert.deepEqual(findLeakedInternalFields(null), []);
 });
+
+test("findLeakedInternalFields detects the ledger-internal keys added for M7 (flat and nested) and public fixtures stay clean", () => {
+  for (const key of ["requestSha256", "evidenceRef", "modelRef", "contentSha256"]) {
+    assert.deepEqual(findLeakedInternalFields({ [key]: "x" }), [key], key + " flat");
+    assert.deepEqual(findLeakedInternalFields({ outer: [{ inner: { [key]: "x" } }] }), [key], key + " nested");
+  }
+  // capabilitySnapshotId is a deliberate PUBLIC field and must never be forbidden.
+  assert.deepEqual(findLeakedInternalFields({ capabilitySnapshotId: "cap-1" }), []);
+  assert.deepEqual(findLeakedInternalFields(conceptBundleQuoteFixture()), []);
+  assert.deepEqual(findLeakedInternalFields(availabilityFixture), []);
+});

@@ -106,7 +106,25 @@ export const PLANE_C_BUNDLE_GRAPH = buildGraph<PlaneCBundleState>([
   ["closed", []],
   ["remedy_pending", ["closed"]],
 ]);
-export function canTransitionPlaneCBundle(from: PlaneCBundleState, to: PlaneCBundleState): boolean {
+/**
+ * doc 06 C-02: only a verified-uncharged FIRST final attempt on an open original package may return
+ * `closure_pending -> open_for_refinements`, and only once the reservation-release ledger receipt is durable.
+ * A failed later, separately purchased final revision never reopens the original package.
+ */
+export interface BundleReopenContextV1 {
+  readonly finalAttempt: "first_final" | "later_revision";
+  readonly outcome: "verified_uncharged" | "charged" | "unknown";
+  readonly releaseReceiptDurable: boolean;
+}
+export function mayReopenBundleAfterUnchargedFinal(context: BundleReopenContextV1): boolean {
+  return context.finalAttempt === "first_final" && context.outcome === "verified_uncharged" && context.releaseReceiptDurable;
+}
+/**
+ * Unconditional edges come from PLANE_C_BUNDLE_GRAPH. The guarded C-02 reopen edge is deliberately not in the
+ * graph: without a reopen context it is denied (default deny).
+ */
+export function canTransitionPlaneCBundle(from: PlaneCBundleState, to: PlaneCBundleState, reopen?: BundleReopenContextV1): boolean {
+  if (from === "closure_pending" && to === "open_for_refinements") return reopen !== undefined && mayReopenBundleAfterUnchargedFinal(reopen);
   return canTransition(PLANE_C_BUNDLE_GRAPH, from, to);
 }
 

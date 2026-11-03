@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { Client } from "pg";
 import { applyCompositionMigrations, compositionMigrationPlan, CompositionMigrationError } from "../src/composition-migrations";
 import { connectionString, freshComposition } from "./composition-fixture";
+// CI sets CI_REQUIRE_PG_TESTS=1 so a missing database fails the run instead of silently skipping.
+const requirePg = process.env.CI_REQUIRE_PG_TESTS === "1";
 
 test("composition migration plan pins exact reviewed SQL and refuses any non-local target", async () => {
   const plan = compositionMigrationPlan(); assert.equal(plan.migrations.length, 1); assert.match(plan.digest, /^[a-f0-9]{64}$/);
@@ -15,7 +17,8 @@ test("composition migration plan pins exact reviewed SQL and refuses any non-loc
   assert.doesNotMatch(sql.replace(/--.*$/gm, ""), /\b(GRANT|REVOKE|DROP\s+(TABLE|SCHEMA)|ALTER\s+TABLE\s+vynvori_identity|TRUNCATE\s+vynvori)/i, "additive only: no grants, drops or identity alterations");
 });
 
-test("composition DDL: replay, drift, immutability, ownership and no-print guarantees in disposable PostgreSQL", { skip: !connectionString }, async t => {
+test("composition DDL: replay, drift, immutability, ownership and no-print guarantees in disposable PostgreSQL", { skip: !connectionString && !requirePg }, async t => {
+  assert.ok(connectionString, "CI_REQUIRE_PG_TESTS=1 requires M3_TEST_POSTGRES_URL");
   const client = await freshComposition();
   const q = (text: string, values?: unknown[]) => client.query(text, values);
   const plan = compositionMigrationPlan(), expected = { database: "vynvori_m3_migration_test", role: "synthetic", planSha256: plan.digest };

@@ -21,17 +21,20 @@ export type { CompositionAccess, CompositionRecord, AssetRecord, VersionRecord, 
 export class CompositionError extends Error {
   constructor(readonly code:
     | "NOT_FOUND" | "REVISION_CONFLICT" | "INVALID_SCENE" | "SCENE_LIMIT" | "ASSET_NOT_OWNED" | "FONT_UNLICENSED" | "UPLOADS_DISABLED"
-    | "UNSUPPORTED_MEDIA" | "ASSET_TOO_LARGE" | "ASSET_QUOTA" | "OWNER_REQUIRED" | "ILLEGAL_TRANSITION" | "STORAGE_UNAVAILABLE", readonly detail?: string) { super(code); this.name = "CompositionError"; }
+    | "UNSUPPORTED_MEDIA" | "ASSET_TOO_LARGE" | "ASSET_QUOTA" | "OWNER_REQUIRED" | "ILLEGAL_TRANSITION" | "STORAGE_UNAVAILABLE" | "LIMITS_NOT_CONFIGURED", readonly detail?: string) { super(code); this.name = "CompositionError"; }
 }
 
+/**
+ * Policy numbers are supplied by the composition root from typed `M3_LIMIT_*` configuration (composition-limits.ts) and have NO
+ * default. An `undefined` field means "not configured": the operation that needs it answers LIMITS_NOT_CONFIGURED.
+ */
 export type CompositionConfig = Readonly<{
-  guestTtlMs: number; uploadsEnabled: boolean; imageLimits: ImageLimits; maxAssetsPerComposition: number; maxBytesPerComposition: number;
+  uploadsEnabled: boolean;
+  guestTtlMs: number | undefined;
+  imageLimits: ImageLimits | undefined;
+  maxAssetsPerComposition: number | undefined;
+  maxBytesPerComposition: number | undefined;
 }>;
-export const defaultCompositionConfig: CompositionConfig = Object.freeze({
-  guestTtlMs: 24 * 3600 * 1000, uploadsEnabled: false,
-  imageLimits: Object.freeze({ maxBytes: 25 * 1024 * 1024, maxPixels: 36_000_000, maxSide: 20_000 }),
-  maxAssetsPerComposition: 24, maxBytesPerComposition: 150 * 1024 * 1024,
-});
 
 const fontIndex = new Map(LICENSED_FONTS.map(font => [font.fontAssetId, font]));
 const profileDefinitionSha = (profile: PrintProfileV1) => createHash("sha256").update(JSON.stringify(profile)).digest("hex");
@@ -47,7 +50,7 @@ export function advancePlaneD(from: PlaneDState, path: readonly PlaneDState[]): 
   return current;
 }
 
-export function compositionService(store: CompositionStore, storage: CompositionAssetStorage | null, config: CompositionConfig = defaultCompositionConfig, now: () => Date = () => new Date(), profile: PrintProfileV1 = SYNTHETIC_PREVIEW_PROFILE) {
+export function compositionService(store: CompositionStore, storage: CompositionAssetStorage | null, config: CompositionConfig, now: () => Date = () => new Date(), profile: PrintProfileV1 = SYNTHETIC_PREVIEW_PROFILE) {
   const profileSha = profileDefinitionSha(profile);
   let profileReady: Promise<void> | undefined;
   const ready = () => (profileReady ??= store.ensurePrintProfile(profile, profileSha).catch(error => { profileReady = undefined; throw error; }));
@@ -85,10 +88,18 @@ export function compositionService(store: CompositionStore, storage: Composition
     return record;
   };
 
+  /** Flag first (UPLOADS_DISABLED), then configuration (LIMITS_NOT_CONFIGURED). Configured-but-incomplete is never unlimited. */
+  function assertUploadsAvailable(): void {
+    if (!config.uploadsEnabled || !storage) throw new CompositionError("UPLOADS_DISABLED");
+    if (!config.imageLimits || config.maxAssetsPerComposition === undefined || config.maxBytesPerComposition === undefined) throw new CompositionError("LIMITS_NOT_CONFIGURED");
+  }
+
   return Object.freeze({
     profile,
+    assertUploadsAvailable,
     /** Free, accountless. The raw capability is returned exactly once and only its hash is stored. */
     async createGuest(): Promise<{ record: CompositionRecord; capability: string; expiresAt: Date }> {
+      if (config.guestTtlMs === undefined) throw new CompositionError("LIMITS_NOT_CONFIGURED");
       await ready();
       const scene = EMPTY_SYNTHETIC_SCENE(), id = randomUUID(), capability = randomBytes(32).toString("base64url");
       const expiresAt = new Date(now().getTime() + config.guestTtlMs);
@@ -174,10 +185,13 @@ export function compositionService(store: CompositionStore, storage: Composition
 
     /** Store the unchanged original privately. Disabled unless `assets.production_uploads` is enabled by the composition root. */
     async uploadAsset(id: string, access: CompositionAccess, bytes: Uint8Array, declaredMime: string | null): Promise<AssetRecord> {
-      if (!config.uploadsEnabled || !storage) throw new CompositionError("UPLOADS_DISABLED");
+      assertUploadsAvailable();
+      if (!storage) throw new CompositionError("UPLOADS_DISABLED"); // narrowing only; assertUploadsAvailable already refused this
+      const { imageLimits, maxAssetsPerComposition, maxBytesPerComposition } = config;
+      if (!imageLimits || maxAssetsPerComposition === undefined || maxBytesPerComposition === undefined) throw new CompositionError("LIMITS_NOT_CONFIGURED");
       await required(id, access);
       let image;
-      try { image = inspectImage(bytes, config.imageLimits); }
+      try { image = inspectImage(bytes, imageLimits); }
       catch (error) {
         if (error instanceof ImageRejectedError) throw new CompositionError(error.code === "TOO_LARGE" ? "ASSET_TOO_LARGE" : "UNSUPPORTED_MEDIA", error.code);
         throw error;
@@ -186,7 +200,7 @@ export function compositionService(store: CompositionStore, storage: Composition
       const existing = (await store.listAssets(id, access, now())) ?? [];
       const duplicate = existing.find(asset => asset.sha256 === image.sha256);
       if (duplicate) return duplicate;
-      if (existing.length >= config.maxAssetsPerComposition || existing.reduce((sum, asset) => sum + asset.byteSize, 0) + bytes.byteLength > config.maxBytesPerComposition) throw new CompositionError("ASSET_QUOTA");
+      if (existing.length >= maxAssetsPerComposition || existing.reduce((sum, asset) => sum + asset.byteSize, 0) + bytes.byteLength > maxBytesPerComposition) throw new CompositionError("ASSET_QUOTA");
       const objectKey = `private/composition/v1/${id}/${image.sha256}`;
       try { await storage.put(objectKey, bytes, image.mime, image.sha256); }
       catch { throw new CompositionError("STORAGE_UNAVAILABLE"); }

@@ -109,3 +109,26 @@ export const commit = (history: History, scene: CompositionSceneV1, limit = 100)
   scene === history.present ? history : { past: [...history.past, history.present].slice(-limit), present: scene, future: [] };
 export const undo = (history: History): History => history.past.length ? { past: history.past.slice(0, -1), present: history.past.at(-1)!, future: [history.present, ...history.future] } : history;
 export const redo = (history: History): History => history.future.length ? { past: [...history.past, history.present], present: history.future[0]!, future: history.future.slice(1) } : history;
+
+/**
+ * Client-side upload pre-checks. The numbers come ONLY from the `uploadLimits` prop (parsed server-side from `M3_LIMIT_*`
+ * configuration); there is no local copy and no default. These checks only save a round trip: the server stays authoritative.
+ */
+export type UploadLimits = Readonly<{ maxBytes: number; maxPixels: number; maxSidePx: number }>;
+export type UploadCheck = Readonly<{ ok: true }> | Readonly<{ ok: false; reason: "size" | "pixels" | "side"; message: string }>;
+const MEBIBYTE = 1024 * 1024;
+export const describeBytes = (bytes: number) => bytes >= MEBIBYTE ? `${Number((bytes / MEBIBYTE).toFixed(1))} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+export function checkUploadFileSize(name: string, byteSize: number, limits: UploadLimits): UploadCheck {
+  return byteSize > limits.maxBytes ? { ok: false, reason: "size", message: `${name}: that file is too large (${describeBytes(limits.maxBytes)} maximum).` } : { ok: true };
+}
+export function checkUploadDimensions(name: string, widthPx: number, heightPx: number, limits: UploadLimits): UploadCheck {
+  if (Math.max(widthPx, heightPx) > limits.maxSidePx) return { ok: false, reason: "side", message: `${name}: image is too large (longest side ${limits.maxSidePx.toLocaleString("en-US")} pixels maximum).` };
+  if (widthPx * heightPx > limits.maxPixels) return { ok: false, reason: "pixels", message: `${name}: image is too large (${limits.maxPixels.toLocaleString("en-US")} pixels in total maximum).` };
+  return { ok: true };
+}
+/** Guest-draft expiry wording derived from the API's `expiresAt`; never a hard-coded duration. */
+export function describeExpiry(expiresAt: string | null | undefined, locale?: string, timeZone?: string): string {
+  const date = expiresAt ? new Date(expiresAt) : null;
+  if (!date || Number.isNaN(date.getTime())) return "until it expires";
+  return `until ${new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", ...(timeZone ? { timeZone } : {}) }).format(date)}`;
+}
