@@ -60,7 +60,8 @@ const code = (promise: Promise<unknown>, expected: CompositionError["code"]) => 
 
 export function compositionConformance(label: string, factory: () => Promise<Harness>, options: { skip?: boolean } = {}) {
   const t = (name: string, fn: () => Promise<void>) => test(`${label}: ${name}`, { skip: options.skip ?? false }, fn);
-  let clock = new Date("2026-11-02T12:00:00Z");
+  // Anchored to real time: the PostgreSQL store reads a new guest draft back with the real clock, so a fixed past date plus a short TTL would already be expired.
+  let clock = new Date();
   const setup = async (uploads = true) => {
     const h = await factory(), storage = memoryStorage();
     const service = compositionService(h.store, storage, { ...SYNTHETIC_COMPOSITION_CONFIG, uploadsEnabled: uploads }, () => clock);
@@ -71,7 +72,7 @@ export function compositionConformance(label: string, factory: () => Promise<Har
     return { id: created.record.id, access: { kind: "guest", capabilityHash: secretHash(created.capability) } as CompositionAccess, capability: created.capability, record: created.record };
   };
   t("guest draft is free, accountless and starts in guest_draft; only the capability hash is stored", async () => {
-    clock = new Date("2026-11-02T12:00:00Z");
+    clock = new Date();
     const { service } = await setup(); const g = await guest(service);
     assert.equal(g.record.lifecycleState, "guest_draft"); assert.equal(g.record.ownerUserId, null); assert.equal(g.capability.length, 43);
     assert.equal(JSON.stringify(g.record).includes(g.capability), false);
@@ -88,7 +89,7 @@ export function compositionConformance(label: string, factory: () => Promise<Har
     await code(service.get(a.id, a.access), "NOT_FOUND");
     await code(service.saveDraft(a.id, a.access, 0, sceneWith()), "NOT_FOUND");
     await code(service.freeze(a.id, a.access, 0), "NOT_FOUND");
-    clock = new Date("2026-11-02T12:00:00Z");
+    clock = new Date();
   });
   t("upload is closed by default (assets.production_uploads OFF) and never reaches storage", async () => {
     const { service, storage } = await setup(false); const g = await guest(service);
