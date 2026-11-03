@@ -9,7 +9,7 @@
 | `firefox` | Playwright Firefox |
 | `webkit` | Playwright WebKit |
 
-Any other value, including an empty string, fails immediately with `Unsupported M0_BROWSER`, before a server is started. Selection lives in `scripts/browser-engine.mjs`; its unit test is `scripts/tests/browser-engine.test.mjs` (`node --test scripts/tests/browser-engine.test.mjs`; not wired into an npm script because `package.json` is outside this step's lane).
+Any other value, including an empty string, fails immediately with `Unsupported M0_BROWSER`, before a server is started. Selection lives in `scripts/browser-engine.mjs`; its unit test is `scripts/tests/browser-engine.test.mjs` (`node --test scripts/tests/browser-engine.test.mjs`; run by `npm run test:lifecycle` (part of `npm test`)).
 
 Invocation (CI only for Firefox and WebKit; browsers are installed by the workflow, never in a session):
 
