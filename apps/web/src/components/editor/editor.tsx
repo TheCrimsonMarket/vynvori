@@ -1,4 +1,5 @@
 "use client";
+import "./zod-jitless";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { CompositionSceneV1Schema, EMPTY_SYNTHETIC_SCENE, LICENSED_FONTS, runPreviewPreflight, type CompositionSceneV1, type EditorLayerV1, type AssetFacts } from "@vynvori/contracts";

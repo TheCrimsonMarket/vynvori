@@ -1,3 +1,4 @@
+import "./zod-jitless";
 import {
   SYNTHETIC_PREVIEW_PROFILE, LICENSED_FONTS, quantizeMm, rotatedBounds, normalizeScene,
   type CompositionSceneV1, type EditorLayerV1, type EditorPageV1,
