@@ -7,8 +7,10 @@
 -- other objects there also make the DROP fail. The journal schema is removed so up -> down -> up passes the drift check.
 DO $rollback$
 BEGIN
+  PERFORM pg_catalog.set_config('lock_timeout', '4s', true);
+  PERFORM pg_catalog.pg_advisory_xact_lock(742110, 7); -- same lock as the runner: never races an apply
   IF to_regnamespace('vynvori_ledger') IS NULL THEN RAISE EXCEPTION 'schema not present'; END IF;
-  IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'vynvori_ledger') THEN
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'vynvori_ledger') THEN
     RAISE EXCEPTION 'refusing rollback: relations exist in vynvori_ledger; later migrations must be rolled back first, and ledger data is restored from backup';
   END IF;
   DROP SCHEMA vynvori_ledger;

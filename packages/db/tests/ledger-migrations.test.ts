@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash, randomBytes } from "node:crypto";
 import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "pg";
 import { applyLedgerMigrations, ledgerMigrationPlan, LedgerMigrationError } from "../src/ledger-migrations";
-import { assertDisposableTarget, databaseFor, dropLedger, freshLedger, ledgerPool, ledgerTarget, resolveLedgerTestUrl, POOL_CAPS, poolBudget } from "./ledger-fixture";
+import { assertDisposableTarget, assertServerIsLoopbackSynthetic, databaseFor, dropLedger, freshLedger, ledgerPool, ledgerTarget, resolveLedgerTestUrl, POOL_CAPS, poolBudget } from "./ledger-fixture";
 
 const planDir = new URL("../ledger-migrations", import.meta.url).pathname;
 const code = (c: string) => (e: unknown) => e instanceof LedgerMigrationError && e.code === c;
@@ -14,6 +15,32 @@ test("ledger plan loads, pins the reviewed SQL and has exactly the schema-only m
   const plan = ledgerMigrationPlan();
   assert.equal(plan.migrations.length, 1); assert.equal(plan.migrations[0]!.file, "0001_ledger_schema.sql");
   assert.match(plan.digest, /^[a-f0-9]{64}$/); assert.deepEqual(plan.plan.requires, ["vynvori_identity"]);
+});
+
+// Golden digests: ANY change to plan.json or the pinned SQL forces a visible edit here (the planSha256 argument alone is circular).
+const GOLDEN_PLAN_JSON_SHA256 = "8342b026886194e48e9819dc5a7afc4c07b914630f703eba9a450ca780ce17d9";
+const GOLDEN_0001_SQL_SHA256 = "a8273f3fac59de2d0c2f1a661a852d22b9a360c9d9c83e672bd7f0d25d74ef4e";
+const sha = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
+test("golden digests pin plan.json and 0001_ledger_schema.sql independently of the loader", () => {
+  assert.equal(sha(join(planDir, "plan.json")), GOLDEN_PLAN_JSON_SHA256);
+  assert.equal(sha(join(planDir, "0001_ledger_schema.sql")), GOLDEN_0001_SQL_SHA256);
+  assert.equal(ledgerMigrationPlan().digest, GOLDEN_PLAN_JSON_SHA256);
+  assert.equal(ledgerMigrationPlan().migrations[0]!.sha256, GOLDEN_0001_SQL_SHA256);
+});
+
+test("plan validation: requires must be exactly the identity schema; files unique and strictly increasing", () => {
+  const variant = (mutate: (plan: Record<string, unknown>) => void) => {
+    const dir = mkdtempSync(join(tmpdir(), "ledger-plan-")); cpSync(planDir, dir, { recursive: true });
+    const plan = JSON.parse(readFileSync(join(dir, "plan.json"), "utf8")); mutate(plan); writeFileSync(join(dir, "plan.json"), JSON.stringify(plan));
+    cpSync(join(dir, "0001_ledger_schema.sql"), join(dir, "0002_second_step.sql"));
+    return dir;
+  };
+  const entry = (file: string) => ({ file, sha256: GOLDEN_0001_SQL_SHA256 });
+  assert.ok(ledgerMigrationPlan(variant(() => undefined)), "baseline copy loads");
+  for (const requires of [[], ["vynvori_identity", "extra"], ["other"], "vynvori_identity"]) assert.throws(() => ledgerMigrationPlan(variant(p => { p["requires"] = requires; })), code("PLAN_INVALID"), JSON.stringify(requires));
+  assert.throws(() => ledgerMigrationPlan(variant(p => { p["migrations"] = [entry("0001_ledger_schema.sql"), entry("0001_ledger_schema.sql")]; })), code("PLAN_INVALID"), "duplicate");
+  assert.throws(() => ledgerMigrationPlan(variant(p => { p["migrations"] = [entry("0002_second_step.sql"), entry("0001_ledger_schema.sql")]; })), code("PLAN_INVALID"), "decreasing");
+  assert.ok(ledgerMigrationPlan(variant(p => { p["migrations"] = [entry("0001_ledger_schema.sql"), entry("0002_second_step.sql")]; })).migrations.length === 2, "increasing is accepted");
 });
 
 test("tampered SQL, plan or file name is PLAN_INVALID", () => {
@@ -33,7 +60,7 @@ test("every non-allow-listed, non-loopback or non-synthetic target is TARGET_REJ
   const remote = new Client({ host: "db.example.neon.tech", ssl: true });
   const local = new Client({ host: "127.0.0.1" });
   const base = { role: "synthetic", planSha256: digest };
-  for (const database of ["vynvori_creative_staging", "production", "vynvori_m3_migration_test", "vynvori_m7__test", "vynvori_m7_x_test; DROP", "vynvori_m7_UPPER_test", "vynvori_m7_x"]) {
+  for (const database of ["vynvori_creative_staging", "production", "vynvori_m3_migration_test", "vynvori_m7__test", "vynvori_m7_x_test; DROP", "vynvori_m7_UPPER_test", "vynvori_m7_x", "vynvori_m7_1abc_test", "vynvori_m7__abc_test", "vynvori_m7_ab_test", "vynvori_m7_" + "a".repeat(26) + "_test"]) {
     await assert.rejects(applyLedgerMigrations(remote, { ...base, database }), code("TARGET_REJECTED"));
     await assert.rejects(applyLedgerMigrations(local, { ...base, database }), code("TARGET_REJECTED"));
   }
@@ -61,10 +88,15 @@ test("fixture decision covers URL present, absent, and absent with CI_REQUIRE_PG
 
 test("fixture refuses non-loopback, non-synthetic and non-allow-listed targets and has the D15 caps", () => {
   const name = databaseFor("migrations");
-  assert.ok(assertDisposableTarget("postgres://synthetic:x@127.0.0.1:5432/postgres", name));
+  assert.ok(assertDisposableTarget("postgres://synthetic:x@127.0.0.1:5432/postgres", name, {}));
+  for (const url of ["postgres://synthetic:x@127.0.0.1/postgres", "postgres://synthetic:x@127.0.0.1:5433/postgres", "postgres://synthetic:x@127.0.0.1:6543/postgres"])
+    assert.throws(() => assertDisposableTarget(url, name, {}), /non-disposable/, "explicit CI port required: " + url);
+  assert.ok(assertDisposableTarget("postgres://synthetic:x@127.0.0.1:5433/postgres", name, { M7_TEST_POSTGRES_PORT_ACK: "5433" }), "explicit acknowledgement names the port");
+  assert.throws(() => assertDisposableTarget("postgres://synthetic:x@127.0.0.1:5434/postgres", name, { M7_TEST_POSTGRES_PORT_ACK: "5433" }), /non-disposable/, "acknowledgement must match exactly");
+  assert.throws(() => assertDisposableTarget("postgres://synthetic:x@127.0.0.1/postgres", name, { M7_TEST_POSTGRES_PORT_ACK: "" }), /non-disposable/, "no port is never acceptable");
   for (const url of ["postgres://synthetic:x@db.neon.tech/postgres", "postgres://localhost/postgres", "postgres://postgres:x@127.0.0.1/postgres", "postgres://synthetic:x@localhost/postgres"])
     assert.throws(() => assertDisposableTarget(url, name), /non-disposable/);
-  for (const bad of ["vynvori_m7_other_test", "vynvori_creative_staging", "postgres"]) assert.throws(() => assertDisposableTarget("postgres://synthetic:x@127.0.0.1/postgres", bad), /non-disposable/);
+  for (const bad of ["vynvori_m7_other_test", "vynvori_creative_staging", "postgres"]) assert.throws(() => assertDisposableTarget("postgres://synthetic:x@127.0.0.1:5432/postgres", bad), /non-disposable/);
   const sneaky = ["?host=prod.example.com", "?user=app", "?port=5433", "?options=-c%20x", "?sslmode=require", "#frag"].map(q => "postgres://synthetic:x@127.0.0.1:5432/postgres" + q);
   for (const url of [...sneaky, "not a url with secret-password"]) assert.throws(() => assertDisposableTarget(url, name), (e: unknown) => e instanceof Error && e.message === "Refusing non-disposable database", url);
   assert.deepEqual(poolBudget(250, "concurrency"), { max: 110, degraded: false });
@@ -108,9 +140,13 @@ test("ledger migration journal: apply, replay, drift, rollback guard, up-down-up
     });
     await t.test("the in-transaction identity check rejects a different database or role than expected", async () => {
       await assert.rejects(applyLedgerMigrations(client, { ...expected, database: databaseFor("fixture") }), code("TARGET_REJECTED"));
-      await client.query("DROP ROLE IF EXISTS synthetic_other_role; CREATE ROLE synthetic_other_role NOLOGIN");
-      await client.query("SET ROLE synthetic_other_role");
-      try { await assert.rejects(applyLedgerMigrations(client, expected), code("TARGET_REJECTED")); } finally { await client.query("RESET ROLE; DROP ROLE synthetic_other_role"); }
+      const role = "m7_probe_" + randomBytes(6).toString("hex"); // roles are cluster-global: never a fixed name
+      await client.query(`CREATE ROLE ${role} NOLOGIN`); await client.query(`SET ROLE ${role}`);
+      try { await assert.rejects(applyLedgerMigrations(client, expected), code("TARGET_REJECTED")); } finally { await client.query("RESET ROLE"); await client.query(`DROP ROLE ${role}`); }
+      await assert.rejects(assertServerIsLoopbackSynthetic({ query: async () => ({ rows: [{ u: "postgres", addr: "127.0.0.1" }] }) }), /non-disposable server/);
+      await assert.rejects(assertServerIsLoopbackSynthetic({ query: async () => ({ rows: [{ u: "synthetic", addr: "10.0.0.5" }] }) }), /non-disposable server/);
+      await assert.rejects(assertServerIsLoopbackSynthetic({ query: async () => ({ rows: [{ u: "synthetic", addr: null }] }) }), /non-disposable server/);
+      await assertServerIsLoopbackSynthetic(client);
     });
     await t.test("half state (schema without journal) is HISTORY_OR_SCHEMA_DRIFT", async () => {
       await client.query("DROP SCHEMA vynvori_ledger_migrations CASCADE");

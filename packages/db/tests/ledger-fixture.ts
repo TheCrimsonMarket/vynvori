@@ -23,14 +23,26 @@ export function resolveLedgerTestUrl(env: Env = process.env) {
 }
 export const ledgerTarget = resolveLedgerTestUrl();
 
-/** Throws unless the URL is a loopback synthetic-user target and the database name passes the allow-list. */
-export function assertDisposableTarget(connection: string, database: string) {
+/** Only CI's port is accepted unless M7_TEST_POSTGRES_PORT_ACK explicitly names another one (a local throwaway server). */
+export const DEFAULT_TEST_PORT = "5432";
+/** Throws unless the URL is a loopback synthetic-user target with an explicit allowed port and the database name passes the allow-list. */
+export function assertDisposableTarget(connection: string, database: string, env: Env = process.env) {
   let url: URL;
   try { url = new URL(connection); } catch { throw new Error("Refusing non-disposable database"); } // never echo the string (may hold a password)
   // pg-connection-string lets query parameters (host, user, port, options, ssl...) override the URL authority, so none are allowed.
-  if (url.search !== "" || url.hash !== "" || url.hostname !== "127.0.0.1" || url.username !== "synthetic" || !LEDGER_TEST_DATABASE.test(database)
+  if (url.search !== "" || url.hash !== "" || url.port === "" || (url.port !== DEFAULT_TEST_PORT && url.port !== env.M7_TEST_POSTGRES_PORT_ACK) || url.hostname !== "127.0.0.1" || url.username !== "synthetic" || !LEDGER_TEST_DATABASE.test(database)
     || !(LEDGER_TEST_NAMES as readonly string[]).some(name => database === databaseFor(name as LedgerTestName))) throw new Error("Refusing non-disposable database");
   return url;
+}
+
+/**
+ * Server-side check, run on the maintenance connection BEFORE any DROP/CREATE DATABASE: the session user must be `synthetic` and the
+ * server address loopback. Residual risk (ADR-0021): a loopback SSH tunnel to a remote server still satisfies this; the database
+ * names stay confined to the allow-list.
+ */
+export async function assertServerIsLoopbackSynthetic(client: { query(text: string): Promise<{ rows: { u: string; addr: string | null }[] }> }) {
+  const row = (await client.query("SELECT current_user::text AS u, host(inet_server_addr()) AS addr")).rows[0];
+  if (!row || row.u !== "synthetic" || (row.addr !== "127.0.0.1" && row.addr !== "::1")) throw new Error("Refusing non-disposable server");
 }
 
 /** Creates (drop + create) the caller's disposable database, rebuilds vynvori_identity, applies the ledger plan. */
@@ -40,6 +52,7 @@ export async function freshLedger(name: LedgerTestName, connection = ledgerTarge
   const admin = new URL(url.toString()); admin.pathname = "/postgres";
   const adminClient = new Client({ connectionString: admin.toString() }); await adminClient.connect();
   try {
+    await assertServerIsLoopbackSynthetic(adminClient);
     await adminClient.query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`);
     await adminClient.query(`CREATE DATABASE ${database}`);
   } finally { await adminClient.end(); }
@@ -57,7 +70,7 @@ export async function dropLedger(name: LedgerTestName, connection = ledgerTarget
   if (!connection) return;
   const database = databaseFor(name), url = assertDisposableTarget(connection, database); url.pathname = "/postgres";
   const admin = new Client({ connectionString: url.toString() }); await admin.connect();
-  try { await admin.query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`); } finally { await admin.end(); }
+  try { await assertServerIsLoopbackSynthetic(admin); await admin.query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`); } finally { await admin.end(); }
 }
 
 /**
@@ -71,7 +84,9 @@ export async function ledgerPool(name: LedgerTestName, kind: keyof typeof POOL_C
   const probe = new Client({ connectionString: url.toString() }); await probe.connect();
   let serverMax: number; try { serverMax = Number((await probe.query("SHOW max_connections")).rows[0].max_connections); } finally { await probe.end(); }
   const sized = poolBudget(serverMax, kind);
-  return { pool: new Pool({ connectionString: url.toString(), max: sized.max }), ...sized, serverMax };
+  const pool = new Pool({ connectionString: url.toString(), max: sized.max });
+  pool.on("error", () => undefined); // an idle-client error must not crash the test process; the failing query surfaces it
+  return { pool, ...sized, serverMax };
 }
 /** Pure D15 sizing: the cap clamped to max_connections minus the reserved superuser slots; degraded when the cap does not fit. */
 export function poolBudget(serverMax: number, kind: keyof typeof POOL_CAPS) {

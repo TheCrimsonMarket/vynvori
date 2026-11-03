@@ -6,7 +6,7 @@ import { Client } from "pg";
 
 const folder = fileURLToPath(new URL("../ledger-migrations", import.meta.url));
 /** Disposable test databases only: vynvori_m7_<name>_test. No remote target exists in this plan. */
-export const LEDGER_TEST_DATABASE = /^vynvori_m7_[a-z0-9]+(?:_[a-z0-9]+)*_test$/;
+export const LEDGER_TEST_DATABASE = /^vynvori_m7_[a-z][a-z0-9_]{2,24}_test$/;
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 type Plan = { version: number; purpose: string; requires: string[]; journalSchema: string; migrations: { file: string; sha256: string }[] };
 export class LedgerMigrationError extends Error {
@@ -17,8 +17,13 @@ export function ledgerMigrationPlan(directory = folder) {
   try {
     const raw = readFileSync(directory + "/plan.json", "utf8"), plan = JSON.parse(raw) as Plan;
     if (plan.version !== 1 || plan.purpose !== "vynvori-credit-ledger" || plan.journalSchema !== "vynvori_ledger_migrations" || !plan.migrations.length) throw new Error();
+    // The runner hard-codes the identity prerequisite; a plan that names anything else is not the reviewed plan.
+    if (JSON.stringify(plan.requires) !== JSON.stringify(["vynvori_identity"])) throw new Error();
+    let previous = 0; const seen = new Set<string>();
     const migrations = plan.migrations.map(entry => {
-      if (!/^\d{4}_[a-z_]+\.sql$/.test(entry.file)) throw new Error();
+      if (!/^\d{4}_[a-z_]+\.sql$/.test(entry.file) || seen.has(entry.file)) throw new Error();
+      const ordinal = Number(entry.file.slice(0, 4)); if (ordinal <= previous) throw new Error(); // unique and strictly increasing
+      previous = ordinal; seen.add(entry.file);
       const sql = readFileSync(directory + "/" + entry.file, "utf8");
       if (digest(sql) !== entry.sha256) throw new Error();
       return { ...entry, sql };
