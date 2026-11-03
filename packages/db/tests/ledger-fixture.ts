@@ -108,16 +108,24 @@ export async function ledgerPool(name: LedgerTestName, kind: keyof typeof POOL_C
   pool.on("error", () => undefined); // an idle-client error must not crash the test process; the failing query surfaces it
   return { pool, ...sized, serverMax };
 }
-/** Standard-cap pool whose every connection runs as `role` (SET ROLE from the superuser fixture login) with an optional search_path. */
+/**
+ * Pool whose every connection runs as `role` (set at connection startup via `-c role=`, from the superuser fixture login) with an
+ * optional search_path. Fails LOUDLY: a bad role makes the connection itself fail, and every new connection verifies current_user
+ * and is_superuser = off; a mismatch throws an uncaught error that fails the test run. No 'error' listeners are installed, so a
+ * real connection crash is never masked. Role names may be mixed-case or contain dots (passed through the startup option verbatim).
+ */
 export async function ledgerPoolAs(name: LedgerTestName, role: string, options: { searchPath?: string; max?: number } = {}, connection = ledgerTarget.url) {
   if (!connection) throw new Error("no test database configured");
-  if (!/^[a-z][a-z0-9_]{2,62}$/.test(role)) throw new Error("bad role name");
+  if (!/^[A-Za-z][A-Za-z0-9_.]{2,62}$/.test(role)) throw new Error("bad role name");
+  if (options.searchPath !== undefined && !/^[A-Za-z0-9_, ]+$/.test(options.searchPath)) throw new Error("bad search_path");
   const database = databaseFor(name), url = assertDisposableTarget(connection, database); url.pathname = "/" + database;
-  const pool = new Pool({ connectionString: url.toString(), max: Math.min(options.max ?? POOL_CAPS.standard, POOL_CAPS.standard) });
-  pool.on("error", () => undefined);
+  const startup = `-c role=${role}` + (options.searchPath ? ` -c search_path=${options.searchPath.replace(/ /g, "\\ ")}` : "");
+  const pool = new Pool({ connectionString: url.toString(), max: Math.min(options.max ?? POOL_CAPS.standard, POOL_CAPS.standard), options: startup });
   pool.on("connect", client => { // queued ahead of any caller statement on the same client
-    client.on("error", () => undefined);
-    void client.query(`SET ROLE ${role}`).then(() => options.searchPath ? client.query(`SET search_path = ${options.searchPath}`) : undefined).catch(() => undefined);
+    client.query("SELECT current_user AS u, current_setting('is_superuser') AS su").then(result => {
+      const row = result.rows[0] as { u: string; su: string };
+      if (row.u !== role || row.su !== "off") throw new Error(`pooled connection is not the restricted role ${role}`);
+    }).catch(error => { process.nextTick(() => { throw error; }); });
   });
   return pool;
 }

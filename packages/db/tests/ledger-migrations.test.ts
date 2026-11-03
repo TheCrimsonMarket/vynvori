@@ -18,9 +18,9 @@ test("ledger plan loads, pins the reviewed SQL and lists 0001 (schema only) then
 });
 
 // Golden digests: ANY change to plan.json or the pinned SQL forces a visible edit here (the planSha256 argument alone is circular).
-const GOLDEN_PLAN_JSON_SHA256 = "0b0abf7ba52c0905fba08ba6ae1eb85793d5e9a08ebcaf046fcc24cc64900c92";
+const GOLDEN_PLAN_JSON_SHA256 = "4c08bb00ea515e97f2acf9ab637701d1b18e008e6fa66b2a4a2b6034255cc7e7";
 const GOLDEN_0001_SQL_SHA256 = "a8273f3fac59de2d0c2f1a661a852d22b9a360c9d9c83e672bd7f0d25d74ef4e";
-const GOLDEN_0002_SQL_SHA256 = "474b12f4394258ce8e83723d5340c404a926dac5c63361f2ab925bb266f075e4";
+const GOLDEN_0002_SQL_SHA256 = "28a6d0e3727bf8c8cd20d98586d2f2564cb57df31412cd655c150e720ea2ea82";
 const sha = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
 test("golden digests pin plan.json, 0001 and 0002 independently of the loader", () => {
   assert.equal(sha(join(planDir, "plan.json")), GOLDEN_PLAN_JSON_SHA256);
@@ -98,7 +98,9 @@ test("0002 is additive: ledger-schema objects only; exactly one SECURITY DEFINER
   for (const match of sql.matchAll(/vynvori_identity[\w.]*/g)) assert.equal(match[0], "vynvori_identity.profiles");
   for (const match of sql.matchAll(/REFERENCES\s+(\S+?)\s*\(/g)) assert.match(match[1]!, /^vynvori_(ledger|identity)\./);
   assert.match(original, /CONSTRAINT\s+ledger_entries_s2_grant_only\s+CHECK\s*\(entry_kind = 'grant'\)/, "temporary S5-droppable constraint present");
-  assert.match(original, /current_user::pg_catalog\.regrole::pg_catalog\.oid\s*<>\s*\(SELECT c\.relowner FROM pg_catalog\.pg_class c WHERE c\.oid = TG_RELID\)/, "wallet guard requires the table owner");
+  assert.match(original, /current_user IS DISTINCT FROM pg_catalog\.pg_get_userbyid\(\(SELECT p\.proowner FROM pg_catalog\.pg_proc p WHERE p\.oid = pg_catalog\.to_regprocedure\('vynvori_ledger\.ledger_entries_apply_to_wallet\(\)'\)\)\)/, "wallet guard requires the owner of the apply FUNCTION, compared by name");
+  assert.doesNotMatch(original, /regrole/i, "no identifier-parsing role cast");
+  assert.equal([...original.matchAll(/fired from an unexpected context/g)].length, 5, "every trigger function verifies what fired it");
   assert.doesNotMatch(readFileSync(join(planDir, "rollback/0002_wallet_ledger.down.sql"), "utf8").replace(/--.*$/gm, ""), /\b(CASCADE|TRUNCATE|DELETE\s+FROM\s+vynvori_ledger\.)/i);
 });
 

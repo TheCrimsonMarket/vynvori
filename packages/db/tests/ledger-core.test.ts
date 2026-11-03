@@ -60,11 +60,34 @@ test("canonicalRequestHash bounds work: cycles, shared deep structures and huge 
   const cyclic: Record<string, unknown> = {}; cyclic["self"] = cyclic;
   assert.throws(() => canonicalRequestHash(cyclic as never), ledgerCode("INVALID_INPUT"));
   let shared: unknown = { leaf: 1 };
-  for (let i = 0; i < 40; i++) shared = { a: shared, b: shared }; // 2^40 paths without a budget
+  for (let i = 0; i < 28; i++) shared = { a: shared, b: shared }; // 2^28 paths without a budget; 28 levels stay under the depth guard, so only the node budget can stop it
   const started = Date.now();
   assert.throws(() => canonicalRequestHash(shared as never), ledgerCode("INVALID_INPUT"));
   assert.throws(() => canonicalRequestHash(Array.from({ length: 20_000 }, () => 1)), ledgerCode("INVALID_INPUT"));
+  assert.throws(() => canonicalRequestHash(new Array(2 ** 32 - 1) as never), ledgerCode("INVALID_INPUT"), "huge sparse array is rejected by length before iterating");
+  assert.throws(() => canonicalRequestHash([1, , 2] as never), ledgerCode("INVALID_INPUT"), "holes are rejected");
   assert.ok(Date.now() - started < 2000, "rejected without exponential work");
+});
+
+test("connection acquisition: a failing pool yields a LedgerError without driver details; any object with connect() works; duck-typed pools are released correctly", async () => {
+  const userId = randomUUID(), spec = { actor: "customer" as const, userId, commandKind: "acquire_probe", idempotencyKey: key("acquire"), payload: {} };
+  const failing = { connect: async () => { throw Object.assign(new Error("connect ECONNREFUSED 10.1.2.3:6543 user=app password=hunter2"), { code: "ECONNREFUSED" }); } };
+  const error = await runLedgerCommand(failing as never, spec, async () => undefined).then(() => undefined, (e: unknown) => e);
+  assert.ok(error instanceof LedgerError && error.code === "TRANSIENT");
+  for (const rendered of [inspect(error, { depth: 10, showHidden: true }), JSON.stringify(error), String(error.stack)]) assert.doesNotMatch(rendered, /10\.1\.2\.3|6543|hunter2|ECONNREFUSED/);
+  const log: string[] = [];
+  const fakeClient = { query: async (text: string) => { log.push(text.split(" ")[0]!); if (text.startsWith("SELECT 1")) return { rows: [{}], rowCount: 1 }; if (text.startsWith("INSERT")) return { rows: [], rowCount: 1 }; return { rows: [], rowCount: null }; },
+    on: () => undefined, off: () => undefined, release: (destroy?: boolean) => { log.push("release:" + String(destroy)); } };
+  const result = await runLedgerCommand({ connect: async () => fakeClient }, spec, async () => undefined);
+  assert.equal(result.replayed, false); assert.ok(log.includes("BEGIN") && log.includes("COMMIT")); assert.equal(log.at(-1), "release:false");
+});
+
+test("the transaction handle given to a callback is frozen", async () => {
+  const userId = randomUUID(); let seen: LedgerTx | undefined;
+  const client = { query: async (text: string) => text.startsWith("SELECT 1") ? { rows: [{}], rowCount: 1 } : text.startsWith("INSERT") ? { rows: [], rowCount: 1 } : { rows: [], rowCount: null }, on: () => undefined, off: () => undefined, release: () => undefined };
+  await runLedgerCommand({ connect: async () => client }, { actor: "customer", userId, commandKind: "freeze_probe", idempotencyKey: key("freeze"), payload: {} }, async tx => { seen = tx; assert.ok(Object.isFrozen(tx)); });
+  assert.throws(() => { (seen as { userId: string }).userId = randomUUID(); }, TypeError);
+  assert.throws(() => { (seen as { requestSha256: string }).requestSha256 = "0".repeat(64); }, TypeError);
 });
 
 test("a hand-built or copied transaction handle cannot append a grant", async () => {

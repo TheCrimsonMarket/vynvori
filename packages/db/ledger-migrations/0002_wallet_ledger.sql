@@ -1,5 +1,5 @@
 -- 0002_wallet_ledger (ADR-0021, M7 S2). Wallet, immutable command log, append-only ledger, grant-source registry.
--- Additive: creates objects in vynvori_ledger only. No GRANT/REVOKE, nothing in vynvori_identity is altered, no rows are inserted
+-- Additive: creates objects in vynvori_ledger only. No GRANT; the only REVOKE is function-level FROM PUBLIC. Nothing in vynvori_identity is altered, no rows are inserted
 -- (in particular NO grant source is registered: after this migration no credit can be minted by anyone).
 -- Privilege model B (ADR-0021, confirmed by the S2 security review). Exactly ONE function is SECURITY DEFINER:
 -- ledger_entries_apply_to_wallet(). Its effective privilege is the OWNER's, so the owner must be a dedicated NOLOGIN,
@@ -10,16 +10,23 @@
 -- Wallet buckets change ONLY through ledger entries:
 --   * ledger_entries rejects UPDATE/DELETE/TRUNCATE;
 --   * wallets rejects a non-zero INSERT, DELETE and TRUNCATE, and rejects UPDATE unless BOTH pg_trigger_depth() > 1 AND the
---     current user is the table owner. A direct UPDATE fires wallets_update_guard at depth 1. The UPDATE issued by the
---     SECURITY DEFINER apply function runs as the owner at depth 2. A trigger created by any other role (even one holding
---     pg_write_all_data) runs as that role and is rejected; the depth check alone is NOT sufficient (a pg_temp trigger
---     reaches depth 2).
+--     current user is the OWNER OF THE APPLY FUNCTION (not of the table: the rollout re-owns only the function, to a dedicated
+--     NOLOGIN role). A direct UPDATE fires wallets_update_guard at depth 1. The UPDATE issued by the SECURITY DEFINER apply
+--     function runs as the function owner at depth 2. A trigger created by any other role (even one holding pg_write_all_data)
+--     runs as that role and is rejected; the depth check alone is NOT sufficient (a pg_temp trigger reaches depth 2). Role
+--     names are compared as names (pg_get_userbyid), never through a regrole cast, which case-folds and parses identifiers.
+--   * Every trigger function verifies what fired it (table, operation, timing, level) and raises otherwise, so a role that
+--     is ever given EXECUTE on one cannot attach it to a trigger on its own table.
 --
 -- TEMPORARY CONSTRAINT: ledger_entries_s2_grant_only restricts entries to kind 'grant' until S5 adds the entry<->reservation
 -- binding trigger. S5's migration drops it; S5's rollback re-adds it. Do not remove it earlier.
 
 CREATE FUNCTION vynvori_ledger.reject_mutation() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $fn$
 BEGIN
+  IF TG_WHEN <> 'BEFORE' OR TG_TABLE_SCHEMA <> 'vynvori_ledger' OR TG_OP NOT IN ('UPDATE', 'DELETE', 'TRUNCATE')
+     OR (TG_OP = 'TRUNCATE' AND TG_LEVEL <> 'STATEMENT') OR (TG_OP <> 'TRUNCATE' AND TG_LEVEL <> 'ROW') THEN
+    RAISE EXCEPTION 'trigger function fired from an unexpected context' USING ERRCODE = 'integrity_constraint_violation';
+  END IF;
   RAISE EXCEPTION 'vynvori_ledger.% is append-only: % rejected', TG_TABLE_NAME, TG_OP USING ERRCODE = 'integrity_constraint_violation';
 END
 $fn$;
@@ -36,6 +43,9 @@ CREATE TABLE vynvori_ledger.wallets(
 
 CREATE FUNCTION vynvori_ledger.wallets_insert_guard() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $fn$
 BEGIN
+  IF TG_RELID IS DISTINCT FROM 'vynvori_ledger.wallets'::pg_catalog.regclass OR TG_OP <> 'INSERT' OR TG_WHEN <> 'BEFORE' OR TG_LEVEL <> 'ROW' THEN
+    RAISE EXCEPTION 'trigger function fired from an unexpected context' USING ERRCODE = 'integrity_constraint_violation';
+  END IF;
   IF NEW.available_units <> 0 OR NEW.reserved_units <> 0 OR NEW.held_for_review_units <> 0 OR NEW.consumed_units <> 0 OR NEW.revision <> 0 THEN
     RAISE EXCEPTION 'a wallet can only be created empty; balances change through ledger entries' USING ERRCODE = 'integrity_constraint_violation';
   END IF;
@@ -46,7 +56,10 @@ CREATE TRIGGER wallets_insert_guard BEFORE INSERT ON vynvori_ledger.wallets FOR 
 
 CREATE FUNCTION vynvori_ledger.wallets_update_guard() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $fn$
 BEGIN
-  IF pg_trigger_depth() <= 1 OR current_user::pg_catalog.regrole::pg_catalog.oid <> (SELECT c.relowner FROM pg_catalog.pg_class c WHERE c.oid = TG_RELID) THEN
+  IF TG_RELID IS DISTINCT FROM 'vynvori_ledger.wallets'::pg_catalog.regclass OR TG_OP <> 'UPDATE' OR TG_WHEN <> 'BEFORE' OR TG_LEVEL <> 'ROW' THEN
+    RAISE EXCEPTION 'trigger function fired from an unexpected context' USING ERRCODE = 'integrity_constraint_violation';
+  END IF;
+  IF pg_trigger_depth() <= 1 OR current_user IS DISTINCT FROM pg_catalog.pg_get_userbyid((SELECT p.proowner FROM pg_catalog.pg_proc p WHERE p.oid = pg_catalog.to_regprocedure('vynvori_ledger.ledger_entries_apply_to_wallet()'))) THEN
     RAISE EXCEPTION 'wallet balances change only through ledger entries' USING ERRCODE = 'integrity_constraint_violation';
   END IF;
   IF NEW.user_id <> OLD.user_id OR NEW.created_at <> OLD.created_at THEN
@@ -127,6 +140,9 @@ CREATE TABLE vynvori_ledger.ledger_entries(
 
 CREATE FUNCTION vynvori_ledger.ledger_entries_check_command() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $fn$
 BEGIN
+  IF TG_RELID IS DISTINCT FROM 'vynvori_ledger.ledger_entries'::pg_catalog.regclass OR TG_OP <> 'INSERT' OR TG_WHEN <> 'BEFORE' OR TG_LEVEL <> 'ROW' THEN
+    RAISE EXCEPTION 'trigger function fired from an unexpected context' USING ERRCODE = 'integrity_constraint_violation';
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM vynvori_ledger.ledger_commands c WHERE c.command_id = NEW.command_id AND c.user_id = NEW.user_id AND c.outcome = 'applied') THEN
     RAISE EXCEPTION 'a ledger entry must reference an applied command of the same user' USING ERRCODE = 'integrity_constraint_violation';
   END IF;
@@ -139,6 +155,9 @@ CREATE TRIGGER ledger_entries_check_command BEFORE INSERT ON vynvori_ledger.ledg
 -- The wallet CHECKs (>= 0, <= safe integer) are the backstop against a negative or overflowing result.
 CREATE FUNCTION vynvori_ledger.ledger_entries_apply_to_wallet() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $fn$
 BEGIN
+  IF TG_RELID IS DISTINCT FROM 'vynvori_ledger.ledger_entries'::pg_catalog.regclass OR TG_OP <> 'INSERT' OR TG_WHEN <> 'AFTER' OR TG_LEVEL <> 'ROW' THEN
+    RAISE EXCEPTION 'trigger function fired from an unexpected context' USING ERRCODE = 'integrity_constraint_violation';
+  END IF;
   UPDATE vynvori_ledger.wallets w SET
     available_units = w.available_units + NEW.delta_available,
     reserved_units = w.reserved_units + NEW.delta_reserved,

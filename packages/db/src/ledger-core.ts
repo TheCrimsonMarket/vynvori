@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash, randomUUID } from "node:crypto";
-import { Pool } from "pg";
+import type { Pool } from "pg";
 import { CreditWalletSummaryV1Schema, type CreditWalletSummaryV1 } from "@vynvori/contracts";
 import {
   LedgerCustomerCommandV1Schema, LedgerInternalCommandV1Schema, type LedgerEntryKindV1, type LedgerErrorCodeV1,
@@ -68,6 +68,7 @@ function canonicalize(value: unknown, budget = { nodes: 0 }, ancestors: object[]
   if (Array.isArray(value) || (typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype)) {
     if (ancestors.includes(value as object)) throw new LedgerError("INVALID_INPUT");
     const next = [...ancestors, value as object];
+    if (Array.isArray(value) && (value.length > CANONICAL_NODE_BUDGET || Object.keys(value).length !== value.length)) throw new LedgerError("INVALID_INPUT"); // huge or sparse
     if (Array.isArray(value)) return "[" + value.map(item => canonicalize(item, budget, next)).join(",") + "]";
     const record = value as Record<string, unknown>;
     return "{" + Object.keys(record).sort().map(key => { if (record[key] === undefined) throw new LedgerError("INVALID_INPUT"); return JSON.stringify(key) + ":" + canonicalize(record[key], budget, next); }).join(",") + "}";
@@ -130,17 +131,21 @@ export interface LedgerQueryResult { rows: Record<string, unknown>[]; rowCount: 
 export interface LedgerQueryable { query(text: string, values?: unknown[]): Promise<LedgerQueryResult> }
 export interface LedgerConn extends LedgerQueryable { release?(destroy?: boolean): void }
 /** A pool, or an object that hands out an exclusive connection (fault-injection tests). A bare Client is deliberately not accepted: it cannot be destroyed and cannot isolate concurrent commands. */
-export type LedgerDb = Pool | { acquire(): Promise<LedgerConn> };
+export type LedgerDb = Pool | PoolLike | { acquire(): Promise<LedgerConn> };
+type PoolLike = { connect(): Promise<{ query(text: string, values?: unknown[]): Promise<LedgerQueryResult>; on(event: "error", listener: () => void): unknown; off(event: "error", listener: () => void): unknown; release(destroy?: boolean): void }> };
+/** Duck-typed on `connect`, so a second copy of pg or a serverless pool works; anything else must supply `acquire`. */
 async function acquire(db: LedgerDb): Promise<LedgerConn> {
   let conn: LedgerConn;
-  if (db instanceof Pool) {
-    const client = await db.connect();
-    // A checked-out pg client emits 'error' when its connection ends. Without a listener that crashes the process; with one
-    // the next statement fails ("not queryable") and is classified. A client that saw an error is never returned to the pool.
-    let broken = false; const onError = () => { broken = true; };
-    client.on("error", onError);
-    conn = { query: (text, values) => client.query(text, values as never) as unknown as Promise<LedgerQueryResult>, release: destroy => { client.off("error", onError); client.release(destroy || broken); } };
-  } else conn = await db.acquire();
+  try {
+    if (typeof (db as Partial<PoolLike>).connect === "function") {
+      const client = await (db as PoolLike).connect();
+      // A checked-out pg client emits 'error' when its connection ends. Without a listener that crashes the process; with one
+      // the next statement fails ("not queryable") and is classified. A client that saw an error is never returned to the pool.
+      let broken = false; const onError = () => { broken = true; };
+      client.on("error", onError);
+      conn = { query: (text, values) => client.query(text, values), release: destroy => { client.off("error", onError); client.release(destroy || broken); } };
+    } else conn = await (db as { acquire(): Promise<LedgerConn> }).acquire();
+  } catch { throw new LedgerError("TRANSIENT"); } // nothing was sent; never surface the driver error (host, port, credentials hints)
   return { query: async (text, values) => { try { return await conn.query(text, values); } catch (error) { if (typeof error === "object" && error !== null) connectionErrors.add(error); throw error; } }, release: destroy => conn.release?.(destroy) };
 }
 
@@ -276,7 +281,7 @@ async function attempt(conn: LedgerConn, command: ReturnType<typeof parseCommand
   }
   let open = true;
   const tx: LedgerTx = { commandId, userId: command.userId, actor: spec.actor, requestSha256: command.requestSha256, query: (text, values) => open ? conn.query(text, values) : Promise.reject(new LedgerError("INVALID_TRANSITION")) };
-  issuedHandles.add(tx);
+  Object.freeze(tx); issuedHandles.add(tx);
   try { await callback(tx); }
   catch (error) {
     open = false;
