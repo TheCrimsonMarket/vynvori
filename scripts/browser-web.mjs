@@ -8,6 +8,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { launchEngine, resolveEngine } from "./browser-engine.mjs";
 import { runEditorScenarios } from "./browser-editor-scenarios.mjs";
+import { loadLazyImages } from "./browser-settle.mjs";
 // Fail before anything is started: an unknown M0_BROWSER must never fall through to another engine.
 const engine = resolveEngine(process.env.M0_BROWSER);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -26,7 +27,7 @@ const child = spawn(process.execPath, [path.join(root, "scripts/web.mjs"), "star
 let serverLog = "";
 child.stdout.on("data", bytes => { serverLog += bytes; });
 child.stderr.on("data", bytes => { serverLog += bytes; });
-const result = { date: new Date().toISOString(), mode: "Next.js production build", base, engine: engine.name, browser: "", checks: [], screenshots: [], errors: [], externalRequests: [], failedAssets: [] };
+const result = { date: new Date().toISOString(), mode: "Next.js production build", base, engine: engine.name, browser: "", checks: [], screenshots: [], errors: [], externalRequests: [], failedAssets: [], cspViolations: [] };
 async function check(name, fn) {
   try { await fn(); result.checks.push({ name, status: "PASSED" }); console.log(`PASS ${name}`); }
   catch (error) { result.checks.push({ name, status: "FAILED", error: error.message }); console.error(`FAIL ${name}: ${error.message}`); }
@@ -51,6 +52,14 @@ try {
   result.browser = await browser.version();
   console.log(`Engine ${engine.name} ${result.browser}`);
   const context = await browser.newContext();
+  // Every engine reports a Content-Security-Policy violation as a DOM event, even when it is silent in the console
+  // (Chromium) or caught by the page (zod's eval probe). Any violation fails the final check.
+  await context.exposeFunction("__vynvoriReportCsp", violation => { result.cspViolations.push(violation); });
+  await context.addInitScript(() => {
+    document.addEventListener("securitypolicyviolation", event => {
+      window.__vynvoriReportCsp(`${event.violatedDirective} blocked=${event.blockedURI} source=${event.sourceFile}:${event.lineNumber}`);
+    });
+  });
   await context.route("**/*", async route => {
     if (new URL(route.request().url()).origin !== base) { result.externalRequests.push(route.request().url()); await route.abort(); }
     else await route.continue();
@@ -69,6 +78,7 @@ try {
         assert.equal(response.status(), 200);
         await page.getByRole("heading", { level: 1 }).filter({ hasText: heading }).waitFor();
         await page.evaluate(() => document.fonts.ready);
+        await loadLazyImages(page);
         await page.waitForFunction(() => [...document.images].every(img => img.complete && img.naturalWidth > 0));
         const layout = await page.evaluate(() => ({
           overflow: document.documentElement.scrollWidth > innerWidth + 1,
@@ -145,7 +155,7 @@ try {
     }
   });
   await check("No fatal runtime errors, missing assets or external requests", async () => {
-    assert.deepEqual(result.errors,[]); assert.deepEqual(result.failedAssets,[]); assert.deepEqual(result.externalRequests,[]);
+    assert.deepEqual(result.errors,[]); assert.deepEqual(result.failedAssets,[]); assert.deepEqual(result.externalRequests,[]); assert.deepEqual(result.cspViolations,[]);
   });
 } catch (error) { result.checks.push({ name:"Harness startup",status:"FAILED",error:error.message }); console.error(error); }
 finally {

@@ -27,7 +27,7 @@ export function SiteHeader() {
       </Link>
       <Button variant="outline" className="menu-toggle" ref={toggle} aria-expanded={open} aria-controls="main-navigation" onClick={() => setOpen(!open)}>Menu</Button>
       <nav id="main-navigation" aria-label="Main navigation" className={open ? "main-navigation is-open" : "main-navigation"}>
-        {links.map(([label, href]) => <Link key={href} href={href} aria-current={pathname === href ? "page" : undefined} onClick={() => setOpen(false)}>{label}</Link>)}
+        {links.map(([label, href]) => <Link key={href} href={href} {...(href === "/account" ? { prefetch: false } : {})} aria-current={pathname === href ? "page" : undefined} onClick={() => setOpen(false)}>{label}</Link>)}
       </nav>
       <Link href="/cart" className="cart-link" aria-current={pathname === "/cart" ? "page" : undefined} onClick={() => setOpen(false)}>Cart<span className="sr-only"> — unavailable</span></Link>
     </div>

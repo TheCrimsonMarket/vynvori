@@ -3,7 +3,7 @@
   "scripts": { "dev": "node ../../scripts/web.mjs dev", "build": "next build", "start": "next start", "typecheck": "node ../../scripts/web.mjs typegen && tsc --noEmit --incremental false" },
   "dependencies": {
     "@vynvori/commerce": "0.0.0", "@vynvori/contracts": "0.0.0", "@vynvori/db": "0.0.0", "@vynvori/shared": "0.0.0", "next": "16.4.3", "react": "19.3.0", "react-dom": "19.3.0",
-    "class-variance-authority": "0.7.1", "clsx": "2.1.1", "tailwind-merge": "3.7.0", "server-only": "0.0.1"
+    "class-variance-authority": "0.7.1", "clsx": "2.1.1", "tailwind-merge": "3.7.0", "server-only": "0.0.1", "zod": "4.6.7"
   },
   "devDependencies": {
     "typescript": "5.9.3", "@types/node": "22.20.5", "@types/react": "19.3.0", "@types/react-dom": "19.3.0",
