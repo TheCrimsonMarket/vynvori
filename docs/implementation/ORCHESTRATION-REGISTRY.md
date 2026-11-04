@@ -2,7 +2,7 @@
 
 Shared-resource and session registry for the tree-structured multi-session harness. **Root owns this file.** Only root-authored PRs change it, and the founder merges them. Milestone status remains authoritative in [MILESTONE-PROGRESS.md](MILESTONE-PROGRESS.md); this file allocates resources and records who works where.
 
-Last updated: 2026-11-03 (M7 S1, M3 C1a merged; M7 S2 draft in fix round for the model-B privilege design). Baseline `main` @ `43bb7aa`; `main` CI was green on `714a0ae`.
+Last updated: 2026-11-04 (M7 S1+S2 and M3 C1a+C1c+C2 merged; the Firefox/WebKit CI job and the S3 and C3a steps are next). Baseline `main` @ `b84ad68`; `main` CI was green on `c4b54dd` (M7 S2).
 
 ## Harness
 
@@ -60,7 +60,7 @@ Last used: **ADR-0020**. Two historical files share number 0008 (`ADR-0008-M2-Cl
 | Number | Reserved for | Holder | Status |
 |---|---|---|---|
 | ADR-0021 | M7 core ledger foundation | M7 manager | granted 2026-11-02; **merged** with S1 ([#23](https://github.com/TheCrimsonMarket/vynvori/pull/23), `714a0ae`) |
-| ADR-0022 | M3 closure (asset access, scan boundary, guest limits) | M3-closure manager | granted 2026-11-03; to be written in step C2 |
+| ADR-0022 | M3 closure (asset access, scan boundary, guest limits) | M3-closure manager | granted 2026-11-03; **written and merged** with C2 ([#29](https://github.com/TheCrimsonMarket/vynvori/pull/29), `06f68e8`) |
 | ADR-0023 and later | unallocated | root | request from root |
 
 ### Migration journals (`packages/db`)
@@ -104,7 +104,9 @@ Root records every session the founder starts. Messages from a session not liste
 | M7 worker S1 | M7 | not reported to root | `claude/youthful-johnson-p85ycz` | [#23](https://github.com/TheCrimsonMarket/vynvori/pull/23) foundation: **merged** 2026-11-03 (`714a0ae`) | 2026-11-03 |
 | M3-closure manager | M3 | `session_01CowtxjZHg48RKM7XdfDfsf` (founder-confirmed 2026-11-03) | `claude/determined-mendel-0h42pl` | [#22](https://github.com/TheCrimsonMarket/vynvori/pull/22) plan: **approved and merged** 2026-11-03 | 2026-11-02 |
 | M3 worker C1a | M3 | not reported to root | `claude/vigilant-noether-toz8yc` | [#25](https://github.com/TheCrimsonMarket/vynvori/pull/25) engine-parameterised browser harness: **merged** 2026-11-03 (`37021ba`) | 2026-11-03 |
-| M7 worker S2 | M7 | not reported to root | `claude/jolly-darwin-fpwkqu` | [#27](https://github.com/TheCrimsonMarket/vynvori/pull/27) wallet + ledger: **DRAFT**, privilege model A→B fix round | 2026-11-03 |
+| M7 worker S2 | M7 | not reported to root | `claude/jolly-darwin-fpwkqu` | [#27](https://github.com/TheCrimsonMarket/vynvori/pull/27) wallet + ledger, privilege model B: **merged** 2026-11-03 (`c4b54dd`); docs corrections [#33](https://github.com/TheCrimsonMarket/vynvori/pull/33) **merged** | 2026-11-03 |
+| M3 worker C2 | M3 | not reported to root | not recorded | [#29](https://github.com/TheCrimsonMarket/vynvori/pull/29) ADR-0022, typed fail-closed limits: **merged** (`06f68e8`) | 2026-11-03 |
+| M3 worker C1c | M3 | not reported to root | `claude/nice-carson-4d7v4d` | [#32](https://github.com/TheCrimsonMarket/vynvori/pull/32) cross-engine triage and fix: **merged** 2026-11-04 (`b84ad68`) | 2026-11-03 |
 
 ## Protocol
 
@@ -120,7 +122,7 @@ From the 2026-11-02 council; the founder decides each wave's start.
 | Wave | Tracks | Prerequisites | Max parallel worker PRs | Status |
 |---|---|---|---|---|
 | W0 | CI recovery, dependency remediation, waiver gate | — | 1 | **DONE** (PR #18) |
-| W1 | M7 core ledger (no Medusa top-ups) + M3 local closure | CI green ✅; founder authorization ✅ | 2 (one per track) | **IN PROGRESS**: M7 S1 merged (S2 next, starts when `main` CI is green); M3 plan approved, C1a ([#25](https://github.com/TheCrimsonMarket/vynvori/pull/25)) in review |
+| W1 | M7 core ledger (no Medusa top-ups) + M3 local closure | CI green ✅; founder authorization ✅ | 2 (one per track) | **IN PROGRESS**: M7 S1 and S2 merged (S3 versioned quotes next, held until main CI green after #33); M3 C1a, C1c and C2 merged (C3a next); Firefox/WebKit CI job ([#28](https://github.com/TheCrimsonMarket/vynvori/pull/28)) verified green on all three engines, merging last |
 | W2 | M4 sandbox commerce + M6a mock studio | M1b PASSED, M3 PASSED | 2 | blocked |
 | W3 | M5, M7 top-ups, M8a, M8b | M4 (and M6a for M8b) | 2–3 | blocked |
 | — | M6b, M9 | doc 15 gates; production, financial, rights, vendor and SSO flags stay OFF | — | blocked |
@@ -139,6 +141,9 @@ From the 2026-11-02 council; the founder decides each wave's start.
 | 2026-11-03 | M7 S1 approved by the founder and merged ([#23](https://github.com/TheCrimsonMarket/vynvori/pull/23)). Root grant applied: `FORBIDDEN_PUBLIC_FIELDS` gained `requestSha256`, `evidenceRef`, `modelRef`, `contentSha256`; `capabilitySnapshotId` deliberately stays public (`quote.ts`, `studio-plan.ts`). Privilege model A stays provisional until the S2 security review confirms or flips it. |
 | 2026-11-03 | M3 closure plan rev 3 approved and merged ([#22](https://github.com/TheCrimsonMarket/vynvori/pull/22)); implementation round 1 authorized: C1a, C2, C3a, C3b, C4, C5, C6, C7a, C7b, C8, serially, one worker at a time, founder merges each PR. C1b not approved. Safe defaults apply to the open plan questions (single-use download grants; no owner download of non-clean originals; no deletion of quarantined objects; no accessibility waivers; no staging hold-pending mode; proceed with the app-issued grant for ACC-07 and note the wording). |
 | 2026-11-03 | CODEOWNERS and branch-protection setting declined for now. |
+| 2026-11-03 | `.env.example` change in C2 (31 commented-out `M3_LIMIT_*` key names, no values) kept; #29 merged. Rule from here: `.env.example` is root-owned; manager or worker edits need a root grant; commented key names only, never values. |
+| 2026-11-03 | WebKit `/account` prefetch: the M3-closure manager relayed that the founder granted a single-variable change (`prefetch: false` on the `/account` link only, no filter, no skipped check); confirmed by CI (all three engines 87/87, run 41612993300). Root separately granted, for C1c, declaring `zod` 4.6.7 in `apps/web/package.json`. |
+| 2026-11-03 | M7 S2 merged with the security reviewer's three doc/test-only items deferred to #33 (override accepted by root with conditions; no SQL changed after the verdict). S3 brief held until #33 merged and `main` was green. |
 
 ## Hard gates carried forward (do not lose)
 
