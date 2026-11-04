@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 
 const folder = fileURLToPath(new URL("../composition-migrations", import.meta.url));
+/** Disposable test databases only: vynvori_m3_<name>_test, one per M3 database test file. */
+export const COMPOSITION_TEST_DATABASE = /^vynvori_m3_[a-z][a-z0-9_]{2,24}_test$/;
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 type Plan = { version: number; purpose: string; requires: string[]; journalSchema: string; migrations: { file: string; sha256: string }[] };
 export class CompositionMigrationError extends Error {
@@ -33,7 +35,7 @@ export function compositionMigrationPlan(directory = folder) {
 export async function applyCompositionMigrations(client: Client, expected: { database: string; role: string; planSha256: string }) {
   if (!(client instanceof Client)) throw new CompositionMigrationError("TARGET_REJECTED");
   const loaded = compositionMigrationPlan(); let commitStarted = false;
-  if (!["vynvori_m3_migration_test", "vynvori_m3_service_test"].includes(expected.database) || expected.role !== "synthetic" || client.host !== "127.0.0.1" || expected.planSha256 !== loaded.digest) throw new CompositionMigrationError("TARGET_REJECTED");
+  if (!COMPOSITION_TEST_DATABASE.test(expected.database) || expected.role !== "synthetic" || client.host !== "127.0.0.1" || expected.planSha256 !== loaded.digest) throw new CompositionMigrationError("TARGET_REJECTED");
   try {
     await client.query("BEGIN"); await client.query("SET LOCAL lock_timeout='4s'");
     await client.query("SELECT pg_advisory_xact_lock(742110,3)");

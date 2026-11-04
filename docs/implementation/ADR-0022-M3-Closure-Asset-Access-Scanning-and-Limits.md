@@ -100,3 +100,91 @@ Also a **technical bound, not policy**: any `*_SECONDS` key above `SECONDS_STRUC
 
 ## Consequences
 Until the founder supplies the 31 values, M3 uploads and guest drafts stay closed in every environment. Later steps (C3a to C8) depend on these keys and append their sections here.
+
+## C3a — Migration `0002` DDL, rollback, `0001` down repair
+
+Implements D6 and the D8 test-database/lock arithmetic in `packages/db/composition-migrations/0002_asset_access_and_limits.sql`. Additive only: creates new objects in schema `vynvori_composition`, adds one index to the existing `compositions` table, grants nothing, seeds nothing. No scanner is named, depended on or approximated (ruling QC); this migration only stores scan facts a future adapter reports. No store or service code is in this step (C3b).
+
+### Table-by-table summary
+
+| Table | Shape | Mutability |
+|---|---|---|
+| `asset_scan_events` | `(asset_id, composition_id, seq, from_status, to_status, asset_sha256, attempt_id, scanner_id, engine_version, definitions_version, evidence_ref, reason_code, recorded_at)`. `PRIMARY KEY (asset_id, seq)`; `FOREIGN KEY (composition_id, asset_id) REFERENCES assets(composition_id, id) ON DELETE RESTRICT`; `attempt_id` nullable `REFERENCES asset_scan_attempts(attempt_id)`. | Append-only: `UPDATE`, `DELETE` and `TRUNCATE` rejected by trigger. |
+| `asset_scan_attempts` | `(attempt_id, asset_id, composition_id, started_at, lease_expires_at, finished_at, outcome)`. Same composite FK to `assets`. `CHECK (lease_expires_at > started_at)`; `CHECK ((finished_at IS NULL) = (outcome IS NULL))`. Partial unique index `(asset_id) WHERE finished_at IS NULL` enforces at most one open attempt per asset. | `INSERT` always allowed; `UPDATE` limited by trigger to the one-way `finished_at NULL -> non-null` (with `outcome`); `DELETE`/`TRUNCATE` rejected. |
+| `asset_download_grants` | `(grant_id, token_hash, asset_id, composition_id, principal_kind, principal_hash, issued_at, expires_at, redeemed_at)`. `token_hash` and `principal_hash` are 64-hex SHA-256 digests; the raw token is never stored. `CHECK (expires_at > issued_at)`. | `INSERT` always allowed; `UPDATE` limited by trigger to the one-way `redeemed_at NULL -> non-null`; `DELETE`/`TRUNCATE` rejected. |
+| `rate_limit_buckets` | `(bucket_key, window_start, count)`, `PRIMARY KEY (bucket_key, window_start)`; index on `window_start` for operator pruning. `bucket_key` CHECK restricts it to the ten operations named in D1/D2 with the correct subject shape (`global`, or a UUID). `count >= 1`. | Mutable by design: the atomic admission statement below upserts it. No immutability trigger. |
+| `compositions` (existing table) | One new partial index, `compositions_live_guest_drafts (guest_draft_id) WHERE owner_user_id IS NULL AND guest_draft_id IS NOT NULL`, for the D2 live-guest-draft count. No `ALTER TABLE`, no other change. | Unchanged. |
+
+### Trigger invariants
+
+- **Scan lifecycle** (`check_scan_event`, `BEFORE INSERT` on `asset_scan_events`): takes the per-asset advisory lock first (below), then enforces, in order: `asset_sha256` equals the asset row's `sha256`; `from_status` equals the current status (the `to_status` of the row with the highest `seq` for that asset, or `pending` when no row exists); `seq` equals the previous `seq + 1` (gap-free); and the edge `from_status -> to_status` is one of `pending->clean`, `pending->quarantined`, `pending->unknown`, `unknown->pending`, `clean->quarantined`. Every other edge, including `clean->pending` and `quarantined->anything`, is rejected — `quarantined` is terminal and never auto-released. Table-level `CHECK`s additionally require `scanner_id`, `engine_version`, `definitions_version`, `evidence_ref` and `attempt_id` for `clean`/`quarantined` events, and a non-empty `reason_code` for `unknown` events and for an explicit `pending` (rescan-request) event.
+- **Scan attempts** (`check_scan_attempt_update`, `BEFORE UPDATE`): rejects any change to a column other than `finished_at`/`outcome`, rejects re-closing an already-closed attempt (`OLD.finished_at IS NOT NULL`), and rejects setting `finished_at` to anything but a value when it was `NULL`. Nothing in SQL expires a lease automatically; closing a timed-out lease is an explicit application action, never a trigger or a timer.
+- **Download grants** (`check_download_grant_update`, `BEFORE UPDATE`): the same shape — only `redeemed_at` may change, and only one-way from `NULL`.
+- All three mostly-immutable tables reuse `vynvori_composition.reject_mutation()` (from `0001`) for `DELETE`/`UPDATE`/`TRUNCATE` rejection where the table is fully or partially immutable.
+
+### Lock helpers (D8, RR-2)
+
+```sql
+m3_lock_key_from_hash(h integer) RETURNS bigint IMMUTABLE AS
+  SELECT (4::bigint << 32) | (h::bigint & 4294967295);
+
+m3_lock_composition(composition_id uuid) RETURNS void AS
+  SELECT pg_advisory_xact_lock(m3_lock_key_from_hash(hashtext(composition_id::text)));
+
+m3_lock_asset(composition_id uuid, asset_id uuid) RETURNS void AS
+  SELECT m3_lock_composition(composition_id);   -- always first
+  SELECT pg_advisory_xact_lock(m3_lock_key_from_hash(hashtext(asset_id::text)));  -- always second
+```
+
+The explicit unsigned mask (`& 4294967295`) stops a negative `hashtext` result from sign-extending over the class-4 high word; a test (`composition-0002-ddl.test.ts`) proves the high word stays `4` for `-1`, `INT_MIN`, `INT_MAX` and other inputs. `m3_lock_asset` takes the composition lock before the asset lock **by construction** — there is no code path through these helpers that acquires them in the other order — so two callers can never form a circular wait on this pair; a test proves the order with `pg_locks` from a second connection, and a concurrency test proves two simultaneous callers on the same composition/asset serialize without a `deadlock_timeout` error. Both helpers use `pg_advisory_xact_lock` (transaction-scoped) only; no session-level advisory lock is taken. `hashtext`'s output is never stored or compared across servers — it is used only as a same-process, same-transaction lock key.
+
+### Atomic rate-bucket admission (D2; the exact statement C4 reuses)
+
+```sql
+INSERT INTO vynvori_composition.rate_limit_buckets AS b (bucket_key, window_start, count)
+VALUES ($1, $2, 1)
+ON CONFLICT (bucket_key, window_start) DO UPDATE SET count = b.count + 1
+WHERE b.count < $3
+RETURNING count;
+```
+
+No row returned means the caller is rate-limited for that window. `$3` (the maximum) is supplied by the caller from typed config (`M3_LIMIT_RATE_*_MAX`, D1); no value is stored in this migration. The concurrency test proves that `N` callers past `SYNTHETIC_LIMIT` admit exactly `SYNTHETIC_LIMIT`.
+
+### Runtime-role GRANT proposal (documentation only; nothing is granted by this migration)
+
+| Table / function | Proposed grant | Holder |
+|---|---|---|
+| `asset_scan_events` | `SELECT`, `INSERT` | runtime role |
+| `asset_scan_attempts` | `SELECT`, `INSERT`, `UPDATE` (restricted in practice to `finished_at`/`outcome` by the trigger) | runtime role |
+| `asset_download_grants` | `SELECT`, `INSERT`, `UPDATE` (restricted in practice to `redeemed_at` by the trigger) | runtime role |
+| `rate_limit_buckets` | `INSERT`, `UPDATE` | runtime role |
+| `rate_limit_buckets` | `DELETE` | a separate operator-prune role only, not the runtime role |
+| `m3_lock_key_from_hash`, `m3_lock_composition`, `m3_lock_asset` | `EXECUTE` | runtime role |
+
+As with `0001` and `0002`'s own apply path, no `GRANT` statement exists in this migration or any test; applying these grants to a real role is a future, separately reviewed step.
+
+### Rollback procedure and caveats
+
+- `rollback/0002_asset_access_and_limits.down.sql`: refuses while any row exists in `asset_scan_events`, `asset_scan_attempts` or `asset_download_grants` (checked independently — a test seeds each table alone and confirms the refusal). `rate_limit_buckets` rows may be dropped; the table holds no customer-facing fact, only a rolling admission counter. When it proceeds, it drops only `0002`'s tables, functions and the `compositions` partial index, and deletes only the `0002` journal row, leaving `0001` intact and re-appliable.
+- **Caveat:** because the scan-event, attempt and grant tables are append-only (or one-way) by trigger, there is no SQL path that empties them short of a superuser disabling the triggers. Operationally, if those rows must ever be cleared, recovery is **restore from backup**, not an in-repo script; this migration deliberately provides no delete path (plan ruling: no deletion of quarantined objects, no delete path anywhere in this step).
+- **`0001` repair (F8):** `rollback/0001_composition_scene.down.sql` now also refuses while any journal row other than `0001` exists (so `0002` must be rolled back first, or a `DROP SCHEMA ... CASCADE` on `vynvori_composition` would silently destroy `0002`'s tables too), and, after dropping the data schema and the `0001` journal row, drops the now-empty journal schema `vynvori_composition_migrations` itself. Before the repair, the old script left that empty journal schema behind; the runner's `hasJournal !== hasSchema` drift check then read it as `HISTORY_OR_SCHEMA_DRIFT` and blocked every future apply. A test reproduces the old failing `up -> down -> up` with the pre-repair script text and shows the same sequence passing with the repaired script.
+- Both rollback scripts are run by hand only; no runner executes either of them. Tests exercise them with `client.query(...)` directly.
+
+### Test databases and connection arithmetic actually used
+
+Per ADR-0022 D8 and the M3-closure plan §6 C3a: the runner's and fixture's database allow-list widened from the two hard-coded names to the pattern `^vynvori_m3_[a-z][a-z0-9_]{2,24}_test$` plus the existing loopback/synthetic/plan-digest checks (`packages/db/src/composition-migrations.ts`). `packages/db/tests/composition-fixture.ts` gained a fixed allow-list of M3 test names (`migration`, `service`, `ddl`, `concurrency`), `databaseFor(name)`, and — mirroring M7's `ledger-fixture.ts` — `assertDisposableTarget`, `assertServerIsDisposableSynthetic`, a `freshCompositionDatabase(name)` that drops and (re)creates its own database through a maintenance connection (`DROP DATABASE ... WITH (FORCE)`; `CREATE DATABASE`) rather than relying on the CI workflow to pre-create it, and pool helpers (`compositionPool`, `poolBudget`) capped per D8. `freshComposition(database)` is unchanged in signature and behaviour for `composition.test.ts` and `composition-pg.test.ts`, whose databases (`vynvori_m3_migration_test`, `vynvori_m3_service_test`) are still created by the `m2.yml` foundation workflow.
+
+| Test file | Pool cap | + persistent client | + transient admin | Peak |
+|---|---|---|---|---|
+| `composition.test.ts` (existing) | n/a (single client) | 1 | 1 | 5* |
+| `composition-pg.test.ts` (existing) | 4 | — | 1 | 5* |
+| `composition-0002-ddl.test.ts` (new) | 3 | 1 | 1 | 5 |
+| `composition-0002-concurrency.test.ts` (new) | 18 | 1 | 1 | 20 |
+| reserved for a later M3 step | — | — | — | 5 |
+| **M3 total, at most five files** | | | | **40** |
+
+\* Existing files' exact internal shape predates C3a and is unchanged; the figures above are the D8-declared peaks already recorded in §5 of this ADR. A static test (`composition-0002-ddl.test.ts`) asserts `DECLARED_PEAK_CONNECTIONS` sums to no more than the 40-connection M3 budget, and the fixture's `compositionPool`/`poolBudget` read `SHOW max_connections` and return a `degraded` pool (capped to what fits, minus `RESERVED_SUPERUSER_SLOTS = 3`) rather than exceeding the server's limit.
+
+### What is NOT deployed
+
+No rollout is authorised by this step. All flags stay `OFF`. `0002` is applied only to the disposable, loopback, `synthetic`-owned test databases named above; no staging or production target exists in the plan or the runner's allow-list. No `GRANT` is issued to any role. No scanner, store method, HTTP route or contract change is introduced — C3b (store/service), C4 (quota/rate limiting wiring), C5 (scan boundary) and C6 (download grants) consume this schema in later, separately reviewed steps.

@@ -4,6 +4,7 @@
   "requires": ["vynvori_identity"],
   "journalSchema": "vynvori_composition_migrations",
   "migrations": [
-    { "file": "0001_composition_scene.sql", "sha256": "7d8a5257b7bde95c3cc445cbb106205d023e20f5c17049f98e9458d500134002" }
+    { "file": "0001_composition_scene.sql", "sha256": "7d8a5257b7bde95c3cc445cbb106205d023e20f5c17049f98e9458d500134002" },
+    { "file": "0002_asset_access_and_limits.sql", "sha256": "f066494fcbce66f4851340aafcbd0b5c6b3d01116f0db63623a7ca9479e113c8" }
   ]
 }
