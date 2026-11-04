@@ -1,6 +1,6 @@
 # M3 C1c — Cross-engine triage (root causes)
 
-Status: **triage plus fixes for failures 1 and 3; failure 2 open; no fix verified on WebKit.** Firefox is verified by root's integrated run 41600819289 (87/87). Firefox and WebKit results exist only in root's CI; every other claim about those engines below is either read from the first cross-engine run or is labelled a hypothesis.
+Status: **all three failures resolved.** Root's integrated three-engine run **41612993300** (job 125839331966, head `879797e` integrated as `abd9f94`; artifacts `m0-browser-chromium`, `m0-browser-firefox`, `m0-browser-webkit`): Chromium 87/87, Firefox 87/87, WebKit 87/87. **Caveat: one integrated run for the final state, not repeated runs.** Firefox and WebKit results exist only in root's CI.
 
 Base: `main` @ `7a51d8e` (C2 merged, CI green: M0 foundation run 41597015812, M2 backend foundation run 41597015746).
 Source run: workflow run **41584515832**, job **125746776865**, head `6def9d1` of root's branch `claude/peaceful-heisenberg-cocinf` (PR #28). Chromium 151.0.7922.34: 87/87. Firefox 153.0: 86/87. WebKit 26.5: 85/87.
@@ -46,7 +46,7 @@ Only `/customize` (the editor, which imports `CompositionSceneV1Schema` and `Com
 
 **Reproduction.** `npm run build:web`; serve with `scripts/web.mjs start`; open `/customize` in Firefox with the existing CSP, or in any engine listen for `securitypolicyviolation`.
 
-**Fix (applied).** `apps/web/src/components/editor/zod-jitless.ts` calls `config({ jitless: true })` in the browser only; it is imported first by `editor.tsx`, `review.tsx` and `model.ts`. This is a library setting (it disables the probe and the generated fast path), not a CSP change: hardening, not a weakening. Server-side zod is untouched. Guards: `apps/web/tests/editor-zod-jitless.test.ts` (control proves the probe is reached without the module) and the harness now records DOM `securitypolicyviolation` events on every engine and fails the final check on any. On the unfixed build the harness records **48** violations in Chromium (the Firefox count) and fails; on the fixed build it records 0.
+**Fix (applied; Firefox 87/87 in runs 41600819289 and 41612993300).** `apps/web/src/components/editor/zod-jitless.ts` calls `config({ jitless: true })` in the browser only; it is imported first by `editor.tsx`, `review.tsx` and `model.ts`. This is a library setting (it disables the probe and the generated fast path), not a CSP change: hardening, not a weakening. Server-side zod is untouched. Guards: `apps/web/tests/editor-zod-jitless.test.ts` (control proves the probe is reached without the module) and the harness now records DOM `securitypolicyviolation` events on every engine and fails the final check on any. On the unfixed build the harness records **48** violations in Chromium (the Firefox count) and fails; on the fixed build it records 0.
 
 ---
 
@@ -67,16 +67,18 @@ Only `/customize` (the editor, which imports `CompositionSceneV1Schema` and `Com
   2710 FAILED /customize?_rsc=jWo42Hg2N1i5UKji net::ERR_ABORTED  (navigation, about 20 ms after it starts)
 ```
 
-These fire about 1 s after the mobile menu opens, with nothing clicked. Only `/customize` and `/account` are affected: they are the two dynamic (`ƒ`) routes in the header; `/products`, `/studio` and `/gallery` are static and their prefetches finish. Next's client router cancels superseded fetches through an `AbortSignal` (`next/dist/client/components/router-reducer/fetch-server-response.js`, "superseded request"). Chromium prints nothing for a cancelled fetch. **Hypothesis (not verified on WebKit):** WebKit prints a cancelled `fetch()` as `Fetch API cannot load … due to access control checks`, so one cancelled `/account` fetch became the single console error. It fits the message shape and the dynamic route; it does not explain why `/customize` (also aborted in Chromium) was not reported, which suggests timing dependence (an abort before response headers arrive).
+These fire about 1 s after the mobile menu opens, with nothing clicked. Only `/customize` and `/account` are affected: they are the two dynamic (`ƒ`) routes in the header; `/products`, `/studio` and `/gallery` are static and their prefetches finish. Next's client router cancels superseded fetches through an `AbortSignal` (`next/dist/client/components/router-reducer/fetch-server-response.js`, "superseded request"). Chromium prints nothing for a cancelled fetch. **Hypothesis at triage time (confirmed below by run 41612993300):** WebKit prints a cancelled `fetch()` as `Fetch API cannot load … due to access control checks`, so one cancelled `/account` fetch became the single console error. It fits the message shape and the dynamic route; it does not explain why `/customize` (also aborted in Chromium) was not reported, which suggests timing dependence (an abort before response headers arrive).
 
 **Candidates tested and discarded.**
 - *Cross-origin or cross-host redirect:* discarded (relative same-origin 307, `localhost` and `127.0.0.1` identical).
 - *The harness closes the menu while prefetches are in flight:* discarded. Making the harness wait for the request queue to drain, and for each destination heading, after every menu step left the same five aborts in Chromium. (Note: Playwright's `waitForLoadState("networkidle")` resolves immediately once reached, so it cannot be used for this.)
 - *Harness filter:* forbidden by the C1c constraints.
 
-**Experiment, not committed.** `prefetch={false}` on the `/account` and `/customize` header links (`apps/web/src/components/site-header.tsx`) removes the prefetch aborts in Chromium. It then exposes a second abort, the `/account` navigation, cancelled 18 ms after it starts by the harness's next click on Cart (in the unmodified build the prefetch has already warmed that navigation). So that edit alone is not shown to be sufficient; it would also need the harness to wait for the `/account` heading before clicking Cart, and it changes product navigation behaviour (no prefetch for two links).
+**Single-variable test (founder grant) and result.** `apps/web/src/components/site-header.tsx` now sets `prefetch: false` on the `/account` link only (`{...(href === "/account" ? { prefetch: false } : {})}`); `/customize` and the other links are unchanged, and there is no filter, no skipped check and no CSP change. Root integrated head `879797e` as `abd9f94`: run **41612993300**, job **125839331966**: **WebKit 87/87**. The `/account?_rsc=… due to access control checks` error, present in runs 41584515832 and 41600819289, is gone. **The hypothesis is confirmed by a single-variable change:** WebKit prints a router-cancelled RSC prefetch of `/account` as that console error. Caveat: one integrated run, not repeated runs; the error was also a single occurrence per run before, so a repeat count would strengthen this.
 
-**Status: cause NOT established on WebKit; no fix applied.** Everything above is Chromium evidence plus a hypothesis about WebKit's message. The file that would carry the product-side fix, `site-header.tsx`, is outside the C1c allowed list: **a root grant is required** before any change there. See "Open decision" below.
+**Product effect.** The Account link is no longer prefetched, so the first click on it fetches the page on demand (the route is `force-dynamic` and its prefetch carried no static content). Other header links, including `/customize`, still prefetch. The `/customize` aborts seen in Chromium are unchanged and WebKit did not report them.
+
+**Status: cause established by evidence and fixed.** The server-side behaviour of WebKit (why `/customize` aborts were not reported) is not explained and is not needed for the fix.
 
 ---
 
@@ -102,19 +104,20 @@ A lazy image that never enters the load threshold never completes, so the wait c
 
 **The assertion is correct** (every image must load). The harness is wrong to assume that a lazy image below the fold loads by itself.
 
-**Fix (applied).** `loadLazyImages` (`scripts/browser-settle.mjs`) scrolls each image into view until it has loaded (bounded, never throws), then returns to the top; the `waitForFunction` and the `images` assertion are unchanged. `scripts/tests/browser-settle.test.mjs` proves in Chromium that a far-below-the-fold lazy image does not load by itself and does with the helper. WebKit result: NOT_RUN until root's integrated CI.
+**Fix (applied).** `loadLazyImages` (`scripts/browser-settle.mjs`) scrolls each image into view until it has loaded (bounded, never throws), then returns to the top; the `waitForFunction` and the `images` assertion are unchanged. `scripts/tests/browser-settle.test.mjs` proves in Chromium that a far-below-the-fold lazy image does not load by itself and does with the helper. WebKit: `/gallery 320x480` failed in the first (unfixed) run 41584515832 and passed in the integrated runs 41600819289 and 41612993300 (two consecutive passes after the fix; no repeated-run counts beyond that). `scripts/tests/browser-settle.test.mjs` also runs in root's `m0.yml` `browser` job (run 41612993300, job 125839331966): `ok 1 - control: a lazy image far below the fold does not load by itself…`, `ok 2 - loadLazyImages loads it, returns to the top, and leaves the assertion unchanged`; 2 tests, 2 pass, 0 fail.
 
 ---
 
-## Plan constraints honoured so far
+## Plan constraints honoured
 
-CSP source (`apps/web/next.config.mjs`) untouched; no workflow, `.env.example`, `package.json` or lockfile change; no check skipped, filtered or weakened.
+CSP source (`apps/web/next.config.mjs`) untouched (empty diff against main); no workflow, `.env.example` or lockfile content change beyond the declared `zod` pin (root grant: `apps/web/package.json` and the matching lockfile workspace line); `site-header.tsx` edited only under the founder's grant, one link; no check skipped, filtered or weakened.
 
-## Open decision (Failure 2)
+## Decisions taken
 
-1. Root integration of this branch shows whether the WebKit `/account` error persists once failures 1 and 3 are fixed and how often (repeat runs give counts).
-2. If it persists, the options are: (a) grant to edit `apps/web/src/components/site-header.tsx` (`prefetch={false}` on `/account`, possibly `/customize`) plus a harness wait on the `/account` heading; (b) accept it as WebKit's reporting of a router-initiated cancel and decide, with root, how the check should treat it. Nothing here proposes a filter without root's decision.
+Failure 2: the founder granted a one-link, single-variable test (`prefetch={false}` on `/account`); it resolved the error. No harness wait on the `/account` heading and no filter were needed.
 
 ## Not verified
 
-Firefox and WebKit on any fix; repeated-run counts for the `/gallery` WebKit timeout; the claim that WebKit reports a cancelled fetch as the observed message.
+- Repeated-run counts: `/gallery` 320x480 and the `/account` error each have one failing run before the fix and consecutive passing integrated runs after it, not a statistical sample.
+- Why WebKit reported the `/account` cancel and not the `/customize` cancels (timing, an abort before response headers, or another WebKit rule); the fix does not depend on it.
+- WebKit's behaviour for the zod eval probe (the violation guard was silent in the WebKit run, but WebKit was never shown to raise it).
