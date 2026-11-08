@@ -5,7 +5,7 @@ import { appendGrantEntry, ensureWallet, runLedgerCommand, type LedgerDb } from 
 import { applyLedgerMigrations, ledgerMigrationPlan, LEDGER_TEST_DATABASE } from "../src/ledger-migrations";
 
 /** Fixture allow-list (ADR-0021 D15). Later steps append their file's name here. */
-export const LEDGER_TEST_NAMES = ["migrations", "fixture", "concurrency", "core", "privileges"] as const;
+export const LEDGER_TEST_NAMES = ["migrations", "fixture", "concurrency", "core", "privileges", "quotes", "isolation"] as const;
 export type LedgerTestName = (typeof LEDGER_TEST_NAMES)[number];
 export const databaseFor = (name: LedgerTestName) => `vynvori_m7_${name}_test`;
 
