@@ -5,6 +5,7 @@ loadEnv(process.env.NODE_ENV || "development", process.cwd());
 const bridge = bridgeSettings(process.env);
 const projectConfig = medusaEnvironment(process.env);
 if (bridge.enabled) projectConfig.http.authMethodsPerActor.customer = ["tcm"];
+// biome-ignore lint/style/noCommonJs: Medusa loads medusa-config through module.exports, as its docs show
 module.exports = defineConfig({
   projectConfig,
   ...(bridge.enabled ? { modules: [

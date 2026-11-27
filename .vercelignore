@@ -14,7 +14,7 @@ AGENTS.md
 CODING_AGENT_START_HERE.md
 README.md
 .gitattributes
-eslint.config.mjs
+biome.json
 apps/web/ASSET-PROVENANCE.md
 apps/web/components.json
 design/reference/*

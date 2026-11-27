@@ -54,7 +54,8 @@ test("guest journey: save, reload identical geometry, freeze, review binding, re
   const savedBody = await saved.json();
   const reload = await (await http.get(req(`/api/v1/compositions/${id}`, { cookie }), { id })).json();
   assert.deepEqual(reload.scene, savedBody.scene ?? reload.scene); assert.equal(reload.sceneHashSha256, savedBody.sceneHashSha256);
-  assert.equal(reload.scene.pages.find((p: any) => p.zoneId === "front").layers[0].xMm, 12.346); // eslint-disable-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: test reads an untyped JSON response body
+  assert.equal(reload.scene.pages.find((p: any) => p.zoneId === "front").layers[0].xMm, 12.346);
   const stale = await http.save(req(`/api/v1/compositions/${id}`, { method: "POST", cookie, body: { expectedRevision: 0, scene } }), { id });
   assert.equal(stale.status, 409); assert.equal((await stale.json()).error.currentRevision, 1);
   const frozen = await http.freeze(req(`/api/v1/compositions/${id}/versions`, { method: "POST", cookie, body: { expectedRevision: 1 } }), { id }); assert.equal(frozen.status, 201);
