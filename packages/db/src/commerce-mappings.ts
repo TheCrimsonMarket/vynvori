@@ -10,9 +10,15 @@ const record = (row: Row): CommerceMappingRecord => ({ userId: row.user_id, proj
 /** Creative database mapping journal only; never accesses the Medusa database. */
 export function commerceMappingStore(pool: Pool) {
   return {
+    /**
+     * First writer wins; every concurrent caller converges on that one row. The ON CONFLICT clause names no target on purpose, so every
+     * unique constraint of the table arbitrates: a racing insert that collides on (project_id,entity_id) or operation_id waits for the
+     * winner and does nothing instead of raising 23505 (M1b-fix-1). The read is a separate statement so it sees the committed winner.
+     * Only this user's own row is ever returned; a collision with another user's row leaves nothing to read and fails closed.
+     */
     async reserve(input: { userId: string; projectId: string; entityId: string; operationId: string; requestCipher: string }): Promise<CommerceMappingRecord> {
       await pool.query(`INSERT INTO vynvori_identity.commerce_mappings(user_id,project_id,entity_id,operation_id,request_cipher)
-        VALUES($1,$2,$3,$4,$5) ON CONFLICT (user_id,project_id) DO NOTHING`, [input.userId, input.projectId, input.entityId, input.operationId, input.requestCipher]);
+        VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`, [input.userId, input.projectId, input.entityId, input.operationId, input.requestCipher]);
       const result = await pool.query<Row>(`SELECT * FROM vynvori_identity.commerce_mappings WHERE user_id=$1 AND project_id=$2`, [input.userId, input.projectId]);
       if (!result.rows[0]) throw new Error("Mapping unavailable");
       return record(result.rows[0]);

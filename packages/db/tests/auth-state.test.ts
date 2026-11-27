@@ -248,7 +248,7 @@ test("durable identity state in disposable loopback PostgreSQL", { skip: !connec
           const failures = settled.flatMap(result => result.status === "rejected" ? [String((result.reason as { code?: unknown }).code ?? "error")] : []);
           assert.deepEqual(failures, [], `round ${round} leaked ${failures.join(",")}`);
           const rows = settled.map(result => (result as PromiseFulfilledResult<Awaited<ReturnType<typeof journal.reserve>>>).value);
-          const winner = attempts.find(input => input.operationId === rows[0].operationId);
+          const winner = attempts.find(input => input.operationId === rows[0]?.operationId);
           assert.ok(winner, "the surviving mapping belongs to one of the racing reservations");
           for (const row of rows) assert.deepEqual(row, { userId, projectId, entityId, operationId: winner.operationId, requestCipher: winner.requestCipher, state: "reserved", authIdentityId: null, customerId: null });
           const stored = await racePool.query("SELECT count(*)::int AS n FROM vynvori_identity.commerce_mappings WHERE project_id=$1 AND (user_id=$2 OR entity_id=$3)", [projectId, userId, entityId]);
