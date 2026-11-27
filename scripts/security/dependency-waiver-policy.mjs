@@ -5,7 +5,8 @@ import { digest, sha256 } from "./audit-policy.mjs";
 // Founder-approved 2026-11-02 (ADR-0020). Updated only by an explicitly reviewed policy change, never by the runner/tests.
 export const WAIVER_POLICY_PATH = "security/dependency-waiver-policy.json";
 export const WAIVER_POLICY_SHA256 = "21eefe2ff7a8ba112b44e946f4441616aa568011bd223aa6be19b82f091212ab";
-// Hard ceiling in code: editing the JSON cannot extend the window even if the anchor were also changed carelessly.
+// Global hard ceiling in code: editing the JSON cannot extend the window even if the anchor were also changed carelessly.
+// The only entries that may outlive it are the code-listed WAIVER_EXTENSIONS below (ADR-0024).
 export const WAIVER_CEILING = "2026-12-17T23:59:59Z";
 const WAIVER_FLOOR = "2026-11-02T00:00:00Z";
 // Per-entry extensions past WAIVER_CEILING (ADR-0024, decided 2026-11-27 under the founder's delegation). The global
@@ -43,7 +44,7 @@ export function checkWaiverShape(policy) {
   check(Array.isArray(policy.waivers) && policy.waivers.length > 0, "WAIVER_SCOPE_INVALID");
   const seen = new Set();
   for (const waiver of policy.waivers) {
-    check(GHSA.test(waiver.ghsa) && !seen.has(waiver.ghsa), "WAIVER_SCOPE_INVALID");
+    check(typeof waiver.ghsa === "string" && GHSA.test(waiver.ghsa) && !seen.has(waiver.ghsa), "WAIVER_SCOPE_INVALID");
     seen.add(waiver.ghsa);
     check(typeof waiver.package === "string" && WAIVABLE.has(waiver.severity) && typeof waiver.range === "string" &&
       typeof waiver.owner === "string" && typeof waiver.rationale === "string" && typeof waiver.recheck === "string", "WAIVER_SCOPE_INVALID");
@@ -62,7 +63,7 @@ export function checkWaiverShape(policy) {
 
 /** The instant a waiver stops counting: its code-listed extension when the policy carries it, otherwise the global ceiling. */
 export function waiverExpiry(waiver) {
-  return Object.hasOwn(WAIVER_EXTENSIONS, waiver.ghsa) && waiver.expiresAt === WAIVER_EXTENSIONS[waiver.ghsa].expiresAt
+  return typeof waiver.ghsa === "string" && Object.hasOwn(WAIVER_EXTENSIONS, waiver.ghsa) && waiver.expiresAt === WAIVER_EXTENSIONS[waiver.ghsa].expiresAt
     ? WAIVER_EXTENSIONS[waiver.ghsa].expiresAt : WAIVER_CEILING;
 }
 

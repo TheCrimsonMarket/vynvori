@@ -149,11 +149,22 @@ test("JSON edits cannot add, move or widen a per-entry extension", () => {
     changed => { changed.waivers[0].nodes.push({ ...changed.waivers[0].nodes[0] }); },
     changed => { changed.waivers[0].nodes[0].path = "node_modules/esbuild"; },
     changed => { changed.waivers.push({ ...structuredClone(changed.waivers[0]), ghsa: "GHSA-1111-2222-3333" }); },
+    // Type confusion: values that would coerce to the reviewed strings are still not equal to them.
+    changed => { changed.waivers[0].expiresAt = [EXTENDED]; },
+    changed => { changed.waivers[0].expiresAt = new Date(EXTENDED).getTime(); },
+    changed => { changed.waivers[0].retriageBy = ["2027-02-15"]; },
   ];
   for (const edit of edits) {
     const changed = structuredClone(policy);
     edit(changed);
     assert.throws(() => checkWaiverShape(changed), /WAIVER_EXTENSION_INVALID/, String(edit));
+  }
+  // Prototype keys and non-string GHSA values never reach the extension map.
+  for (const ghsa of ["__proto__", "constructor", "hasOwnProperty", [ESBUILD]]) {
+    const changed = structuredClone(policy);
+    changed.waivers[0].ghsa = ghsa;
+    assert.throws(() => checkWaiverShape(changed), /WAIVER_SCOPE_INVALID/, String(ghsa));
+    assert.equal(waiverExpiry({ ...policy.waivers[0], ghsa }), WAIVER_CEILING, String(ghsa));
   }
   // An entry without an extension stays valid, and the policy-level window still cannot move.
   const plain = structuredClone(policy);
