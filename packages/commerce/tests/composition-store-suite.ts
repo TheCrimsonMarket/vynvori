@@ -7,11 +7,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { CompositionAccess, CompositionStore } from "@vynvori/contracts/composition-port";
-import { compositionService, CompositionError, secretHash } from "../src/composition";
+import { EMPTY_SYNTHETIC_SCENE } from "@vynvori/contracts";
+import { compositionService, CompositionError, sceneSha256, secretHash } from "../src/composition";
 import type { Harness } from "./composition-suite";
 import { imageLayer, memoryStorage, png, sceneWith, textLayer } from "./composition-fixtures";
 import {
-  SYNTHETIC_COMPOSITION_CONFIG, SYNTHETIC_GRANT_TTL_SECONDS, SYNTHETIC_RATE_MAX, SYNTHETIC_RATE_WINDOW_SECONDS, SYNTHETIC_SCAN_EVIDENCE, SYNTHETIC_SCAN_LEASE_SECONDS,
+  SYNTHETIC_COMPOSITION_CONFIG, SYNTHETIC_GRANT_TTL_SECONDS, SYNTHETIC_GUEST_TTL_SECONDS, SYNTHETIC_LIVE_CAP, SYNTHETIC_QUOTA_BYTES, SYNTHETIC_QUOTA_MAX_ASSETS, SYNTHETIC_RATE_MAX, SYNTHETIC_RATE_WINDOW_SECONDS, SYNTHETIC_SCAN_EVIDENCE, SYNTHETIC_SCAN_LEASE_SECONDS,
 } from "./composition-synthetic";
 
 const seconds = (date: Date, n: number) => new Date(date.getTime() + n * 1000);
@@ -27,7 +28,11 @@ export async function markClean(store: CompositionStore, compositionId: string, 
   if (done.status !== "recorded") throw new Error(`markClean: ${done.status}`);
 }
 
-export type StoreHarness = Harness & { lateQuarantine(compositionId: string, assetId: string): Promise<void> };
+export type StoreHarness = Harness & {
+  lateQuarantine(compositionId: string, assetId: string): Promise<void>;
+  /** Rows in the rate-bucket table (the in-memory port: distinct buckets). Proves that callers without access never created one (C4). */
+  bucketCount(): Promise<number>;
+};
 
 export function storeConformance(label: string, factory: () => Promise<StoreHarness>, options: { skip?: boolean } = {}) {
   const t = (name: string, fn: () => Promise<void>) => test(`${label}: ${name}`, { skip: options.skip ?? false }, fn);
@@ -293,5 +298,72 @@ export function storeConformance(label: string, factory: () => Promise<StoreHarn
     await h.expireGuest(b.id);
     assert.equal(await h.store.countLiveGuestDrafts(now), base + 1);
     await assert.rejects(h.store.countLiveGuestDrafts(new Date(Number.NaN)), RangeError);
+  });
+
+  // ---- ADR-0022 C4: quota and live-guest cap enforced in the store (SQL), independent of any service pre-check.
+  const newGuestInput = (now: Date) => {
+    const scene = EMPTY_SYNTHETIC_SCENE(), id = randomUUID(), capability = randomBytes(32).toString("base64url");
+    return { id, capability, input: { id, capabilityHash: secretHash(capability), guestExpiresAt: seconds(now, SYNTHETIC_GUEST_TTL_SECONDS), scene, sceneSha256: sceneSha256(scene), state: "guest_draft" as const, now, liveGuestDraftsMax: SYNTHETIC_LIVE_CAP } };
+  };
+
+  t("createGuest: the live cap admits exactly the cap, refuses the next without writing anything, and expiry or an M1b claim frees a slot", async () => {
+    const { h, store, guest } = await setup(); await guest(); // creating one through the service also ensures the print profile (FK)
+    const now = new Date(), base = await store.countLiveGuestDrafts(now), cap = base + SYNTHETIC_LIVE_CAP;
+    const made = [];
+    for (let i = 0; i < SYNTHETIC_LIVE_CAP; i += 1) { const g = newGuestInput(now); const out = await store.createGuest({ ...g.input, liveGuestDraftsMax: cap }); assert.equal(out.status, "created"); made.push(g); }
+    const refused = newGuestInput(now), out = await store.createGuest({ ...refused.input, liveGuestDraftsMax: cap });
+    assert.deepEqual(out, { status: "cap_reached" });
+    assert.equal(await store.get(refused.id, { kind: "guest", capabilityHash: secretHash(refused.capability) }, now), null, "nothing was written for the refused draft");
+    assert.equal(await store.countLiveGuestDrafts(now), cap);
+    await h.expireGuest(made[0]!.id); // an expired draft is not live
+    assert.equal((await store.createGuest({ ...newGuestInput(now).input, liveGuestDraftsMax: cap })).status, "created");
+    assert.deepEqual(await store.createGuest({ ...newGuestInput(now).input, liveGuestDraftsMax: cap }), { status: "cap_reached" });
+    await h.m1bClaim(made[1]!.id, await h.newUser()); // claimed in M1b: not live either
+    assert.equal((await store.createGuest({ ...newGuestInput(now).input, liveGuestDraftsMax: cap })).status, "created");
+  });
+
+  t("createGuest: an unset, zero, negative, fractional or non-numeric cap throws and is never unlimited; a bad time throws", async () => {
+    const { store, guest } = await setup(); await guest(); const now = new Date();
+    for (const bad of [undefined, null, 0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "5", Number.MAX_SAFE_INTEGER + 1])
+      await assert.rejects(store.createGuest({ ...newGuestInput(now).input, liveGuestDraftsMax: bad as number }), RangeError, String(bad));
+    await assert.rejects(store.createGuest({ ...newGuestInput(now).input, now: new Date(Number.NaN) }), RangeError);
+    assert.equal((await store.createGuest(newGuestInput(now).input)).status, "created", "the same input with a valid cap works");
+  });
+
+  const quota = { maxAssets: SYNTHETIC_QUOTA_MAX_ASSETS, maxBytes: SYNTHETIC_QUOTA_BYTES };
+  /** The object key must match the 0001 CHECK: private/composition/v1/<composition id>/<sha256>. */
+  const assetInput = (compositionId: string, byteSize: number, sha = createHash("sha256").update(randomUUID()).digest("hex")) =>
+    ({ id: randomUUID(), sha256: sha, mime: "image/png", byteSize, widthPx: 4, heightPx: 4, objectKey: `private/composition/v1/${compositionId}/${sha}` });
+
+  t("insertAsset quota: count and bytes are enforced in SQL; the same bytes are idempotent even at the quota; no access means not_found", async () => {
+    const { h, store, guest } = await setup(); const g = await guest(), now = new Date();
+    const first = await store.insertAsset(g.id, g.access, now, assetInput(g.id, 10), quota);
+    assert.equal(first.status, "inserted"); assert.equal(first.status === "inserted" && first.asset.scanStatus, "pending");
+    for (let i = 2; i <= SYNTHETIC_QUOTA_MAX_ASSETS; i += 1) assert.equal((await store.insertAsset(g.id, g.access, now, assetInput(g.id, 10), quota)).status, "inserted");
+    assert.deepEqual(await store.insertAsset(g.id, g.access, now, assetInput(g.id, 10), quota), { status: "quota_exceeded" });
+    assert.equal((await store.listAssets(g.id, g.access, now))!.length, SYNTHETIC_QUOTA_MAX_ASSETS);
+    const again = await store.insertAsset(g.id, g.access, now, assetInput(g.id, 10, first.status === "inserted" ? first.asset.sha256 : ""), quota);
+    assert.equal(again.status, "existing"); assert.equal(again.status === "existing" && again.asset.id, first.status === "inserted" ? first.asset.id : "", "a duplicate never counts against the quota");
+    // bytes: a single new asset that would pass the byte maximum is refused even though the count has room
+    const b = await guest();
+    assert.equal((await store.insertAsset(b.id, b.access, now, assetInput(b.id, SYNTHETIC_QUOTA_BYTES), quota)).status, "inserted");
+    assert.deepEqual(await store.insertAsset(b.id, b.access, now, assetInput(b.id, 1), quota), { status: "quota_exceeded" });
+    const c = await guest();
+    assert.deepEqual(await store.insertAsset(c.id, c.access, now, assetInput(c.id, SYNTHETIC_QUOTA_BYTES + 1), quota), { status: "quota_exceeded" });
+    // access: foreign, expired, claimed and malformed ids are all the same not_found, and nothing is written
+    const other = await guest(), user = await h.newUser();
+    for (const [id, access] of [[c.id, other.access], [randomUUID(), c.access], ["not-a-uuid", c.access], [c.id, { kind: "owner", userId: user } as CompositionAccess]] as const)
+      assert.deepEqual(await store.insertAsset(id, access, now, assetInput(id, 1), quota), { status: "not_found" });
+    await h.expireGuest(c.id); assert.deepEqual(await store.insertAsset(c.id, c.access, now, assetInput(c.id, 1), quota), { status: "not_found" });
+    const d = await guest(); await h.m1bClaim(d.id, user); assert.deepEqual(await store.insertAsset(d.id, d.access, now, assetInput(d.id, 1), quota), { status: "not_found" });
+  });
+
+  t("insertAsset quota: unset, zero, negative or fractional maxima throw and are never unlimited", async () => {
+    const { store, guest } = await setup(); const g = await guest(), now = new Date();
+    for (const bad of [undefined, null, 0, -1, 1.5, Number.NaN, "3"])
+      for (const key of ["maxAssets", "maxBytes"] as const) await assert.rejects(store.insertAsset(g.id, g.access, now, assetInput(g.id, 1), { ...quota, [key]: bad } as never), RangeError, `${key}=${String(bad)}`);
+    await assert.rejects(store.insertAsset(g.id, g.access, now, assetInput(g.id, 1), undefined as never), RangeError);
+    await assert.rejects(store.insertAsset(g.id, g.access, now, assetInput(g.id, 0), quota), RangeError);
+    assert.deepEqual(await store.listAssets(g.id, g.access, now), []);
   });
 }

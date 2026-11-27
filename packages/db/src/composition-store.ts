@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { CompositionSceneV1Schema, sceneSourceHashes, type PreflightIssue, type PrintProfileV1 } from "@vynvori/contracts";
 import type {
-  ArtifactScanStatus, AssetRecord, CompositionAccess, CompositionRecord, CompositionStore, DownloadGrantRecord, RateLimitOperation,
+  ArtifactScanStatus, AssetRecord, CompositionAccess, CompositionRecord, CompositionStore, CreateGuestOutcome, DownloadGrantRecord, InsertAssetOutcome, RateLimitOperation,
   ScanAttemptRecord, ScanEventRecord, ScanResultEvent, ScanTransitionOutcome, VersionRecord,
 } from "@vynvori/contracts/composition-port";
 
@@ -46,6 +46,8 @@ const isDate = (value: unknown): value is Date => value instanceof Date && Numbe
 const PG_INTEGER_MAX = 2147483647, SCAN_TEXT_MAX = 512;
 const isText = (value: unknown): value is string => typeof value === "string" && value.trim() !== "" && value === value.trim() && value.length <= SCAN_TEXT_MAX;
 const isPositiveInteger = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value > 0 && value <= PG_INTEGER_MAX;
+/** Policy maxima that are compared in JavaScript (not cast to a PostgreSQL integer): any positive safe integer. Unset or zero is never "unlimited". */
+const isSafePositive = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 const isReason = (value: unknown): value is string => typeof value === "string" && value.length <= SCAN_TEXT_MAX && reasonCodePattern.test(value);
 /** Programming errors (malformed ids, unset or non-positive policy, a lease or expiry not after `now`) throw. Nothing defaults. */
 function invalid(what: string): never { throw new RangeError(`composition store: invalid ${what}`); }
@@ -102,6 +104,19 @@ const openTransactions = new WeakSet<PoolClient>();
 function assertInTransaction(tx: PoolClient): void { if (!openTransactions.has(tx)) throw new Error("composition lock helpers need an open composition transaction"); }
 export async function lockComposition(tx: CompositionTx, compositionId: string): Promise<void> { assertInTransaction(tx); await tx.query(`SELECT ${S}.m3_lock_composition($1::uuid)`, [compositionId]); }
 export async function lockAsset(tx: CompositionTx, compositionId: string, assetId: string): Promise<void> { assertInTransaction(tx); await tx.query(`SELECT ${S}.m3_lock_asset($1::uuid, $2::uuid)`, [compositionId, assetId]); }
+/**
+ * Global serialisation of the live-guest-draft cap (ADR-0022 D2, C4). A class-4 transaction lock keyed by one fixed subject string,
+ * built by the same SQL helper as the per-subject locks (unsigned mask included). `createGuest` takes this lock and nothing else, so
+ * it can never take part in a lock cycle; a `hashtext` collision with another subject only adds harmless waiting.
+ */
+const LIVE_GUEST_CAP_SUBJECT = "m3:live-guest-drafts";
+export async function lockLiveGuestCap(tx: CompositionTx): Promise<void> { assertInTransaction(tx); await tx.query(`SELECT pg_advisory_xact_lock(${S}.m3_lock_key_from_hash(hashtext($1)))`, [LIVE_GUEST_CAP_SUBJECT]); }
+/** Unexpired, unclaimed, unowned guest compositions at `now`: the same population the guest access predicate admits. */
+async function liveGuestDrafts(runner: Pick<Pool, "query">, now: Date): Promise<number> {
+  const result = await runner.query(`SELECT count(*)::integer AS n FROM ${S}.compositions c JOIN ${I}.guest_drafts gd ON gd.id = c.guest_draft_id
+    WHERE c.owner_user_id IS NULL AND c.guest_draft_id IS NOT NULL AND gd.expires_at > $1 AND gd.owner_id IS NULL`, [now]);
+  return result.rows[0].n as number;
+}
 /** The only way to obtain a `CompositionTx`: BEGIN, run `work`, COMMIT (ROLLBACK on error), and release the client. */
 export async function withCompositionTransaction<T>(pool: Pool, work: (tx: CompositionTx) => Promise<T>): Promise<T> {
   const client = await pool.connect();
@@ -190,12 +205,17 @@ export function compositionStore(pool: Pool): CompositionStore {
       if (stored.rows[0]?.definition_sha256 !== sha) throw new Error("Print profile version already exists with different content");
     },
     async createGuest(input) {
+      if (!isSafePositive(input?.liveGuestDraftsMax)) invalid("live guest cap");
+      if (!isDate(input.now)) invalid("time");
       return transaction(async client => {
+        // Count, decision and both inserts under one global lock: concurrent creators serialise here, so the cap cannot be overshot.
+        await lockLiveGuestCap(client);
+        if (await liveGuestDrafts(client, input.now) >= input.liveGuestDraftsMax) return { status: "cap_reached" as const };
         await client.query(`INSERT INTO ${I}.guest_drafts(id,capability_hash,expires_at) VALUES($1,$2,$3)`, [input.id, input.capabilityHash, input.guestExpiresAt]);
         await client.query(`INSERT INTO ${S}.compositions(id,guest_draft_id,product_family,print_profile_id,print_profile_version,lifecycle_state,draft_scene,draft_scene_sha256)
           VALUES($1,$1,$2,$3,$4,$5,$6,$7)`, [input.id, input.scene.productFamily, input.scene.printProfileId, input.scene.printProfileVersion, input.state, JSON.stringify(input.scene), input.sceneSha256]);
-        return (await read(client, input.id, { kind: "guest", capabilityHash: input.capabilityHash }, new Date()))!;
-      });
+        return { status: "created" as const, record: (await read(client, input.id, { kind: "guest", capabilityHash: input.capabilityHash }, input.now))! };
+      }) satisfies Promise<CreateGuestOutcome>;
     },
     async createOwned(input) {
       await pool.query(`INSERT INTO ${S}.compositions(id,owner_user_id,product_family,print_profile_id,print_profile_version,lifecycle_state,draft_scene,draft_scene_sha256)
@@ -221,16 +241,30 @@ export function compositionStore(pool: Pool): CompositionStore {
           AND gd.owner_id=$2 AND gd.claimed_at IS NOT NULL RETURNING c.id`, [id, userId, capabilityHash, now]);
       return result.rowCount === 1 ? read(pool, id, { kind: "owner", userId }, now) : null;
     },
-    async insertAsset(id, access, now, value) {
-      const params: unknown[] = [value.id, id, value.objectKey, value.sha256, value.mime, value.byteSize, value.widthPx, value.heightPx], predicate = allowed(access, "c", params, now);
-      // A row this statement inserted has no scan event yet: its status is "pending" by definition (ADR-0022 D3).
-      const inserted = await pool.query(`INSERT INTO ${S}.assets(id,composition_id,kind,object_key,sha256,mime,byte_size,width_px,height_px)
-        SELECT $1,c.id,'customer_original',$3,$4,$5,$6,$7,$8 FROM ${S}.compositions c WHERE c.id=$2 AND ${predicate}
-        ON CONFLICT (composition_id, sha256) DO NOTHING RETURNING *, 'pending'::text AS scan_status`, params);
-      if (inserted.rows[0]) return asset(inserted.rows[0]);
-      const lookup: unknown[] = [id, value.sha256], guard = allowed(access, "c", lookup, now);
-      const existing = await pool.query(`${ASSET} JOIN ${S}.compositions c ON c.id=a.composition_id WHERE a.composition_id=$1 AND a.sha256=$2 AND ${guard}`, lookup);
-      return existing.rows[0] ? asset(existing.rows[0]) : null;
+    async insertAsset(id, access, now, value, quota) {
+      if (!isSafePositive(quota?.maxAssets) || !isSafePositive(quota?.maxBytes)) invalid("asset quota"); // unset or non-positive is never unlimited
+      if (!isDate(now) || !isSafePositive(value?.byteSize)) invalid("asset");
+      if (!isId(id)) return { status: "not_found" as const };
+      return transaction(async tx => {
+        // Order (ADR-0022 C3b lock order): access check without a lock, the composition advisory lock, then the authoritative re-read.
+        // A caller without access never takes the lock. No row lock on `compositions` is taken here, so this writer can never wait on
+        // a row held by a freeze that is itself queued on the advisory lock.
+        const probe = async () => { const params: unknown[] = [id], predicate = allowed(access, "c", params, now); return (await tx.query(`SELECT 1 FROM ${S}.compositions c WHERE c.id=$1 AND ${predicate}`, params)).rowCount === 1; };
+        if (!(await probe())) return { status: "not_found" as const };
+        await lockComposition(tx, id);
+        if (!(await probe())) return { status: "not_found" as const };
+        const existing = (await tx.query(`${ASSET} WHERE a.composition_id=$1 AND a.sha256=$2`, [id, value.sha256])).rows[0];
+        if (existing) return { status: "existing" as const, asset: asset(existing) }; // same bytes are idempotent and never count against the quota
+        const totals = (await tx.query(`SELECT count(*)::integer AS n, COALESCE(sum(byte_size), 0)::text AS bytes FROM ${S}.assets WHERE composition_id=$1`, [id])).rows[0];
+        if (totals.n >= quota.maxAssets || Number(totals.bytes) + value.byteSize > quota.maxBytes) return { status: "quota_exceeded" as const };
+        // A row this statement inserted has no scan event yet: its status is "pending" by definition (ADR-0022 D3).
+        const inserted = (await tx.query(`INSERT INTO ${S}.assets(id,composition_id,kind,object_key,sha256,mime,byte_size,width_px,height_px)
+          VALUES($1,$2,'customer_original',$3,$4,$5,$6,$7,$8) ON CONFLICT (composition_id, sha256) DO NOTHING RETURNING *, 'pending'::text AS scan_status`,
+          [value.id, id, value.objectKey, value.sha256, value.mime, value.byteSize, value.widthPx, value.heightPx])).rows[0];
+        if (inserted) return { status: "inserted" as const, asset: asset(inserted) };
+        const raced = (await tx.query(`${ASSET} WHERE a.composition_id=$1 AND a.sha256=$2`, [id, value.sha256])).rows[0]; // a writer outside the lock won
+        return raced ? { status: "existing" as const, asset: asset(raced) } : { status: "not_found" as const };
+      }) satisfies Promise<InsertAssetOutcome>;
     },
     async getAsset(compositionId, assetId, access, now) {
       const params: unknown[] = [compositionId, assetId], predicate = allowed(access, "c", params, now);
@@ -380,9 +414,7 @@ export function compositionStore(pool: Pool): CompositionStore {
     },
     async countLiveGuestDrafts(now) {
       if (!isDate(now)) invalid("time");
-      const result = await pool.query(`SELECT count(*)::integer AS n FROM ${S}.compositions c JOIN ${I}.guest_drafts gd ON gd.id = c.guest_draft_id
-        WHERE c.owner_user_id IS NULL AND c.guest_draft_id IS NOT NULL AND gd.expires_at > $1 AND gd.owner_id IS NULL`, [now]);
-      return result.rows[0].n as number;
+      return liveGuestDrafts(pool, now);
     },
     async pruneRateBuckets(input) {
       // A window that started before the cut-off must also have ENDED by `now`, so no active window (and no live limit) is ever reset.

@@ -22,6 +22,16 @@ export type VersionRecord = Readonly<{
   preflightState: "preview_only" | "blocked"; preflightIssues: readonly PreflightIssue[]; frozenAt: Date;
 }>;
 export type SaveOutcome = { status: "saved"; record: CompositionRecord } | { status: "conflict"; currentRevision: number } | { status: "not_found" };
+/** Per-composition upload maxima, supplied by the caller from typed `M3_LIMIT_*` configuration (never defaulted by the store). */
+export type AssetQuota = Readonly<{ maxAssets: number; maxBytes: number }>;
+/** `existing`: the same bytes were already stored for this composition (idempotent upload). `quota_exceeded`: a new row would pass either maximum. */
+export type InsertAssetOutcome =
+  | { status: "inserted"; asset: AssetRecord }
+  | { status: "existing"; asset: AssetRecord }
+  | { status: "quota_exceeded" }
+  | { status: "not_found" };
+/** `cap_reached`: the global live-guest-draft cap is full; nothing was written. */
+export type CreateGuestOutcome = { status: "created"; record: CompositionRecord } | { status: "cap_reached" };
 /** `asset_not_clean`: an image the version pins is not `clean` (checked inside the freeze transaction, ADR-0022 D5). */
 export type FreezeOutcome =
   | { status: "frozen"; version: VersionRecord; record: CompositionRecord }
@@ -32,13 +42,24 @@ export type FreezeOutcome =
 /** Persistence port. EVERY read/write is access-scoped inside the store (SQL), never filtered afterwards. */
 export interface CompositionStore {
   ensurePrintProfile(profile: PrintProfileV1, definitionSha256: string): Promise<void>;
-  createGuest(input: { id: string; capabilityHash: string; guestExpiresAt: Date; scene: CompositionSceneV1; sceneSha256: string; state: PlaneDState }): Promise<CompositionRecord>;
+  /**
+   * Creates a guest draft only while fewer than `liveGuestDraftsMax` live drafts exist (ADR-0022 D2, C4). The count, the cap decision
+   * and both inserts run in ONE transaction under a class-4 advisory lock, so concurrent creators can never exceed the cap. The cap is
+   * caller-supplied typed policy: unset, zero or non-integer throws `RangeError`; it is never unlimited and never defaulted here.
+   */
+  createGuest(input: { id: string; capabilityHash: string; guestExpiresAt: Date; scene: CompositionSceneV1; sceneSha256: string; state: PlaneDState; now: Date; liveGuestDraftsMax: number }): Promise<CreateGuestOutcome>;
   createOwned(input: { id: string; ownerUserId: string; scene: CompositionSceneV1; sceneSha256: string; state: PlaneDState }): Promise<CompositionRecord>;
   get(id: string, access: CompositionAccess, now: Date): Promise<CompositionRecord | null>;
   listOwned(userId: string): Promise<readonly CompositionRecord[]>;
   saveDraft(id: string, access: CompositionAccess, now: Date, input: { expectedRevision: number; scene: CompositionSceneV1; sceneSha256: string; state: PlaneDState }): Promise<SaveOutcome>;
   adoptClaimedGuest(id: string, userId: string, capabilityHash: string, now: Date): Promise<CompositionRecord | null>;
-  insertAsset(id: string, access: CompositionAccess, now: Date, asset: Omit<AssetRecord, "createdAt" | "compositionId" | "scanStatus">): Promise<AssetRecord | null>;
+  /**
+   * Quota in SQL (ADR-0022 D2, C4): access check, then the per-composition advisory lock, then the authoritative re-read, the duplicate
+   * lookup (same bytes return the existing row and are never charged to the quota) and the count/byte sum, then the insert, all in one
+   * transaction. Concurrent uploads therefore cannot overshoot either maximum. Maxima are caller-supplied typed policy: unset, zero or
+   * non-integer throws `RangeError`.
+   */
+  insertAsset(id: string, access: CompositionAccess, now: Date, asset: Omit<AssetRecord, "createdAt" | "compositionId" | "scanStatus">, quota: AssetQuota): Promise<InsertAssetOutcome>;
   getAsset(compositionId: string, assetId: string, access: CompositionAccess, now: Date): Promise<AssetRecord | null>;
   listAssets(compositionId: string, access: CompositionAccess, now: Date): Promise<readonly AssetRecord[] | null>;
   /**
