@@ -12,14 +12,17 @@ const absent = ["/usr/local/lib/node_modules/npm", "/usr/local/lib/node_modules/
   "/usr/bin/minizip", "/usr/lib/x86_64-linux-gnu/libminizip.so.1", "/bin/sh", "/usr/bin/apt", "/usr/bin/dpkg"];
 for (const file of absent) assert.equal(fs.existsSync(file), false, `Unnecessary runtime tooling: ${file}`);
 for (const name of ["cli", "framework", "medusa"]) {
-  assert.equal(JSON.parse(fs.readFileSync(`/app/node_modules/@medusajs/${name}/package.json`, "utf8")).version, "2.21.2");
+  assert.equal(JSON.parse(fs.readFileSync(`/app/node_modules/@medusajs/${name}/package.json`, "utf8")).version, "2.23.1");
 }
 const exports = ["@medusajs/framework/pg", "@medusajs/cli/cli.js", "@medusajs/medusa"];
 for (const name of exports) assert.ok(runtimeRequire.resolve(name));
 assert.equal(typeof runtimeRequire("@medusajs/framework/pg").Client, "function");
 // Exercise installed native glibc bindings on the Cloud Run/CI amd64 target.
-const native = ["lightningcss", "@rollup/rollup-linux-x64-gnu", "@napi-rs/lzma-linux-x64-gnu", "msgpackr-extract"];
+// Medusa 2.23.1 (ADR-0024): Vite 8 bundles with Rolldown (Rollup and @napi-rs/lzma left the tree), and the production
+// lightningcss copy is nested under vite, so it is loaded the way vite resolves it.
+const native = ["@rolldown/binding-linux-x64-gnu", "msgpackr-extract"];
 for (const name of native) assert.ok(runtimeRequire(name));
+assert.ok(createRequire(runtimeRequire.resolve("vite/package.json"))("lightningcss"));
 const zlibPackage = fs.readFileSync("/var/lib/dpkg/status.d/zlib1g", "utf8");
 const zlibVersion = /^Version: (.+)$/m.exec(zlibPackage)?.[1];
 assert.equal(zlibVersion, "1:1.3.dfsg+really1.3.1-1+b1");

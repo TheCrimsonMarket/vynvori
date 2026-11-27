@@ -1,4 +1,6 @@
 import { compositionConformance, memoryHarness } from "./composition-suite";
 import { storeConformance } from "./composition-store-suite";
+import { limiterConformance } from "./composition-limiter-suite";
 compositionConformance("composition service (in-memory port)", async () => memoryHarness());
 storeConformance("composition store primitives (in-memory port)", async () => memoryHarness());
+limiterConformance("composition limiter (in-memory port)", async () => memoryHarness());

@@ -301,6 +301,149 @@ Status: **proposed, implemented locally for S5 only; not deployed.** Plan step: 
 | LOW-4: the eligibility port runs while the wallet row is locked | Documented as honest limit 6. |
 | INFO: rejection persisted per key; `Σ hold_units` vs the maximum hold is TypeScript-only; a NUL byte in `evidenceRef` maps to `DATABASE_ERROR` (rolled back, harmless); a final may name a fully released package | Documented in the design bullets and honest limits 1 and 7. The NUL-byte mapping is left as is: it fails closed. |
 
+## S6 addendum — settle, reconciliation hold, vendor-cost isolation (migration `0006_vendor_cost_evidence`)
+Status: **proposed, implemented locally for S6 only; not deployed.** Plan step: `M7-Plan.md` §7 S6.
+
+Scope:
+- Nothing in S6 adds a flag, a dependency, a route, an `.env` key, a contract change or a runtime import (`ledger-isolation.test.ts`, D13). `ledger-settlement.ts` and `ledger-evidence.ts` are on the ledger-source list, and nothing under `apps/` imports them.
+- `0006_vendor_cost_evidence.sql` adds no `GRANT`, no role, no `OWNER TO` and no rows. It references nothing in `vynvori_identity` and no Medusa object. Its only `REVOKE` is function-level `FROM PUBLIC`.
+- It is journal number 0006, after S5's `0005_reservations`.
+- No real credit grant source is registered by any means. The S2 proofs are unchanged and still run.
+
+**What S6 adds.**
+- `0006` drops S5's temporary `ledger_entries_s5_kinds` constraint. It then `CREATE OR REPLACE`s exactly three S5 functions, each a strict superset of its 0005 body. A static test checks that every 0005 refusal message survives.
+  - `ledger_entries_bind_reservation()` (invoker, `BEFORE INSERT`) now admits `settle` and `hold`. It lists the admitted kinds itself (`grant`, `reserve`, `release`, `settle`, `hold`), which is why the kind constraint can go. S2's `ledger_entries_kind` and `ledger_entries_sign_shape` still bound the shape.
+  - `ledger_entries_apply_to_reservation()` (**`SECURITY DEFINER`**, restated; `CREATE OR REPLACE` keeps its owner and ACL) gains two `UPDATE` branches. Each re-checks state `reserved`, the dispatch marker and the units.
+  - `credit_reservations_update_guard()` keeps the same depth **and** function-owner test. It allows exactly `authorization_requested → reserved` and `reserved → released | settled | reconciliation_hold`. There is no edge out of `settled` or `reconciliation_hold`. This is tested directly: the function owner, at depth 2 through a TEMP trigger, is refused every such edge, while the control edge works.
+- A new table, `vendor_cost_evidence`.
+- No new definer: the migration set keeps exactly two.
+- `src/ledger-settlement.ts` (`settleReservation`, `holdReservation`) and `src/ledger-evidence.ts` (`recordVendorCostEvidence`), exported as `./ledger-settlement` and `./ledger-evidence`.
+- Two new command kinds, `reservation_settle` and `reservation_hold`, registered in A4(2).
+
+**Design (binding for S6).**
+- **Settle.** `settleReservation` uses a system actor with `expectedUserId` (D11), parsed by `LedgerInternalCommandV1Schema`. It settles only on evidence that meets all of these:
+  - parses as `TransitionEvidenceV1` with `transition: "settle"` before any SQL;
+  - passes `canMarkReceiptSettled` (never `outcome_unknown` or a vendor-charge message) and `canMarkOperationDelivered` (verified manifest hash and owner/rights);
+  - has an `operationId` equal to the reservation's own operation, read from the database inside the command;
+  - targets a reservation that is `reserved` and dispatched.
+
+  One `settle` entry consumes exactly the frozen `charge_units` and returns `hold_units − charge_units` to `available`. The amount is never taken from the caller, so a settle cannot exceed the hold. The binding trigger refuses any other split (`delta_reserved = −hold`, `delta_consumed = charge`, `delta_available = hold − charge`), and so does the definer's own `UPDATE`.
+- **Hold.** `holdReservation` takes `outcome_unknown` or `persistence_failed_under_review` evidence with the matching reason, under the same binding and dispatch rules. It moves the **full** hold of exactly this reservation to `held_for_review` (state `reconciliation_hold`). No customer debit is inferred, nothing is retried and nothing is released. Siblings are untouched and settle or release independently (tested). Nothing in W1 leaves the hold: the guard has no edge out, no exported function names it, and remedy is a later milestone (D2).
+- **Persisted rejections and lock order.**
+  - An operation mismatch (`EVIDENCE_INVALID`) or a wrong state (`INVALID_TRANSITION`) is persisted under the idempotency key, as in S5.
+  - A second settle, or a settle or hold of a released, settled or held reservation, is `INVALID_TRANSITION`, with balances unchanged.
+  - Lock order is wallet → reservation (A4(1), proven for both new kinds).
+- **Out of order: neither case is persisted, so retrying with the same key works once the missing row commits (tested).**
+  - Evidence for a reservation that does not exist yet, or that belongs to another user, is `NOT_FOUND`.
+  - Evidence that arrives before the dispatch marker is `INVALID_TRANSITION` thrown as a plain `LedgerError`. This differs from S5's release, on purpose. A component that learns of an unknown outcome before its dispatch marker commits must still be able to hold under its original key. Review LOW-1.
+- **Vendor-cost evidence.**
+  - `recordVendorCostEvidence` writes only `vendor_cost_evidence`, in one autocommitted statement. It takes no wallet lock, opens no ledger command and names no other ledger table (static test).
+  - The table has no FK in either direction. Its only triggers are `reject_mutation()`, covering append-only and no `TRUNCATE`. No ledger function body mentions it (catalog test).
+  - `reservation_id` is an optional reconciliation hint and is deliberately not checked.
+  - Recording is idempotent on `(operation_id, evidence_kind, evidence_ref)`. A changed amount or hint under the same key is `IDEMPOTENCY_CONFLICT`. `recorded_by` is provenance, not content.
+  - Usage, invoice and unknown evidence for reserved, held and settled operations change **zero rows** in `wallets`, `ledger_entries`, `credit_reservations`, `ledger_commands` and `ledger_authorizations` (md5 fingerprint test).
+- **Micro-USD mapping.**
+  - `amount_usd_micros` is an exact integer number of millionths of a US dollar, from 0 to 2^53 − 1. It is `NULL` when the vendor reported no amount, and must be `NULL` for `unknown`.
+  - `internal.ts`'s `privateVendorCostUsd: number` maps as `amountUsdMicros / 1e6`, for internal display only.
+  - The ledger never converts a float into micros (no rounding rule is approved) and never converts USD into credits (no rate card exists).
+  - Vendor cost never reaches a customer projection: `FORBIDDEN_PUBLIC_FIELDS` already lists `privateVendorCostUsd` and `vendorCostEvidence`.
+
+**S9 grants this design needs (founder-executed; never in a migration).**
+- **Vendor-cost evidence.** `SELECT, INSERT` on `vendor_cost_evidence`, with no `UPDATE`, `DELETE` or `TRUNCATE`. Preferably grant it to a dedicated internal reconciliation role rather than the customer-path runtime role. The table is append-only and unattributed, so whoever holds `INSERT` can add rows that only a superuser can remove (review LOW-2).
+- **Settle and hold.** They need nothing new: they write `ledger_commands` and `ledger_entries`, which are already granted.
+- **Reservation definer owner.** Unchanged: `USAGE` on the schema, `SELECT` and `UPDATE (state)` on `credit_reservations`. `ledger-privileges.test.ts` shows settle and hold working after the S9 re-own with exactly those three privileges.
+- **Caveat for later migrations.** `CREATE OR REPLACE FUNCTION` needs the function owner. After the apply function is re-owned, a migration (or this rollback) that replaces it must re-own it back to the migration owner first and re-own it afterwards, as for 0002's wallet definer. It fails loudly ("must be owner"), never silently.
+- **Open S5 questions.** The founder's questions on one or two definer owner roles, and on a definer-only command path, are **not** decided here. S6 works under either answer, because it adds no definer and needs no new definer privilege.
+
+**Honest limits (stated, not overclaimed).**
+1. **The S1 gate's manifest comparison is not met in W1.** That gate asks the ledger to compare `manifestSha256` against a stored manifest. No manifest store exists before M6b/M8a, and `TransitionEvidenceV1` still carries the literal booleans; contracts are a root lane, and S6 changes no contract. What S6 does enforce:
+   - only system actors, parsed by `LedgerInternalCommandV1Schema`;
+   - the owner read from the database (`expectedUserId`; a mismatch is `NOT_FOUND`);
+   - the operation id bound to the reservation's own row;
+   - the contract guards and the dispatch marker.
+
+   The evidence reference is stored on the entry for audit. **Founder question:** accept this for W1, or block S6's merge on a manifest store.
+2. **S6 makes S5 honest limit 1 worse, because settle and hold are one-way in W1** (review MEDIUM-1).
+   - **What raw SQL can do.** Code holding the runtime role's `INSERT` privileges, writing raw SQL, can write an applied `reservation_settle` or `reservation_hold` command and a shape-valid entry with any evidence string. It can do this against **any** user's reserved, dispatched reservation.
+   - **Forged settle.** Consumes exactly that reservation's frozen `charge_units` with no delivery. It never mints, never moves credits across users, never exceeds the hold and never happens twice.
+   - **Forged hold.** Freezes the full `hold_units` in `held_for_review`.
+   - **Why this is worse than S5.** Neither forgery can be undone in W1: no path leaves `settled` or `reconciliation_hold`, and the one-terminal index then blocks the legitimate outcome. S5's forgeable release only returned credits. So a leaked runtime credential could consume or freeze the reserved credits of every user with a dispatched reservation.
+   - **What the database enforces.** The shape only: kind, a command of this transaction, units, evidence kind, dispatched, `reserved`. The decision behind the evidence is the library's.
+   - **What does not fix it.** A ledger-side evidence table written by the same runtime role would not close this.
+   - **The fix, and the recommendation.** The fix is S5's open question: a `SECURITY DEFINER` command path, or revoking direct `INSERT` on `ledger_commands` and `ledger_entries` from the runtime role. **Recommendation:** make it a hard gate before any rollout that grants the runtime role. That is a registry change (root lane) and a founder decision, so S6 raises it and does not decide it.
+3. **Plane B evidence is caller-asserted.** Neither function verifies the reference against a provider record, because `ProviderOutcomeEvidencePort` has no implementation in W1.
+4. **`vendor_cost_evidence` has no owner column and no row-level security.** It is internal by design, so whoever can read it reads all of it. It must never be exposed through a customer route; D13 and `FORBIDDEN_PUBLIC_FIELDS` cover W1.
+
+**Table and trigger inventory (changes only).**
+
+| Object | Kind | Notes |
+|---|---|---|
+| `vendor_cost_evidence` | table | `evidence_id` PK; `operation_id`, `evidence_ref` (1..512), `recorded_by` shape `CHECK`s; `evidence_kind` in usage/invoice/unknown; `amount_usd_micros` 0..2^53−1 or `NULL`, `NULL` for unknown; `UNIQUE(operation_id, evidence_kind, evidence_ref)`; no FK |
+| `vendor_cost_evidence_immutable` / `_no_truncate` | `BEFORE UPDATE OR DELETE` / `BEFORE TRUNCATE` | `reject_mutation()` (0002) |
+| `ledger_entries_bind_reservation()` | replaced | adds settle and hold binding: kind-matched command of this transaction, reserved and dispatched, exact units, evidence kind, reference length |
+| `ledger_entries_apply_to_reservation()` | replaced, **`SECURITY DEFINER`** | adds `settled` and `reconciliation_hold` branches with re-checked units |
+| `credit_reservations_update_guard()` | replaced | adds `reserved → settled` and `reserved → reconciliation_hold`; same owner and depth test |
+| `ledger_entries_s5_kinds` | dropped | the binding trigger lists the admitted kinds |
+
+**Honest mutation table.** Each mutation was run locally on PostgreSQL 16 and really fails the named test. A mutation of `0006` re-pins its digest in `plan.json` so the other files still load. The source was then restored from git, and the tree was confirmed clean.
+
+| Mutation | Failing named test(s) |
+|---|---|
+| S6-M1 guard keeps only `pg_trigger_depth() > 1` (owner check removed) | `ledger-privileges.test.ts`: "S5 DESIGN: a role with TABLE-level UPDATE on credit_reservations…"; "S9 step for S5: re-owning ONLY the reservation definer…" |
+| S6-M2 settle binding stops checking the evidence kind | `ledger-settlement.test.ts`: "entry binding for settle and hold…" |
+| S6-M3 settle binding stops checking consumed = charge and available = hold − charge | `ledger-settlement.test.ts`: "entry binding for settle and hold…" |
+| S6-M4 hold binding stops checking the dispatch marker | `ledger-settlement.test.ts`: "entry binding for settle and hold…" |
+| S6-M5 guard admits `reconciliation_hold → released` | `ledger-settlement.test.ts`: "entry binding for settle and hold…" (the owner-at-depth-2 edge-list probes; this mutation survived the first run, and those probes were added to kill it) |
+| S6-M6 `vendor_cost_evidence.reservation_id` gains an FK to `credit_reservations` | `ledger-settlement.test.ts`: "vendor-cost isolation…"; "catalog: vendor_cost_evidence has no FK…" |
+| S6-M7 TypeScript operation-id binding of settle and hold evidence removed | `ledger-settlement.test.ts`: "settle refuses: evidence for a sibling's operation…"; "hold: an unknown outcome…" |
+
+**Connection use.**
+- `ledger-settlement.test.ts` is a standard file, using database `vynvori_m7_settlement_test` (a new allow-list name). It opens one pool capped at 5 plus one fixture client, a declared peak of **6**.
+- The S6 rows in `ledger-concurrency.test.ts` reuse that file's existing pool.
+- `ledger-privileges`, `ledger-isolation`, `ledger-migrations` and `ledger-core` open no new connections.
+- Net change to the `db-integration` budget: **+6**.
+
+**Files outside the plan's S6 list (all inside M7's lane, `packages/db/**` and this ADR).**
+- `tests/ledger-migrations.test.ts`:
+  - 0006 added to the plan list and the golden digests;
+  - a new "0006 is additive" static test;
+  - 0006 rollback subtests for refusal, keep, down and up;
+  - every down chain now starts at 0006.
+- `tests/ledger-privileges.test.ts`:
+  - S6 grants and an S6 positive path;
+  - vendor evidence shown insert-only and append-only;
+  - TEMP-trigger probes to `settled` and `reconciliation_hold`;
+  - settle and hold after the S9 re-own;
+  - one drop probe now names `ledger_entries_sign_shape`, because `ledger_entries_s5_kinds` is gone.
+- `tests/ledger-isolation.test.ts`:
+  - the D13 source list and the API allow-lists;
+  - the A4 kinds and lock order;
+  - static checks for vendor-cost and hold isolation.
+- `tests/ledger-core.test.ts`:
+  - settle and hold now pass the kind check and are refused by the binding;
+  - the wallet-CHECK probe now counts only the reservation FK.
+- `tests/ledger-fixture.ts`: the `settlement` allow-list name.
+
+**Rollback.** `rollback/0006_vendor_cost_evidence.down.sql` is one `DO` block that runs under the runner's advisory lock. It:
+- refuses unless 0006 is journaled and no later migration is;
+- takes `ACCESS EXCLUSIVE` locks on `ledger_entries`, `credit_reservations` and `vendor_cost_evidence` before checking for data;
+- refuses while any vendor-cost evidence row, any `settle` or `hold` entry, or any `settled` or `reconciliation_hold` reservation exists (real data is restored from backup, never deleted);
+- drops `vendor_cost_evidence`, restores the three S5 function bodies verbatim, re-adds `ledger_entries_s5_kinds` and removes the journal row.
+
+S5 rows survive it. Tests check that `prosrc` equals the 0005 bodies, that exactly two definers remain, and that up → down → up works.
+
+**Checks run locally only (NOT_RUN as CI evidence; only the CI `db-integration` job's log counts).**
+- The ledger Postgres tests ran against a throwaway PostgreSQL 16 cluster in this container: loopback, `synthetic` superuser, `max_connections = 250`, the port acknowledged through `M7_TEST_POSTGRES_PORT_ACK`, and `CI_REQUIRE_PG_TESTS=1`.
+- Result: 194/194 across the nine ledger test files, plus the mutation table above. After S6 merged, `main` was merged into this branch; one subtest now runs S6's real `settleReservation` and `holdReservation` against S7's closure and reopen rules (a settled final closes by delivery and never reopens; a held final blocks both).
+
+**Security review (S6, before the PR).** The `security-reviewer` agent reviewed the migration, the rollback, the library and the tests. It found nothing CRITICAL or HIGH. It confirmed that the replaced bodies equal 0005 plus the new edges, that the owner-and-depth guard is intact, and that the rollback is byte-identical to the 0005 bodies.
+
+| Finding | Disposition |
+|---|---|
+| MEDIUM-1: a forged settle or hold through raw runtime SQL is irreversible in W1 (no exit from `settled` or `reconciliation_hold`), so S5 honest limit 1 is worse | Honest limit 2 says exactly this. A definer command path, or revoking the runtime role's direct `INSERT` on commands and entries, is recommended as a hard gate before any rollout. That is a founder decision and a registry change in the root lane, so it is not decided here. No hard-gate break: nothing is minted, and state moves only through entries. |
+| LOW-1: a settle or hold before the dispatch marker was a persisted rejection, so a component that retries with the same key could never hold an unknown outcome | Fixed: "not dispatched yet" is a non-persisted `INVALID_TRANSITION`. The test now holds under the same key after the marker commits. |
+| LOW-2: append-only, unattributed `vendor_cost_evidence` rows can be added by anyone holding `INSERT` and removed only by a superuser | S9 grant note: prefer a dedicated internal reconciliation role. The shape `CHECK`s bound each row. |
+| INFO: the hold's `reason` is hashed into the request but not stored on the entry | No change. `evidence_kind` maps one-to-one to the reason (schema refine), so nothing is lost. |
 ## S7 addendum — refinement slots, package transitions and closure (migration `0007_refinement_slots`)
 Status: **proposed, implemented locally for S7 only; not deployed.** Plan step: `M7-Plan.md` §7 S7 (with D9, F11/Q7, §2, §3). Nothing in S7 adds a flag, a dependency, a route, an `.env` key or a runtime import (`ledger-isolation.test.ts`, D13: `ledger-entitlements.ts` is on the ledger-source list and nothing under `apps/` imports it). `0007_refinement_slots.sql` adds no `GRANT`, no role, no `OWNER TO`, inserts no rows, references no Medusa object, registers no credit grant source and writes no ledger entry (refinements never touch a wallet bucket). It replaces exactly one S5 object (the `ledger_packages_immutable` trigger, which rejected every update "until S7") and does not replace or alter any 0005/0006 function. The package edge guard in root (`canTransitionPlaneCBundle`) and the operation guards are imported, not edited.
 
@@ -335,7 +478,7 @@ Status: **proposed, implemented locally for S7 only; not deployed.** Plan step: 
 6. Rate limiting belongs at the API layer (there is no API in S7).
 7. `LedgerError` exposes `sqlstate`/`constraint` fields (ledger-core, outside this lane) which carry internal names; the S7 library only ever raises codes.
 8. The runtime's `FOR UPDATE` lock grants let raw SQL lock any user's package or slot rows; two raw sessions could deadlock (the library locks in the documented order).
-9. 0006 (S6) must precede 0007 in the plan; whichever pull request merges second merges main in and adds its rollback ahead of `down6`.
+9. 0006 (S6) is on `main` and 0007 follows it in `plan.json`; the migrations test runs `down7` before `down6`. S7 replaces none of the three S5 functions S6 replaced. The library names no S6-only reservation state: unresolved finals are `state <> 'released'` and not `settled` in TypeScript, and the database lists the states itself (S6's static scan forbids `reconciliation_hold` in `packages/db/src` TypeScript).
 
 **Table and trigger inventory (all in `vynvori_ledger`).**
 

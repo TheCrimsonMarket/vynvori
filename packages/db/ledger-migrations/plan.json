@@ -9,6 +9,7 @@
     { "file": "0003_quotes.sql", "sha256": "f32217a8a099728e5956a2166cf6ecc163cb2ea12af4511879fd0e282ba46159" },
     { "file": "0004_promo_claims.sql", "sha256": "0ceee68eb748af0ed0ddb86558bb652900c15f64fe6a8185a6de358e31dba397" },
     { "file": "0005_reservations.sql", "sha256": "07948d4f934cdee709da3b7cded3d36919185075991594f6f3e112f2eb8e1ddf" },
+    { "file": "0006_vendor_cost_evidence.sql", "sha256": "2eb40569cc4a5cf3d226dca3a8bf63c393999b4ffd087e9411900cba59c8267a" },
     { "file": "0007_refinement_slots.sql", "sha256": "f0ca7b72f280b507e68accab25eaa3b712fe0bfca389ace965b01d1d9df06cfb" }
   ]
 }

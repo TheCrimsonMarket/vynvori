@@ -10,7 +10,9 @@ import { databaseFor, dropLedger, freshEmptyDatabase, grantSyntheticCredits, led
 import { assessQuoteForAuthorization, getQuote, issueQuote, renewQuote } from "../src/ledger-quotes";
 import { authorizeQuote, getReservation, recordWorkflowRef, releaseReservation } from "../src/ledger-reservations";
 import { getBundleState, openRefinements, recordBundleDelivery, skipRefinementSlot } from "../src/ledger-entitlements";
-import { SYNTHETIC_BUNDLE_HOLD, SYNTHETIC_FINAL_HOLD, SYNTHETIC_HOLDS, consent, currentPricePolicy, eligibilityPort, issueTestQuote, releaseEvidence } from "./ledger-reservation-fixture";
+import { holdReservation, settleReservation } from "../src/ledger-settlement";
+import { recordVendorCostEvidence } from "../src/ledger-evidence";
+import { SYNTHETIC_BUNDLE_HOLD, SYNTHETIC_CHARGES, SYNTHETIC_FINAL_HOLD, SYNTHETIC_HOLDS, consent, currentPricePolicy, eligibilityPort, issueTestQuote, releaseEvidence } from "./ledger-reservation-fixture";
 
 /**
  * Privilege-model B proof (ADR-0021 S2 addendum). CI's `synthetic` is a SUPERUSER, so a test run as synthetic would pass with
@@ -91,6 +93,9 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
           // SELECT on ledger_authorizations is needed by issueQuote/renewQuote too (the lineage-authorized trigger reads it).
           await admin.query(`GRANT SELECT, INSERT ON vynvori_ledger.ledger_authorizations, vynvori_ledger.ledger_packages, vynvori_ledger.credit_reservations TO ${q(role)}`);
           await admin.query(`GRANT UPDATE (workflow_ref) ON vynvori_ledger.credit_reservations TO ${q(role)}`);
+          // S6 (ADR-0021 S6 addendum): SELECT, INSERT on vendor_cost_evidence; settle and hold need nothing new (they write
+          // ledger_entries and ledger_commands, already granted; the reservation definer moves the state).
+          await admin.query(`GRANT SELECT, INSERT ON vynvori_ledger.vendor_cost_evidence TO ${q(role)}`);
           // S7 (ADR-0021 S7 addendum): SELECT, INSERT on the two insert-only event tables and SELECT on the slots; NO UPDATE on packages or slots.
           await admin.query(`GRANT SELECT, INSERT ON vynvori_ledger.ledger_package_events, vynvori_ledger.refinement_slot_events TO ${q(role)}`);
           await admin.query(`GRANT SELECT ON vynvori_ledger.refinement_slots TO ${q(role)}`);
@@ -182,7 +187,7 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
           `SELECT ${APPLY}`, "SELECT vynvori_ledger.wallets_update_guard()",
           "ALTER TABLE vynvori_ledger.ledger_entries DISABLE TRIGGER ledger_entries_apply_to_wallet", "ALTER TABLE vynvori_ledger.wallets DISABLE TRIGGER ALL",
           "DROP TRIGGER ledger_entries_apply_to_wallet ON vynvori_ledger.ledger_entries",
-          "ALTER TABLE vynvori_ledger.ledger_entries DROP CONSTRAINT ledger_entries_s5_kinds",
+          "ALTER TABLE vynvori_ledger.ledger_entries DROP CONSTRAINT ledger_entries_sign_shape",
           "CREATE OR REPLACE FUNCTION vynvori_ledger.wallets_update_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
           "CREATE FUNCTION vynvori_ledger.mint() RETURNS int LANGUAGE sql AS 'SELECT 1'", "DROP FUNCTION vynvori_ledger.reject_mutation() CASCADE",
           "TRUNCATE vynvori_ledger.ledger_entries", "TRUNCATE vynvori_ledger.wallets", "TRUNCATE vynvori_ledger.ledger_commands", "TRUNCATE vynvori_ledger.ledger_grant_sources",
@@ -441,6 +446,28 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
         assert.equal((await getReservation(rtPool, s5User, s5Bundle.reservations[0]!.reservationId)).workflowRef, "wf/priv-2");
       });
 
+      await t.test("S6 positive: settle and hold work end to end as the restricted runtime role with no new privilege; vendor-cost evidence is insert-only", async () => {
+        const user = await profile(); await ensureWallet(rtPool, user);
+        await grantSyntheticCredits(rtPool, { userId: user, grantSourceId: source, sourceRef: "s6-funds", units: SYNTHETIC_BUNDLE_HOLD });
+        const bundle = await s5Authorize(rtPool, user, await issueTestQuote(rtPool, user, "bundle", "priv-s6-bundle"));
+        const [toSettle, toHold] = [bundle.reservations[0]!, bundle.reservations[1]!];
+        for (const [i, r] of [toSettle, toHold].entries()) await recordWorkflowRef(rtPool, { userId: user, component: "priv", reservationId: r.reservationId, workflowRef: `wf/priv-s6-${i}`, idempotencyKey: `priv-s6-dispatch-000${i}` });
+        assert.equal((await settleReservation(rtPool, { userId: user, component: "priv", reservationId: toSettle.reservationId, evidence: { transition: "settle", operationId: toSettle.operationId, evidenceKind: "persisted_delivered", evidenceRef: "priv-s6-settle", hasVerifiedManifestHash: true, ownerAndRightsVerified: true }, idempotencyKey: "priv-s6-settle-00001" })).state, "settled");
+        assert.equal((await holdReservation(rtPool, { userId: user, component: "priv", reservationId: toHold.reservationId, evidence: { transition: "hold", operationId: toHold.operationId, evidenceKind: "persistence_failed_under_review", evidenceRef: "priv-s6-hold", reason: "persistence_unconfirmed" }, idempotencyKey: "priv-s6-hold-0000001" })).state, "reconciliation_hold");
+        const hold0 = SYNTHETIC_HOLDS[0], hold1 = SYNTHETIC_HOLDS[1], charge0 = SYNTHETIC_CHARGES[0];
+        assert.deepEqual(await buckets(user), { a: String(hold0 - charge0), r: String(SYNTHETIC_BUNDLE_HOLD - hold0 - hold1), h: String(hold1), c: String(charge0), rev: "6" });
+        const before = [await reservationRow(toSettle.reservationId), await reservationRow(toHold.reservationId), await buckets(user)];
+        const evidence = await recordVendorCostEvidence(rtPool, { component: "priv", operationId: toSettle.operationId, reservationId: toSettle.reservationId, evidenceKind: "invoice", evidenceRef: "priv-s6-invoice", amountUsdMicros: 1234567 });
+        assert.equal(evidence.replayed, false);
+        assert.deepEqual([await reservationRow(toSettle.reservationId), await reservationRow(toHold.reservationId), await buckets(user)], before, "vendor-cost evidence moved nothing");
+        for (const sql of ["UPDATE vynvori_ledger.vendor_cost_evidence SET amount_usd_micros = 0", "DELETE FROM vynvori_ledger.vendor_cost_evidence", "TRUNCATE vynvori_ledger.vendor_cost_evidence", "ALTER TABLE vynvori_ledger.vendor_cost_evidence DISABLE TRIGGER ALL", "DROP TABLE vynvori_ledger.vendor_cost_evidence"])
+          await assert.rejects(rtPool.query(sql), code("42501"), `runtime: ${sql}`);
+        for (const sql of ["UPDATE vynvori_ledger.vendor_cost_evidence SET amount_usd_micros = 0", "DELETE FROM vynvori_ledger.vendor_cost_evidence"])
+          await assert.rejects(rtwPool.query(sql), code("23000", /append-only/), `pg_write_all_data: ${sql}`);
+        assert.equal((await admin.query("SELECT amount_usd_micros::text AS m FROM vynvori_ledger.vendor_cost_evidence WHERE evidence_id = $1", [evidence.evidenceId])).rows[0].m, "1234567");
+        for (const column of ["amount_usd_micros", "reservation_id", "evidence_kind"]) assert.equal((await admin.query("SELECT has_column_privilege($1, 'vynvori_ledger.vendor_cost_evidence', $2, 'UPDATE') AS x", [rt, column])).rows[0].x, false, column);
+      });
+
       await t.test("S5: the runtime role holds no privilege to change state, units, authorizations or packages (42501); its one updatable column cannot rewrite a recorded reference (23000)", async () => {
         const [dispatched, fresh] = [s5Bundle.reservations[0]!, s5Bundle.reservations[1]!];
         const before = [await reservationRow(dispatched.reservationId), await reservationRow(fresh.reservationId), await buckets(s5User)];
@@ -471,7 +498,8 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
           await assert.rejects(pool.query("UPDATE vynvori_ledger.credit_reservations SET state = 'released' WHERE reservation_id = $1", [target.reservationId]), code("23000", /only through ledger entries/), `${label}: direct state`);
           await assert.rejects(pool.query("UPDATE vynvori_ledger.credit_reservations SET hold_units = 1, charge_units = 1 WHERE reservation_id = $1", [target.reservationId]), code("23000", /immutable/), `${label}: direct units`);
           await assert.rejects(tempTrigger(pool, "state = 'released'"), code("23000", /only through ledger entries/), `${label}: TEMP trigger (depth 2, not the function owner)`);
-          await assert.rejects(tempTrigger(pool, "state = 'settled'"), code("23000", /only through ledger entries/), `${label}: TEMP trigger to a state S5 has no edge to`);
+          await assert.rejects(tempTrigger(pool, "state = 'settled'"), code("23000", /only through ledger entries/), `${label}: TEMP trigger to settled (an S6 edge, but only for the function owner)`);
+          await assert.rejects(tempTrigger(pool, "state = 'reconciliation_hold'"), code("23000", /only through ledger entries/), `${label}: TEMP trigger to reconciliation_hold (S6 edge, function owner only)`);
         };
         await withRole(rtt, pool => probe(pool, "table-level UPDATE"));
         assert.equal((await admin.query("SELECT has_table_privilege($1, 'vynvori_ledger.credit_reservations', 'UPDATE') AS x", [rtw])).rows[0].x, true, "precondition: pg_write_all_data CAN update reservations by privilege alone");
@@ -545,6 +573,11 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
           assert.deepEqual(await buckets(user), before, "nothing moved on the failed attempt");
           await admin.query(grant);
         }
+        // S6 edges run through the same re-owned definer with the same three privileges: settle and hold need nothing more.
+        const second = await attempt();
+        for (const [i, r] of second.reservations.slice(0, 2).entries()) await recordWorkflowRef(rtPool, { userId: user, component: "priv", reservationId: r.reservationId, workflowRef: `wf/s9-s6-${i}`, idempotencyKey: `priv-s9-s6-dispatch-${i}` });
+        assert.equal((await settleReservation(rtPool, { userId: user, component: "priv", reservationId: second.reservations[0]!.reservationId, evidence: { transition: "settle", operationId: second.reservations[0]!.operationId, evidenceKind: "persisted_delivered", evidenceRef: "s9-settle", hasVerifiedManifestHash: true, ownerAndRightsVerified: true }, idempotencyKey: "priv-s9-settle-000001" })).state, "settled", "settle works with exactly the listed privileges");
+        assert.equal((await holdReservation(rtPool, { userId: user, component: "priv", reservationId: second.reservations[1]!.reservationId, evidence: { transition: "hold", operationId: second.reservations[1]!.operationId, evidenceKind: "outcome_unknown", evidenceRef: "s9-hold", reason: "outcome_unknown" }, idempotencyKey: "priv-s9-hold-00000001" })).state, "reconciliation_hold", "hold works with exactly the listed privileges");
         const target = first.reservations[1]!, before = await reservationRow(target.reservationId);
         await withRole(owner, async pool => {
           await assert.rejects(pool.query("UPDATE vynvori_ledger.credit_reservations SET state = 'released' WHERE reservation_id = $1", [target.reservationId]), code("23000", /only through ledger entries/), "old table owner, direct");

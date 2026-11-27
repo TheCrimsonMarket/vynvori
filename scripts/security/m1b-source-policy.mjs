@@ -9,6 +9,9 @@ export const M1B_POLICY_DIGEST = "UNACTIVATED";
 export const M1B_POLICY_PATH = "security/m1b-source-ci-policy.json";
 export const M1B_SCOPE = "m1b-github-ci-source-only";
 export const M1B_EXPIRY = "2026-10-24T23:59:59Z";
+// ADR-0024: the Medusa version a future M1b source review would cover. The sealed 2026-10 policy JSON records 2.21.2,
+// stays UNACTIVATED and expired, and is rejected either way.
+export const M1B_MEDUSA_VERSION = "2.23.1";
 export const M1B_ADVISORIES = [
   { name: "braces", version: "3.0.3", ghsa: "GHSA-vfj7-8cjw-p6xm", nodes: ["node_modules/braces"] },
   { name: "sprintf-js", version: "1.0.3", ghsa: "GHSA-hp3w-g68c-fv3c", nodes: ["node_modules/sprintf-js"] },
@@ -45,7 +48,7 @@ export function m1bContext(env) {
 export async function collectM1bReviewState(root) {
   const lockSha256 = sha256(await fs.readFile(path.join(root, "package-lock.json")));
   const state = await snapshot(root, { fingerprint: { lockSha256, securityRoots: roots }, exceptions: M1B_ADVISORIES });
-  check(state.lock.packages["node_modules/@medusajs/medusa"]?.version === "2.21.2" && state.lock.packages["node_modules/@medusajs/js-sdk"]?.version === "2.21.2", "M1B_MEDUSA_VERSION_CHANGED");
+  check(state.lock.packages["node_modules/@medusajs/medusa"]?.version === M1B_MEDUSA_VERSION && state.lock.packages["node_modules/@medusajs/js-sdk"]?.version === M1B_MEDUSA_VERSION, "M1B_MEDUSA_VERSION_CHANGED");
   for (const file of Object.keys(state.surface)) state.surface[file] = sha256(normalize(file, await fs.readFile(path.join(root, file))));
   for (const edge of state.resolutions) check(edge.child === edge.resolved, "M1B_INSTALLED_RESOLUTION_CHANGED");
   for (const [location, installed] of Object.entries(state.installed)) {
@@ -58,7 +61,7 @@ export async function collectM1bReviewState(root) {
 }
 function metadata(policy, approval, now) {
   check(/^[a-f0-9]{40}$/.test(approval.implementation) && /^[a-f0-9]{64}$/.test(approval.digest), "M1B_NOT_APPROVED");
-  check(policy.version === 1 && policy.medusaVersion === "2.21.2" && digest(policy) === approval.digest && policy.implementationCommit === approval.implementation && policy.approved === true &&
+  check(policy.version === 1 && policy.medusaVersion === M1B_MEDUSA_VERSION && digest(policy) === approval.digest && policy.implementationCommit === approval.implementation && policy.approved === true &&
     policy.authority === "VYNVORI founder" && policy.scope === M1B_SCOPE && policy.remoteExecutionApproved === false &&
     policy.expiresAt === M1B_EXPIRY && equal(policy.advisories, M1B_ADVISORIES), "M1B_APPROVAL_CHANGED");
   const approved = Date.parse(policy.approvedOn + "T00:00:00Z"), expiry = Date.parse(policy.expiresAt);
@@ -122,7 +125,7 @@ export function evaluateM1b(input, approval = defaultApproval()) {
   } catch (error) { return { accepted: false, status: "REJECTED", code: error.message }; }
 }
 export function m1bProposal(state, production, all, image) {
-  return { version: 1, medusaVersion: "2.21.2", approved: false, authority: null, approvedOn: null, scope: M1B_SCOPE, remoteExecutionApproved: false, implementationCommit: state.commit, expiresAt: M1B_EXPIRY,
+  return { version: 1, medusaVersion: M1B_MEDUSA_VERSION, approved: false, authority: null, approvedOn: null, scope: M1B_SCOPE, remoteExecutionApproved: false, implementationCommit: state.commit, expiresAt: M1B_EXPIRY,
     advisories: M1B_ADVISORIES, fingerprint: fingerprint(state), audits: { production: auditIdentity(JSON.parse(production.stdout)), all: auditIdentity(JSON.parse(all.stdout)) },
     runtime: { configuration: image.configuration, inventory: image.inventory, baseLayers: image.baseLayers, scan: image.scan } };
 }

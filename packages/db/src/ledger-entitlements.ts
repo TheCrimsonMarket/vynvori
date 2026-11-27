@@ -359,7 +359,7 @@ export async function closeBundleWithForfeiture(db: LedgerDb, input: CloseBundle
     requireEdge(bundle.state, "closed");
     if (slots.some(s => s.state === "pending" || s.state === "unknown")) throw new LedgerBusinessRejection("INVALID_TRANSITION");
     const finals = (await tx.query(`SELECT reservation_id, state, quote_version_id FROM ${S}.credit_reservations WHERE original_package_id = $1 AND user_id = $2 AND operation_kind IN ('final_standard', 'final_premium')`, [packageId, userId])).rows as { reservation_id: string; state: string; quote_version_id: string }[];
-    if (finals.some(f => f.state === "authorization_requested" || f.state === "reserved" || f.state === "reconciliation_hold" || f.state === "operator_remedy")) throw new LedgerBusinessRejection("INVALID_TRANSITION"); // unresolved final: closure stays pending
+    if (finals.some(f => f.state !== "released" && f.state !== "settled")) throw new LedgerBusinessRejection("INVALID_TRANSITION"); // unresolved final (anything not terminal): closure stays pending; the database names each state itself
     let disclosingQuote: string;
     if (finalReservationId !== null) {
       const settled = finals.find(f => f.reservation_id === finalReservationId);
@@ -403,7 +403,7 @@ export async function reopenBundleAfterUnchargedFinal(db: LedgerDb, input: Reope
     const began = (await tx.query(`SELECT 1 FROM ${S}.ledger_package_events pe WHERE pe.package_id = $1 AND pe.user_id = $2 AND pe.to_state = 'closure_pending' AND pe.begin_reason = 'final_authorized' AND pe.final_reservation_id = $3
       AND NOT EXISTS (SELECT 1 FROM ${S}.ledger_package_events pl WHERE pl.package_id = pe.package_id AND pl.user_id = pe.user_id AND pl.to_state = 'closure_pending' AND pl.created_at > pe.created_at)`, [packageId, userId, finalReservationId])).rows.length > 0;
     if (!began) throw new LedgerBusinessRejection("INVALID_TRANSITION"); // closure began some other way (e.g. the customer's explicit request): never reversed by this final
-    const live = (await tx.query(`SELECT 1 FROM ${S}.credit_reservations WHERE original_package_id = $1 AND user_id = $2 AND state IN ('authorization_requested', 'reserved', 'settled', 'reconciliation_hold', 'operator_remedy')`, [packageId, userId])).rows.length > 0;
+    const live = (await tx.query(`SELECT 1 FROM ${S}.credit_reservations WHERE original_package_id = $1 AND user_id = $2 AND state <> 'released'`, [packageId, userId])).rows.length > 0;
     if (live) throw new LedgerBusinessRejection("INVALID_TRANSITION"); // a sibling final is settled or unresolved
     const context: BundleReopenContextV1 = {
       finalAttempt: r.pre_attempt_package_state === "open_for_refinements" ? "first_final" : "later_revision",

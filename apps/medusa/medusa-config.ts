@@ -15,6 +15,9 @@ module.exports = defineConfig({
       { resolve: "./src/modules/tcm-auth", id: "tcm", options: { enabled: true, issuer: bridge.issuer, apiBase: bridge.apiBase, audience: bridge.audience, clientId: bridge.clientId, clientSecret: bridge.clientSecret } },
     ] } },
   ] } : {}),
+  // Medusa 2.23 loads the Medusa Cloud plugin by default (admin announcement routes that call api.prod.medusajs.cloud,
+  // a cloud table and RBAC policy script). VYNVORI is self-hosted with no cloud egress, so it stays out (ADR-0024).
+  plugins: [{ resolve: "@medusajs/cloud", options: { disabled: true } }],
   // M2 has no operator UI/custom auth. Admin API retains native user auth.
   admin: { disable: true },
 });

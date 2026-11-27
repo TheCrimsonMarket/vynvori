@@ -10,6 +10,7 @@ import {
   recordBundleDelivery, reopenBundleAfterUnchargedFinal, restoreRefinementSlot, skipRefinementSlot, type BundleRecord,
 } from "../src/ledger-entitlements";
 import { authorizeQuote, recordWorkflowRef, releaseReservation } from "../src/ledger-reservations";
+import { holdReservation, settleReservation } from "../src/ledger-settlement";
 import { dropLedger, freshLedger, grantSyntheticCredits, ledgerPool, ledgerTarget, registerSyntheticGrantSource, syntheticProfileWithWallet } from "./ledger-fixture";
 import { SYNTHETIC_BUNDLE_HOLD, SYNTHETIC_FINAL_HOLD, consent, currentPricePolicy, eligibilityPort, issueTestQuote, releaseEvidence } from "./ledger-reservation-fixture";
 
@@ -17,8 +18,8 @@ import { SYNTHETIC_BUNDLE_HOLD, SYNTHETIC_FINAL_HOLD, consent, currentPricePolic
  * ADR-0021 S7 addendum: package transitions, the two refinement slots and closure, and the 0007 database backstop.
  * Non-concurrency file: pool capped at 5 (D15); declared peak connections = 5 (pool) + 1 (persistent fixture client) = 6.
  * Every unit value is SYNTHETIC. Nothing here is a price, a credit cost, a package size, a hold duration or an expiry.
- * Settlement belongs to S6: where a test needs a SETTLED final it forces that state as the fixture superuser (trigger disabled
- * inside the test only), which is a fixture shortcut and says nothing about S6.
+ * Settlement belongs to S6. Most tests that need a SETTLED final force that state as the fixture superuser (trigger disabled inside the
+ * call only), a fixture shortcut that says nothing about S6; one subtest runs the real S6 settle and hold commands end to end.
  */
 const code = (c: string) => (e: unknown) => e instanceof LedgerError && e.code === c;
 const rejection = (c: string) => (e: unknown) => e instanceof LedgerBusinessRejection && e.code === c;
@@ -438,6 +439,30 @@ test("ledger entitlements: package transitions, refinement slots and closure in 
       });
       assert.equal((await getBundleState(pool, b.user, b.packageId)).state, "closure_pending");
       assert.equal(await entryCount(b.user), 1 + 3, "one grant plus the bundle's three reserve entries; nothing from S7");
+    });
+
+    await t.test("with S6 present: a final that really settles closes the package by delivery; a final held for reconciliation blocks the close", async () => {
+      const evidence = (r: { operationId: string }) => ({ transition: "settle", operationId: r.operationId, evidenceKind: "persisted_delivered", evidenceRef: "plane-b/settle-1", hasVerifiedManifestHash: true, ownerAndRightsVerified: true });
+      const dispatch = (b: B, r: { reservationId: string }) => recordWorkflowRef(pool, { userId: b.user, component: "workflow", reservationId: r.reservationId, workflowRef: "wf/" + randomUUID(), idempotencyKey: key("dispatch") });
+      const b = await opened();
+      const final = await authorizeFinal(b);
+      await beginBundleClosure(pool, sys(b, { trigger: { kind: "final_authorized", finalReservationId: final.reservationId } }) as never);
+      await dispatch(b, final);
+      await assert.rejects(closeBundleWithForfeiture(pool, sys(b, { cause: { kind: "final_delivered", finalReservationId: final.reservationId }, refinementClosureNoticeVersion: NOTICE }) as never), rejection("INVALID_TRANSITION"), "reserved: not yet delivered");
+      assert.equal((await settleReservation(pool, { userId: b.user, component: "workflow", reservationId: final.reservationId, evidence: evidence(final), idempotencyKey: key("settle") } as never)).state, "settled");
+      await assert.rejects(closeExplicit(b), rejection("INVALID_TRANSITION"), "settled by S6: only closure by delivery");
+      await assert.rejects(reopenBundleAfterUnchargedFinal(pool, sys(b, { finalReservationId: final.reservationId }) as never), rejection("INVALID_TRANSITION"), "a settled final never reopens");
+      const closed = await closeBundleWithForfeiture(pool, sys(b, { cause: { kind: "final_delivered", finalReservationId: final.reservationId }, refinementClosureNoticeVersion: NOTICE }) as never);
+      assert.deepEqual([closed.state, ...states(closed)], ["closed", "forfeited", "forfeited"]);
+      // a final the settlement path put on hold is unresolved: it blocks the close and the reopen
+      const h = await opened();
+      const held = await authorizeFinal(h);
+      await beginBundleClosure(pool, sys(h, { trigger: { kind: "final_authorized", finalReservationId: held.reservationId } }) as never);
+      await dispatch(h, held);
+      assert.equal((await holdReservation(pool, { userId: h.user, component: "workflow", reservationId: held.reservationId, evidence: { transition: "hold", operationId: held.operationId, evidenceKind: "persistence_failed_under_review", evidenceRef: "plane-b/hold-1", reason: "persistence_unconfirmed" }, idempotencyKey: key("hold") } as never)).state, "reconciliation_hold");
+      await assert.rejects(closeExplicit(h), rejection("INVALID_TRANSITION"), "held: unresolved");
+      await assert.rejects(reopenBundleAfterUnchargedFinal(pool, sys(h, { finalReservationId: held.reservationId }) as never), rejection("INVALID_TRANSITION"), "held: not uncharged");
+      assert.equal((await getBundleState(pool, h.user, h.packageId)).state, "closure_pending");
     });
 
     // ---- each business precondition is also enforced by the database on its own (raw SQL, so the library's pre-checks cannot answer first) ----

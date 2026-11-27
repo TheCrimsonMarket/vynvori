@@ -4,7 +4,7 @@
  */
 import type { CompositionConfig } from "../src/composition";
 import type { CompositionHttpConfig } from "../src/composition-http";
-import { COMPOSITION_LIMIT_KEYS } from "../src/composition-limits";
+import { COMPOSITION_LIMIT_KEYS, RATE_LIMITED_OPERATIONS, type RatePolicies } from "../src/composition-limits";
 
 export const SYNTHETIC_GUEST_TTL_SECONDS = 7200;
 export const SYNTHETIC_IMAGE_LIMITS = Object.freeze({ maxBytes: 2 * 1024 * 1024, maxPixels: 10_000_000, maxSide: 4000 });
@@ -12,9 +12,21 @@ export const SYNTHETIC_MAX_ASSETS = 3;
 export const SYNTHETIC_MAX_BYTES_PER_COMPOSITION = 5 * 1024 * 1024;
 export const SYNTHETIC_JSON_MAX_BYTES = 64 * 1024;
 
+/**
+ * SYNTHETIC C4 rate policy: one generous window for every operation so the pre-C4 suites never meet a limit by accident. Tests that
+ * exercise a limit override single operations with `SYNTHETIC_RATE_LIMIT` and `SYNTHETIC_RATE_WINDOW_SECONDS` below.
+ */
+export const SYNTHETIC_GENEROUS_RATE_MAX = 1000;
+export const SYNTHETIC_LIVE_GUEST_DRAFTS_MAX = 1000;
+export const SYNTHETIC_RATE_LIMIT = 3;
+export const SYNTHETIC_RATE_LIMIT_WINDOW_SECONDS = 3600;
+export const syntheticRatePolicies = (over: RatePolicies = {}): RatePolicies =>
+  Object.freeze({ ...Object.fromEntries(RATE_LIMITED_OPERATIONS.map(operation => [operation, { windowSeconds: SYNTHETIC_RATE_LIMIT_WINDOW_SECONDS, max: SYNTHETIC_GENEROUS_RATE_MAX }])), ...over });
+
 export const SYNTHETIC_COMPOSITION_CONFIG: CompositionConfig = Object.freeze({
   uploadsEnabled: false, guestTtlMs: SYNTHETIC_GUEST_TTL_SECONDS * 1000, imageLimits: SYNTHETIC_IMAGE_LIMITS,
   maxAssetsPerComposition: SYNTHETIC_MAX_ASSETS, maxBytesPerComposition: SYNTHETIC_MAX_BYTES_PER_COMPOSITION,
+  rate: syntheticRatePolicies(), liveGuestDraftsMax: SYNTHETIC_LIVE_GUEST_DRAFTS_MAX,
 });
 export const SYNTHETIC_HTTP_LIMITS: Pick<CompositionHttpConfig, "guestTtlSeconds" | "maxJsonBytes" | "maxUploadBytes"> = Object.freeze({
   guestTtlSeconds: SYNTHETIC_GUEST_TTL_SECONDS, maxJsonBytes: SYNTHETIC_JSON_MAX_BYTES, maxUploadBytes: SYNTHETIC_IMAGE_LIMITS.maxBytes,
@@ -39,3 +51,8 @@ export const SYNTHETIC_RATE_WINDOW_SECONDS = 60;
 export const SYNTHETIC_RATE_MAX = 3;
 /** Synthetic scanner evidence: never a real vendor, engine or signature set (founder ruling QC: no scanner is chosen). */
 export const SYNTHETIC_SCAN_EVIDENCE = Object.freeze({ scannerId: "synthetic-scanner", engineVersion: "synthetic-engine-0", definitionsVersion: "synthetic-defs-0", evidenceRef: "evidence://synthetic/clean" });
+
+/** SYNTHETIC C4 store-level quota and live-cap fixtures (ADR-0022). Test fixtures only; no founder value exists for any of them. */
+export const SYNTHETIC_LIVE_CAP = 3;
+export const SYNTHETIC_QUOTA_MAX_ASSETS = 3;
+export const SYNTHETIC_QUOTA_BYTES = 1000;

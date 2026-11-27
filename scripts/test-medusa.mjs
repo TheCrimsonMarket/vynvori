@@ -68,6 +68,10 @@ try {
     ["/admin/users/me", "GET", 401], ["/admin/m2-readiness", "GET", 401], ["/store/customers/me", "GET", 401],
     ["/auth/customer/emailpass/register", "POST", 403], ["/auth/customer/emailpass", "POST", 403],
     ["/store/customers", "POST", 403], ["/store/carts", "POST", 403], ["/STORE/carts", "POST", 403],
+    // ADR-0024, Express 5: Medusa rewrites the "/*" boundary matcher to "/{*splat0}". It must still cover nested,
+    // trailing-slash and percent-encoded paths, the unenrolled bridge route, and let ordinary Store reads through.
+    ["/store/carts/cart_synthetic/line-items", "POST", 403], ["/store/carts/", "POST", 403], ["/%73tore/carts", "POST", 403],
+    ["/auth/customer/tcm/provision", "POST", 403], ["/store/regions", "GET", 200],
   ]) {
     const response = await request(`http://127.0.0.1:19000${path}`, { method, headers: { "content-type": "application/json", "x-publishable-api-key": apiKey.token }, ...(method === "POST" ? { body: "{}" } : {}) });
     assert.equal(response.status, expected, `${method} ${path}`);
