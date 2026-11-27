@@ -8,6 +8,8 @@ import { ensureWallet, getWalletSummary } from "../src/ledger-core";
 import { ledgerMigrationPlan } from "../src/ledger-migrations";
 import { databaseFor, dropLedger, freshEmptyDatabase, grantSyntheticCredits, ledgerPoolAs, ledgerTarget, registerSyntheticGrantSource } from "./ledger-fixture";
 import { assessQuoteForAuthorization, getQuote, issueQuote, renewQuote } from "../src/ledger-quotes";
+import { authorizeQuote, getReservation, recordWorkflowRef, releaseReservation } from "../src/ledger-reservations";
+import { SYNTHETIC_BUNDLE_HOLD, SYNTHETIC_FINAL_HOLD, SYNTHETIC_HOLDS, consent, currentPricePolicy, eligibilityPort, issueTestQuote, releaseEvidence } from "./ledger-reservation-fixture";
 
 /**
  * Privilege-model B proof (ADR-0021 S2 addendum). CI's `synthetic` is a SUPERUSER, so a test run as synthetic would pass with
@@ -15,6 +17,7 @@ import { assessQuoteForAuthorization, getQuote, issueQuote, renewQuote } from ".
  * seeds profiles/grant sources; every assertion about what the runtime may do runs as a NON-superuser role. Roles are
  * cluster-global: random per-run names (some deliberately mixed-case or punctuated), dropped at the end, leaks reported.
  * Pool budget: at most 5 pooled connections at any time (rt 2 + rtw 1 + at most 2 short-lived single-connection pools).
+ * S5 (0005) adds the reservation definer, its exact S9 privileges and the TEMP-trigger / broad-write-role probes on reservations.
  * SYNTHETIC_* values are test-only.
  */
 const SYNTHETIC_UNITS = 4, MAX_POOL_CONNECTIONS = 5;
@@ -38,6 +41,11 @@ const code = (c: string, pattern?: RegExp) => (e: unknown) => (e as { code?: str
 const migrationSql = () => ledgerMigrationPlan().migrations.map(m => m.sql);
 const q = (identifier: string) => '"' + identifier.replace(/"/g, '""') + '"';
 const APPLY = "vynvori_ledger.ledger_entries_apply_to_wallet()";
+const APPLY_RESERVATION = "vynvori_ledger.ledger_entries_apply_to_reservation()";
+/** Every S5 (0005) trigger function, with a timing at which it can be attached to a TEMP table for the context-check probe. */
+const S5_FUNCTIONS = ["ledger_authorizations_check_insert", "ledger_packages_check_insert", "credit_reservations_check_insert", "credit_reservations_update_guard",
+  "credit_reservations_check_not_pending", "ledger_authorizations_check_complete", "ledger_entries_bind_reservation", "ledger_entries_apply_to_reservation",
+  "ledger_quotes_refuse_authorized_lineage"].map(name => `vynvori_ledger.${name}()`);
 
 test("privilege model B: a non-superuser runtime role cannot move wallet balances, mint credits or alter the ledger", { skip: ledgerTarget.skip }, async t => {
   assert.ok(ledgerTarget.url, "CI_REQUIRE_PG_TESTS=1 requires M7_TEST_POSTGRES_URL or M2_CREATIVE_DATABASE_URL");
@@ -66,7 +74,7 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
       await admin.query(`GRANT USAGE ON SCHEMA vynvori_identity TO ${q(owner)}`);
       await admin.query(`GRANT REFERENCES ON vynvori_identity.profiles TO ${q(owner)}`);
 
-      await t.test("the migration applies as a plain non-superuser owner; exactly one definer function, owned by the owner, not executable by the runtime role", async () => {
+      await t.test("the migration applies as a plain non-superuser owner; exactly two definer functions, owned by the owner, not executable by the runtime role", async () => {
         await admin.query(`SET ROLE ${q(owner)}`);
         try { for (const sql of migrationSql()) await admin.query(sql); } finally { await admin.query("RESET ROLE"); }
         // runtime grants as the S9 proposal will shape them (test only; the migration grants nothing)
@@ -78,13 +86,18 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
           await admin.query(`GRANT SELECT ON vynvori_ledger.ledger_grant_sources TO ${q(role)}`);
           // S3 (ADR-0021 addendum A5): exactly SELECT, INSERT on the three quote tables; no UPDATE anywhere.
           await admin.query(`GRANT SELECT, INSERT ON vynvori_ledger.ledger_quote_lineages, vynvori_ledger.ledger_quotes, vynvori_ledger.ledger_quote_allocations TO ${q(role)}`);
+          // S5 (ADR-0021 S5 addendum): SELECT, INSERT on the three S5 tables and UPDATE of the dispatch marker column only.
+          // SELECT on ledger_authorizations is needed by issueQuote/renewQuote too (the lineage-authorized trigger reads it).
+          await admin.query(`GRANT SELECT, INSERT ON vynvori_ledger.ledger_authorizations, vynvori_ledger.ledger_packages, vynvori_ledger.credit_reservations TO ${q(role)}`);
+          await admin.query(`GRANT UPDATE (workflow_ref) ON vynvori_ledger.credit_reservations TO ${q(role)}`);
         }
         // a role with TABLE-level UPDATE on wallets that is NOT in pg_write_all_data: only the design (not missing privileges) can stop it
         await admin.query(`GRANT USAGE ON SCHEMA vynvori_ledger TO ${q(rtt)}`);
         await admin.query(`GRANT SELECT, UPDATE ON vynvori_ledger.wallets TO ${q(rtt)}`);
         assert.equal((await admin.query(`SELECT has_function_privilege($1, '${APPLY}', 'EXECUTE') AS x`, [rt])).rows[0].x, false);
         const definers = (await admin.query("SELECT p.proname, pg_get_userbyid(p.proowner) AS owner FROM pg_proc p WHERE p.pronamespace = 'vynvori_ledger'::regnamespace AND p.prosecdef")).rows;
-        assert.deepEqual(definers, [{ proname: "ledger_entries_apply_to_wallet", owner }]);
+        assert.deepEqual(definers.sort((a, b) => a.proname.localeCompare(b.proname)), [{ proname: "ledger_entries_apply_to_reservation", owner }, { proname: "ledger_entries_apply_to_wallet", owner }], "exactly two definers: S2's wallet writer and S5's reservation writer");
+        assert.equal((await admin.query(`SELECT has_function_privilege($1, '${APPLY_RESERVATION}', 'EXECUTE') AS x`, [rt])).rows[0].x, false);
         assert.equal((await admin.query("SELECT count(*)::int n FROM vynvori_ledger.ledger_grant_sources")).rows[0].n, 0, "0002 registered no grant source (applied by a non-superuser)");
       });
 
@@ -161,13 +174,13 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
           `SELECT ${APPLY}`, "SELECT vynvori_ledger.wallets_update_guard()",
           "ALTER TABLE vynvori_ledger.ledger_entries DISABLE TRIGGER ledger_entries_apply_to_wallet", "ALTER TABLE vynvori_ledger.wallets DISABLE TRIGGER ALL",
           "DROP TRIGGER ledger_entries_apply_to_wallet ON vynvori_ledger.ledger_entries",
-          "ALTER TABLE vynvori_ledger.ledger_entries DROP CONSTRAINT ledger_entries_s2_grant_only",
+          "ALTER TABLE vynvori_ledger.ledger_entries DROP CONSTRAINT ledger_entries_s5_kinds",
           "CREATE OR REPLACE FUNCTION vynvori_ledger.wallets_update_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
           "CREATE FUNCTION vynvori_ledger.mint() RETURNS int LANGUAGE sql AS 'SELECT 1'", "DROP FUNCTION vynvori_ledger.reject_mutation() CASCADE",
           "TRUNCATE vynvori_ledger.ledger_entries", "TRUNCATE vynvori_ledger.wallets", "TRUNCATE vynvori_ledger.ledger_commands", "TRUNCATE vynvori_ledger.ledger_grant_sources",
           "SET session_replication_role = replica", `ALTER TABLE vynvori_ledger.wallets OWNER TO ${q(rt)}`, "DROP TABLE vynvori_ledger.ledger_entries",
         ]) await assert.rejects(rtPool.query(sql), code("42501"), sql);
-        assert.equal((await admin.query("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid = 'vynvori_ledger.ledger_entries'::regclass AND NOT tgisinternal")).rows[0].n, 4, "all ledger_entries triggers still present");
+        assert.equal((await admin.query("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid = 'vynvori_ledger.ledger_entries'::regclass AND NOT tgisinternal")).rows[0].n, 6, "all ledger_entries triggers still present (4 from S2, 2 from S5)");
       });
 
       await t.test("a runtime role cannot UPDATE or DELETE ledger entries or commands", async () => {
@@ -382,7 +395,7 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
           `CREATE OR REPLACE FUNCTION ${ALLOC_FN}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$`,
           "DROP FUNCTION vynvori_ledger.ledger_quotes_check_version() CASCADE",
         ]) await assert.rejects(rtPool.query(sql), code("42501"), sql);
-        assert.equal((await admin.query("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid = 'vynvori_ledger.ledger_quotes'::regclass AND NOT tgisinternal")).rows[0].n, 4, "all ledger_quotes triggers still present");
+        assert.equal((await admin.query("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid = 'vynvori_ledger.ledger_quotes'::regclass AND NOT tgisinternal")).rows[0].n, 5, "all ledger_quotes triggers still present (4 from S3, 1 from S5)");
       });
 
       await t.test("S3: the runtime role holds no UPDATE privilege, table- or column-level, on any quote table", async () => {
@@ -392,6 +405,147 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
         for (const [table, column] of [["ledger_quotes", "model_ref"], ["ledger_quote_allocations", "hold_units"]] as const) {
           assert.equal((await admin.query("SELECT has_column_privilege($1, $2, $3, 'UPDATE') AS x", [rt, `vynvori_ledger.${table}`, column])).rows[0].x, false, `${table}.${column}`);
         }
+      });
+
+
+      // ---- S5 (0005): reservations ---------------------------------------------------------------------------------------------
+      const reservationRow = async (id: string) => (await admin.query("SELECT state, hold_units::text h, charge_units::text c, workflow_ref w FROM vynvori_ledger.credit_reservations WHERE reservation_id=$1", [id])).rows[0];
+      const runAs = async (pool: Pool, ...statements: [string, unknown[]?][]) => { const client = await pool.connect(); try { for (const [sql, values] of statements) await client.query(sql, values); } finally { client.release(true); } };
+      const s5User = await profile();
+      let s5Bundle!: Awaited<ReturnType<typeof authorizeQuote>>;
+      let s5Keys = 0;
+      const s5Authorize = (pool: Pool, user: string, quoteVersionId: string, originalPackageId?: string) =>
+        authorizeQuote(pool, { userId: user, quoteVersionId, idempotencyKey: `priv-s5-authorize-${String(s5Keys++).padStart(4, "0")}`, consent: consent(), originalPackageId, now: new Date(), pricePolicy: currentPricePolicy, eligibility: eligibilityPort() });
+
+      await t.test("S5 positive: authorize (bundle and final), dispatch and release work end to end as the restricted runtime role", async () => {
+        await ensureWallet(rtPool, s5User);
+        await grantSyntheticCredits(rtPool, { userId: s5User, grantSourceId: source, sourceRef: "s5-funds", units: SYNTHETIC_BUNDLE_HOLD + SYNTHETIC_FINAL_HOLD });
+        s5Bundle = await s5Authorize(rtPool, s5User, await issueTestQuote(rtPool, s5User, "bundle", "priv-s5-bundle"));
+        assert.deepEqual(s5Bundle.reservations.map(r => [r.state, r.holdUnits]), SYNTHETIC_HOLDS.map(h => ["reserved", h]));
+        assert.deepEqual(await buckets(s5User), { a: String(SYNTHETIC_FINAL_HOLD), r: String(SYNTHETIC_BUNDLE_HOLD), h: "0", c: "0", rev: "4" });
+        const final = await s5Authorize(rtPool, s5User, await issueTestQuote(rtPool, s5User, "final", "priv-s5-final"), s5Bundle.packageId!);
+        assert.deepEqual(await buckets(s5User), { a: "0", r: String(SYNTHETIC_BUNDLE_HOLD + SYNTHETIC_FINAL_HOLD), h: "0", c: "0", rev: "5" });
+        const target = final.reservations[0]!;
+        assert.equal((await recordWorkflowRef(rtPool, { userId: s5User, component: "priv", reservationId: target.reservationId, workflowRef: "wf/priv-1", idempotencyKey: "priv-s5-dispatch-0001" })).workflowRef, "wf/priv-1");
+        assert.equal((await releaseReservation(rtPool, { userId: s5User, component: "priv", reservationId: target.reservationId, evidence: releaseEvidence(target.operationId), idempotencyKey: "priv-s5-release-00001" })).state, "released");
+        assert.deepEqual(await buckets(s5User), { a: String(SYNTHETIC_FINAL_HOLD), r: String(SYNTHETIC_BUNDLE_HOLD), h: "0", c: "0", rev: "6" });
+        await recordWorkflowRef(rtPool, { userId: s5User, component: "priv", reservationId: s5Bundle.reservations[0]!.reservationId, workflowRef: "wf/priv-2", idempotencyKey: "priv-s5-dispatch-0002" });
+        assert.equal((await getReservation(rtPool, s5User, s5Bundle.reservations[0]!.reservationId)).workflowRef, "wf/priv-2");
+      });
+
+      await t.test("S5: the runtime role holds no privilege to change state, units, authorizations or packages (42501); its one updatable column cannot rewrite a recorded reference (23000)", async () => {
+        const [dispatched, fresh] = [s5Bundle.reservations[0]!, s5Bundle.reservations[1]!];
+        const before = [await reservationRow(dispatched.reservationId), await reservationRow(fresh.reservationId), await buckets(s5User)];
+        for (const sql of [
+          "UPDATE vynvori_ledger.credit_reservations SET state = 'released'", "UPDATE vynvori_ledger.credit_reservations SET hold_units = 1", "UPDATE vynvori_ledger.credit_reservations SET charge_units = 1",
+          "UPDATE vynvori_ledger.credit_reservations SET user_id = user_id", "DELETE FROM vynvori_ledger.credit_reservations", "TRUNCATE vynvori_ledger.credit_reservations",
+          "UPDATE vynvori_ledger.ledger_authorizations SET consent_text_version = 'x'", "DELETE FROM vynvori_ledger.ledger_authorizations", "TRUNCATE vynvori_ledger.ledger_authorizations",
+          "UPDATE vynvori_ledger.ledger_packages SET state = 'closed'", "DELETE FROM vynvori_ledger.ledger_packages", "TRUNCATE vynvori_ledger.ledger_packages",
+        ]) await assert.rejects(rtPool.query(sql), code("42501"), sql);
+        for (const [table, column, expected] of [["credit_reservations", "workflow_ref", true], ["credit_reservations", "state", false], ["credit_reservations", "hold_units", false], ["credit_reservations", "charge_units", false], ["ledger_packages", "state", false], ["ledger_authorizations", "quote_version_id", false]] as const)
+          assert.equal((await admin.query("SELECT has_column_privilege($1, $2, $3, 'UPDATE') AS x", [rt, `vynvori_ledger.${table}`, column])).rows[0].x, expected, `${table}.${column}`);
+        await assert.rejects(rtPool.query("UPDATE vynvori_ledger.credit_reservations SET workflow_ref = 'wf/forged' WHERE reservation_id = $1", [dispatched.reservationId]), code("23000", /recorded once/), "a recorded reference is never rewritten");
+        await assert.rejects(rtPool.query("UPDATE vynvori_ledger.credit_reservations SET workflow_ref = NULL WHERE reservation_id = $1", [dispatched.reservationId]), code("23000", /recorded once/), "nor cleared");
+        await assert.rejects(rtPool.query("UPDATE vynvori_ledger.credit_reservations SET workflow_ref = workflow_ref WHERE reservation_id = $1", [fresh.reservationId]), code("23000", /recorded once/), "a no-op update is not a dispatch");
+        assert.deepEqual([await reservationRow(dispatched.reservationId), await reservationRow(fresh.reservationId), await buckets(s5User)], before);
+      });
+
+      await t.test("S5 DESIGN: a role with TABLE-level UPDATE on credit_reservations, and one with pg_write_all_data, cannot move state or units directly or through a TEMP trigger (23000)", async () => {
+        const target = s5Bundle.reservations[0]!; // reserved AND dispatched: the one state from which a release edge exists
+        const before = [await reservationRow(target.reservationId), await buckets(s5User)];
+        await admin.query(`GRANT SELECT, UPDATE ON vynvori_ledger.credit_reservations TO ${q(rtt)}`);
+        const tempTrigger = (pool: Pool, set: string) => runAs(pool,
+          ["CREATE TEMP TABLE s5_exploit(x int)"],
+          [`CREATE FUNCTION pg_temp.s5_exploit_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN UPDATE vynvori_ledger.credit_reservations SET ${set} WHERE reservation_id = '${target.reservationId}'; RETURN NEW; END $$`],
+          ["CREATE TRIGGER s5_exploit_tg AFTER INSERT ON s5_exploit FOR EACH ROW EXECUTE FUNCTION pg_temp.s5_exploit_fn()"],
+          ["INSERT INTO s5_exploit VALUES (1)"]);
+        const probe = async (pool: Pool, label: string) => {
+          await assert.rejects(pool.query("UPDATE vynvori_ledger.credit_reservations SET state = 'released' WHERE reservation_id = $1", [target.reservationId]), code("23000", /only through ledger entries/), `${label}: direct state`);
+          await assert.rejects(pool.query("UPDATE vynvori_ledger.credit_reservations SET hold_units = 1, charge_units = 1 WHERE reservation_id = $1", [target.reservationId]), code("23000", /immutable/), `${label}: direct units`);
+          await assert.rejects(tempTrigger(pool, "state = 'released'"), code("23000", /only through ledger entries/), `${label}: TEMP trigger (depth 2, not the function owner)`);
+          await assert.rejects(tempTrigger(pool, "state = 'settled'"), code("23000", /only through ledger entries/), `${label}: TEMP trigger to a state S5 has no edge to`);
+        };
+        await withRole(rtt, pool => probe(pool, "table-level UPDATE"));
+        assert.equal((await admin.query("SELECT has_table_privilege($1, 'vynvori_ledger.credit_reservations', 'UPDATE') AS x", [rtw])).rows[0].x, true, "precondition: pg_write_all_data CAN update reservations by privilege alone");
+        await probe(rtwPool, "pg_write_all_data");
+        await assert.rejects(rtwPool.query("DELETE FROM vynvori_ledger.credit_reservations WHERE reservation_id = $1", [target.reservationId]), code("23000", /append-only/), "pg_write_all_data: delete");
+        await assert.rejects(rtwPool.query("UPDATE vynvori_ledger.ledger_packages SET state = 'closed'"), code("23000", /append-only/), "pg_write_all_data: package state (no transition exists before S7)");
+        await assert.rejects(rtwPool.query("UPDATE vynvori_ledger.ledger_authorizations SET consent_text_version = 'forged'"), code("23000", /append-only/), "pg_write_all_data: authorization");
+        assert.deepEqual([await reservationRow(target.reservationId), await buckets(s5User)], before, "reservation and wallet unchanged");
+      });
+
+      await t.test("S5: the reservation definer and every S5 trigger function cannot be called directly; with EXECUTE granted a TEMP-table trigger is refused by the context check", async () => {
+        const before = [await reservationRow(s5Bundle.reservations[0]!.reservationId), await buckets(s5User)];
+        const attach = (fn: string) => runAs(rtPool, ["CREATE TEMP TABLE s5_ctx(user_id uuid, reservation_id uuid, entry_kind text)"],
+          [`CREATE TRIGGER s5_ctx_tg AFTER INSERT ON s5_ctx FOR EACH ROW EXECUTE FUNCTION ${fn}`], ["INSERT INTO s5_ctx VALUES ($1, $2, 'release')", [s5User, s5Bundle.reservations[0]!.reservationId]]);
+        for (const fn of S5_FUNCTIONS) {
+          await assert.rejects(rtPool.query(`SELECT ${fn}`), code("42501"), `no EXECUTE: ${fn}`);
+          await assert.rejects(attach(fn), code("42501"), `without EXECUTE the trigger cannot even be created: ${fn}`);
+          await admin.query(`GRANT EXECUTE ON FUNCTION ${fn} TO ${q(rt)}`);
+          try {
+            await assert.rejects(attach(fn), code("23000", /unexpected context/), `with EXECUTE, the context check rejects a foreign trigger: ${fn}`);
+            await assert.rejects(rtPool.query(`SELECT ${fn}`), code("0A000", /trigger functions can only be called as triggers/), `direct invocation WITH EXECUTE: ${fn}`);
+          } finally { await admin.query(`REVOKE EXECUTE ON FUNCTION ${fn} FROM ${q(rt)}`); }
+        }
+        assert.deepEqual([await reservationRow(s5Bundle.reservations[0]!.reservationId), await buckets(s5User)], before);
+      });
+
+      await t.test("S5: a runtime role cannot disable, drop or replace the S5 triggers, functions, FK or constraints", async () => {
+        for (const sql of [
+          "ALTER TABLE vynvori_ledger.credit_reservations DISABLE TRIGGER ALL", "ALTER TABLE vynvori_ledger.credit_reservations DISABLE TRIGGER credit_reservations_update_guard",
+          "ALTER TABLE vynvori_ledger.ledger_entries DISABLE TRIGGER ledger_entries_bind_reservation", "ALTER TABLE vynvori_ledger.ledger_authorizations DISABLE TRIGGER ALL", "ALTER TABLE vynvori_ledger.ledger_packages DISABLE TRIGGER ALL",
+          "ALTER TABLE vynvori_ledger.ledger_quotes DISABLE TRIGGER ledger_quotes_refuse_authorized_lineage",
+          "DROP TRIGGER credit_reservations_update_guard ON vynvori_ledger.credit_reservations", "DROP TRIGGER ledger_entries_apply_to_reservation ON vynvori_ledger.ledger_entries",
+          "ALTER TABLE vynvori_ledger.ledger_entries DROP CONSTRAINT ledger_entries_reservation_fk", "ALTER TABLE vynvori_ledger.credit_reservations DROP CONSTRAINT credit_reservations_kind_shape",
+          "DROP INDEX vynvori_ledger.ledger_entries_one_terminal_per_reservation",
+          "CREATE OR REPLACE FUNCTION vynvori_ledger.credit_reservations_update_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
+          "CREATE OR REPLACE FUNCTION vynvori_ledger.ledger_entries_bind_reservation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
+          `DROP FUNCTION ${APPLY_RESERVATION} CASCADE`, `ALTER FUNCTION ${APPLY_RESERVATION} OWNER TO ${q(rt)}`, `ALTER TABLE vynvori_ledger.credit_reservations OWNER TO ${q(rt)}`,
+          "DROP TABLE vynvori_ledger.credit_reservations",
+        ]) await assert.rejects(rtPool.query(sql), code("42501"), sql);
+        const triggers = (await admin.query("SELECT c.relname, count(*)::int n FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE c.relnamespace = 'vynvori_ledger'::regnamespace AND NOT t.tgisinternal AND t.tgenabled = 'O' AND c.relname IN ('credit_reservations','ledger_authorizations','ledger_packages') GROUP BY 1 ORDER BY 1")).rows;
+        assert.deepEqual(triggers, [{ relname: "credit_reservations", n: 5 }, { relname: "ledger_authorizations", n: 4 }, { relname: "ledger_packages", n: 3 }], "every S5 trigger present and enabled");
+      });
+
+      await t.test("S9 step for S5: re-owning ONLY the reservation definer to a dedicated role with EXACTLY USAGE + SELECT + UPDATE(state) on credit_reservations keeps the path working, fails when any one is removed, and blocks the old owner and a superuser", async () => {
+        const exact = "m7_resdef_" + suffix;
+        await mkRole(exact);
+        const privileges: [string, string, string][] = [
+          ["USAGE on schema vynvori_ledger", `GRANT USAGE ON SCHEMA vynvori_ledger TO ${q(exact)}`, `REVOKE USAGE ON SCHEMA vynvori_ledger FROM ${q(exact)}`],
+          ["SELECT on vynvori_ledger.credit_reservations", `GRANT SELECT ON vynvori_ledger.credit_reservations TO ${q(exact)}`, `REVOKE SELECT ON vynvori_ledger.credit_reservations FROM ${q(exact)}`],
+          ["UPDATE (state) on vynvori_ledger.credit_reservations", `GRANT UPDATE (state) ON vynvori_ledger.credit_reservations TO ${q(exact)}`, `REVOKE UPDATE (state) ON vynvori_ledger.credit_reservations FROM ${q(exact)}`],
+        ];
+        for (const [, grant] of privileges) await admin.query(grant);
+        await admin.query(`ALTER FUNCTION ${APPLY_RESERVATION} OWNER TO ${q(exact)}`);
+        assert.equal((await admin.query("SELECT pg_get_userbyid(relowner) AS o FROM pg_class WHERE oid = 'vynvori_ledger.credit_reservations'::regclass")).rows[0].o, owner, "tables keep the migration login as owner");
+        const user = await profile(); await ensureWallet(rtPool, user);
+        await grantSyntheticCredits(rtPool, { userId: user, grantSourceId: source, sourceRef: "s9-res-funds", units: 5 * SYNTHETIC_BUNDLE_HOLD });
+        let n = 0;
+        const attempt = async () => s5Authorize(rtPool, user, await issueTestQuote(rtPool, user, "bundle", `priv-s9-bundle-${n++}`));
+        const first = await attempt();
+        assert.ok(first.reservations.every(r => r.state === "reserved"), "reserve works with exactly the listed privileges");
+        const held = (await admin.query("SELECT has_table_privilege($1, 'vynvori_ledger.credit_reservations', p) AS x FROM unnest(ARRAY['INSERT','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p", [exact])).rows;
+        assert.ok(held.every(r => r.x === false), "no other table privilege is held");
+        assert.equal((await admin.query("SELECT has_column_privilege($1, 'vynvori_ledger.credit_reservations', 'workflow_ref', 'UPDATE') AS x", [exact])).rows[0].x, false, "the definer cannot touch the dispatch marker");
+        const dispatchedId = first.reservations[0]!.reservationId, operationId = first.reservations[0]!.operationId;
+        await recordWorkflowRef(rtPool, { userId: user, component: "priv", reservationId: dispatchedId, workflowRef: "wf/s9-1", idempotencyKey: "priv-s9-dispatch-0001" });
+        assert.equal((await releaseReservation(rtPool, { userId: user, component: "priv", reservationId: dispatchedId, evidence: releaseEvidence(operationId), idempotencyKey: "priv-s9-release-00001" })).state, "released", "release works too");
+        for (const [label, grant, revoke] of privileges) {
+          await admin.query(revoke);
+          const before = await buckets(user);
+          await assert.rejects(attempt(), (e: unknown) => (e as { sqlstate?: string }).sqlstate === "42501", `without ${label} the legitimate path fails (privilege not padded)`);
+          assert.deepEqual(await buckets(user), before, "nothing moved on the failed attempt");
+          await admin.query(grant);
+        }
+        const target = first.reservations[1]!, before = await reservationRow(target.reservationId);
+        await withRole(owner, async pool => {
+          await assert.rejects(pool.query("UPDATE vynvori_ledger.credit_reservations SET state = 'released' WHERE reservation_id = $1", [target.reservationId]), code("23000", /only through ledger entries/), "old table owner, direct");
+        });
+        await assert.rejects(admin.query("UPDATE vynvori_ledger.credit_reservations SET state = 'released' WHERE reservation_id = $1", [target.reservationId]), code("23000", /only through ledger entries/), "superuser that is not the function owner, direct");
+        await admin.query(`CREATE TEMP TABLE su_s5(x int); CREATE FUNCTION pg_temp.su_s5_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN UPDATE vynvori_ledger.credit_reservations SET state = 'released' WHERE reservation_id = '${target.reservationId}'; RETURN NEW; END $$; CREATE TRIGGER su_s5_tg AFTER INSERT ON su_s5 FOR EACH ROW EXECUTE FUNCTION pg_temp.su_s5_fn()`);
+        await assert.rejects(admin.query("INSERT INTO su_s5 VALUES (1)"), code("23000", /only through ledger entries/), "superuser through a trigger");
+        await admin.query("DROP TABLE su_s5; DROP FUNCTION pg_temp.su_s5_fn()");
+        assert.deepEqual(await reservationRow(target.reservationId), before);
       });
 
       await t.test("TEMP: revoking it from the role alone does nothing while PUBLIC holds it; revoking from PUBLIC closes the exploit's first step", async () => {
