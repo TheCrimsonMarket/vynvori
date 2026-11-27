@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { digest } from "../security/audit-policy.mjs";
 import { evaluateWaivers, collectWaiverState, inspectWaivedNodes, validateWaiverPolicy, WAIVER_POLICY_SHA256, WAIVER_CEILING } from "../security/dependency-waiver-policy.mjs";
@@ -236,6 +237,9 @@ test("installed-tree collection fails closed on changed versions or contexts", a
   const current = await collectWaiverState(root, policy).then(value => ({ value }), error => ({ error }));
   // The real install either matches every reviewed node or is rejected with a waiver-specific code.
   if (current.error) assert.match(current.error.message, /^(WAIVED_|UNREVIEWED_NPM_CONFIGURATION|LOCK_FORMAT)/);
+  // With a real install (always the case in CI after npm ci) the reviewed node is present, so the checks below must run.
+  const installedNode = await fs.lstat(path.join(root, policy.waivers[0].nodes[0].path, "package.json")).then(stat => stat.isFile(), () => false);
+  if (installedNode) assert.equal(current.error, undefined, current.error?.message);
   else assert.deepEqual(Object.keys(current.value.installed).sort(), policy.waivers.flatMap(waiver => waiver.nodes.map(node => node.path)).sort());
   // An unreviewed policy is rejected before any path it names is read.
   await assert.rejects(collectWaiverState(root, { ...policy, waivers: [{ ...policy.waivers[0], nodes: [{ ...policy.waivers[0].nodes[0], path: "node_modules/../../etc" }] }] }), /WAIVER_POLICY_FINGERPRINT_MISMATCH/);

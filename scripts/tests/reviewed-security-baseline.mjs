@@ -6,6 +6,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 export const REVIEWED_BASELINE = "259d3883f9d346cbfd117b014beb6bc5d9b18a72";
+// ADR-0024: sha256 (LF-normalised) of security/fixtures/m2-historical-install.json, reviewed with the capture. A changed
+// capture must update this anchor in the same reviewed change.
+export const HISTORICAL_INSTALL_SHA256 = "b230d878812cb316023a3731f5611987bbb0f992ae4e8574fce323d0800c142d";
 export function reviewedSurface(root, policy) {
   const tree = execFileSync("git", ["ls-tree", "-r", "--name-only", REVIEWED_BASELINE, "--", ...policy.fingerprint.securityRoots], { cwd: root, encoding: "utf8" });
   const files = tree.trim().split("\n").filter(Boolean);
@@ -46,7 +49,9 @@ export async function historicalState(root, policy) {
     if (sha256(await fs.readFile(path.join(temporary, "package-lock.json"))) !== policy.fingerprint.lockSha256) throw new Error("HISTORICAL_LOCK_MISMATCH");
     // Third-party manifests come from a capture of a real `npm ci` of this baseline lockfile (ADR-0024), never from
     // the approval policy. Medusa 2.23.1 replaced the live tree, so the live install can no longer stand in for it.
-    const capture = JSON.parse(await fs.readFile(new URL("../../security/fixtures/m2-historical-install.json", import.meta.url), "utf8"));
+    const captureText = (await fs.readFile(new URL("../../security/fixtures/m2-historical-install.json", import.meta.url), "utf8")).replaceAll("\r\n", "\n");
+    if (sha256(captureText) !== HISTORICAL_INSTALL_SHA256) throw new Error("HISTORICAL_INSTALL_CAPTURE_CHANGED");
+    const capture = JSON.parse(captureText);
     if (capture.schemaVersion !== 1 || capture.baseline !== REVIEWED_BASELINE || capture.lockSha256 !== policy.fingerprint.lockSha256) throw new Error("HISTORICAL_INSTALL_CAPTURE_MISMATCH");
     for (const [location, manifest] of Object.entries(capture.manifests)) {
       if (!location.startsWith("node_modules/") || location.split("/").includes("..") || location.includes("\\") || path.posix.isAbsolute(location)) throw new Error("BASELINE_PATH_INVALID");
