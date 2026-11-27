@@ -44,7 +44,7 @@ test("every S7 function rejects malformed input before any SQL", async () => {
   for (const bad of [...slotBad, { component: "Bad Component" }, { sourceVersionId: "bad id" }, { operationId: "" }, { operationId: "x".repeat(129) }] as Record<string, unknown>[])
     await assert.rejects(markRefinementPending(db, { ...pending, ...bad } as never), code("INVALID_INPUT"), JSON.stringify(bad));
   const outcome = { ...slot, component: "studio", operationId: "op-1", evidenceRef: "ev-1" };
-  for (const bad of [{ evidenceRef: "" }, { evidenceRef: "r".repeat(513) }, { evidenceRef: 5 }, { evidenceRef: undefined }] as Record<string, unknown>[]) {
+  for (const bad of [{ evidenceRef: "" }, { evidenceRef: "r".repeat(513) }, { evidenceRef: 5 }, { evidenceRef: undefined }, { evidenceRef: "a\nb" }, { evidenceRef: "a\u0000b" }, { evidenceRef: "tab\there" }, { evidenceRef: "caf\u00e9" }] as Record<string, unknown>[]) {
     await assert.rejects(markRefinementUnknown(db, { ...outcome, ...bad } as never), code("EVIDENCE_INVALID"), JSON.stringify(bad));
     await assert.rejects(consumeRefinementSlot(db, { ...outcome, deliveredVersionId: "v-1", ...bad } as never), code("EVIDENCE_INVALID"), JSON.stringify(bad));
   }
@@ -55,14 +55,16 @@ test("every S7 function rejects malformed input before any SQL", async () => {
     await assert.rejects(recordBundleDelivery(db, { ...sys, artifactCount: 3, evidenceRef: "e", ...bad }), code("INVALID_INPUT"), JSON.stringify(bad));
   }
   for (const artifactCount of [-1, 4, 1.5, Number.NaN, "3", null]) await assert.rejects(recordBundleDelivery(db, { ...sys, artifactCount, evidenceRef: "e" } as never), code("INVALID_INPUT"), String(artifactCount));
-  for (const evidenceRef of ["", "r".repeat(513), undefined]) await assert.rejects(recordBundleDelivery(db, { ...sys, artifactCount: 3, evidenceRef } as never), code("EVIDENCE_INVALID"));
+  for (const evidenceRef of ["", "r".repeat(513), undefined, "a\r\nb", "a\u0000b", "bell\u0007"]) await assert.rejects(recordBundleDelivery(db, { ...sys, artifactCount: 3, evidenceRef } as never), code("EVIDENCE_INVALID"));
   for (const trigger of [undefined, null, {}, { kind: "approved_expiry" }, { kind: "final_authorized" }, { kind: "final_authorized", finalReservationId: "x" }])
     await assert.rejects(beginBundleClosure(db, { ...sys, trigger } as never), code("INVALID_INPUT"), JSON.stringify(trigger));
   for (const cause of [undefined, null, {}, { kind: "approved_expiry" }, { kind: "final_delivered" }, { kind: "final_delivered", finalReservationId: "x" }])
     await assert.rejects(closeBundleWithForfeiture(db, { ...sys, cause, refinementClosureNoticeVersion: NOTICE } as never), code("INVALID_INPUT"), JSON.stringify(cause));
-  for (const notice of ["", null, undefined, 5, "n".repeat(257)]) await assert.rejects(closeBundleWithForfeiture(db, { ...sys, cause: { kind: "explicit_close" }, refinementClosureNoticeVersion: notice } as never), code("INVALID_INPUT"), String(notice));
+  for (const notice of ["", null, undefined, 5, "n".repeat(257), "a\nb", "a\u0000b", "caf\u00e9"]) await assert.rejects(closeBundleWithForfeiture(db, { ...sys, cause: { kind: "explicit_close" }, refinementClosureNoticeVersion: notice } as never), code("INVALID_INPUT"), String(notice));
   await assert.rejects(reopenBundleAfterUnchargedFinal(db, { ...sys, finalReservationId: "x" }), code("INVALID_INPUT"));
   await assert.rejects(getBundleState(db as never, "x", randomUUID()), code("INVALID_INPUT"));
+  // a driver failure while reading never surfaces: it is a TRANSIENT LedgerError
+  await assert.rejects(getBundleState({ query: async () => { throw Object.assign(new Error("boom: relation vynvori_ledger.x"), { code: "42P01" }); } } as never, randomUUID(), randomUUID()), (e: unknown) => (e as { code?: string }).code === "TRANSIENT" && !/boom|42P01/.test((e as Error).message));
 });
 
 test("static: no clock, no expiry cause and no numeric business constant in the S7 module or migration", () => {
@@ -106,7 +108,7 @@ test("ledger entitlements: package transitions, refinement slots and closure in 
     const entryCount = async (userId: string) => (await client.query("SELECT count(*)::int n FROM vynvori_ledger.ledger_entries WHERE user_id = $1", [userId])).rows[0].n as number;
     const count = async (table: string, userId: string) => (await client.query(`SELECT count(*)::int n FROM vynvori_ledger.${table} WHERE user_id = $1`, [userId])).rows[0].n as number;
 
-    type B = { user: string; packageId: string; reservations: { reservationId: string; operationId: string }[]; authorizationId: string };
+    type B = { user: string; packageId: string; reservations: readonly { reservationId: string; operationId: string }[]; authorizationId: string };
     /** A user holding one authorized bundle whose disclosing quote carries `notice` (null = the quote discloses no closure notice). */
     const withBundle = async (notice: string | null = NOTICE): Promise<B> => {
       const user = await syntheticProfileWithWallet(client);
@@ -436,6 +438,32 @@ test("ledger entitlements: package transitions, refinement slots and closure in 
       });
       assert.equal((await getBundleState(pool, b.user, b.packageId)).state, "closure_pending");
       assert.equal(await entryCount(b.user), 1 + 3, "one grant plus the bundle's three reserve entries; nothing from S7");
+    });
+
+    await t.test("C-02 reopen binding: a closure that began by the customer's explicit request is never reversed by a released final; free text is printable ASCII only", async () => {
+      const b = await opened();
+      const final = await authorizeFinal(b);
+      await beginExplicit(b);
+      await releaseFinal(b, final);
+      await assert.rejects(reopenBundleAfterUnchargedFinal(pool, sys(b, { finalReservationId: final.reservationId }) as never), rejection("INVALID_TRANSITION"), "closure began by explicit request");
+      assert.equal((await getBundleState(pool, b.user, b.packageId)).state, "closure_pending");
+      await probe("raw reopen event for a closure that did not begin because of this final", async () => client.query(
+        "INSERT INTO vynvori_ledger.ledger_package_events(package_event_id,user_id,package_id,command_id,from_state,to_state,final_reservation_id) VALUES($1,$2,$3,$4,'closure_pending','open_for_refinements',$5)",
+        [randomUUID(), b.user, b.packageId, await rawCommand(b.user, "bundle_reopen"), final.reservationId]), /closure to have begun/);
+      // a sibling final that is still unresolved blocks the reopen even when closure began because of the released one
+      const c = await opened();
+      const first = await authorizeFinal(c);
+      await beginBundleClosure(pool, sys(c, { trigger: { kind: "final_authorized", finalReservationId: first.reservationId } }) as never);
+      await releaseFinal(c, first);
+      await authorizeFinal(c);
+      await assert.rejects(reopenBundleAfterUnchargedFinal(pool, sys(c, { finalReservationId: first.reservationId }) as never), rejection("INVALID_TRANSITION"), "a sibling final is unresolved");
+      assert.equal((await getBundleState(pool, c.user, c.packageId)).state, "closure_pending");
+      // free text: control characters and non-ASCII are refused by the table's own CHECK as well as by the library
+      const fresh = await withBundle();
+      for (const bad of ["a\nb", "a\tb", "café"])
+        await probe(`evidence_ref ${JSON.stringify(bad)}`, async () => packageEvent({ user: fresh.user, packageId: fresh.packageId, command: await rawCommand(fresh.user, "bundle_record_delivery"), from: "authorized", to: "delivered_3_of_3", extra: { artifactCount: 3, evidenceRef: bad } }), /ledger_package_events_evidence_ref/);
+      await assert.rejects(recordBundleDelivery(pool, sys(fresh, { artifactCount: 3, evidenceRef: "line1\nline2" }) as never), code("EVIDENCE_INVALID"));
+      assert.equal((await getBundleState(pool, fresh.user, fresh.packageId)).state, "authorized");
     });
   } finally {
     await pool.end().catch(() => undefined);

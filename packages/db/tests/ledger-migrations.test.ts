@@ -18,13 +18,13 @@ test("ledger plan loads, pins the reviewed SQL and lists 0001 (schema only), 000
 });
 
 // Golden digests: ANY change to plan.json or the pinned SQL forces a visible edit here (the planSha256 argument alone is circular).
-const GOLDEN_PLAN_JSON_SHA256 = "5a4147f9f2ffffcc9bcb4cc08ec420742e324e328932eec5f598bc174beaad3b";
+const GOLDEN_PLAN_JSON_SHA256 = "ce279c98c3245f570d6b5b06ad2e00b0770d36e16b287f15136c7523203def69";
 const GOLDEN_0001_SQL_SHA256 = "a8273f3fac59de2d0c2f1a661a852d22b9a360c9d9c83e672bd7f0d25d74ef4e";
 const GOLDEN_0002_SQL_SHA256 = "28a6d0e3727bf8c8cd20d98586d2f2564cb57df31412cd655c150e720ea2ea82";
 const GOLDEN_0003_SQL_SHA256 = "f32217a8a099728e5956a2166cf6ecc163cb2ea12af4511879fd0e282ba46159";
 const GOLDEN_0004_SQL_SHA256 = "0ceee68eb748af0ed0ddb86558bb652900c15f64fe6a8185a6de358e31dba397";
 const GOLDEN_0005_SQL_SHA256 = "07948d4f934cdee709da3b7cded3d36919185075991594f6f3e112f2eb8e1ddf";
-const GOLDEN_0007_SQL_SHA256 = "cae7ef748a7f12e8d04b0bbb67c5e9bcf1cae2ac1bf716cbc2062395190f41b7";
+const GOLDEN_0007_SQL_SHA256 = "f0ca7b72f280b507e68accab25eaa3b712fe0bfca389ace965b01d1d9df06cfb";
 const sha = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
 test("golden digests pin plan.json, 0001, 0002, 0003, 0004, 0005 and 0007 independently of the loader", () => {
   assert.equal(sha(join(planDir, "plan.json")), GOLDEN_PLAN_JSON_SHA256);

@@ -41,12 +41,14 @@ function assertOpaqueId(value: unknown): string { if (typeof value !== "string" 
 function assertComponent(value: unknown): string { if (typeof value !== "string" || !COMPONENT.test(value)) throw new LedgerError("INVALID_INPUT"); return value; }
 function assertIdempotencyKey(value: unknown): string { if (!IdempotencyKeySchema.safeParse(value).success) throw new LedgerError("INVALID_INPUT"); return value as string; }
 function assertOrdinal(value: unknown): 1 | 2 { if (value !== 1 && value !== 2) throw new LedgerError("INVALID_INPUT"); return value; }
+/** Free text is printable ASCII only (no control character, newline or NUL): the same set the 0007 CHECKs enforce. */
+const PRINTABLE = /^[ -~]+$/;
 function assertEvidenceRef(value: unknown): string {
-  if (typeof value !== "string" || value.length < 1 || value.length > MAX_EVIDENCE_REF) throw new LedgerError("EVIDENCE_INVALID"); // before any SQL
+  if (typeof value !== "string" || value.length < 1 || value.length > MAX_EVIDENCE_REF || !PRINTABLE.test(value)) throw new LedgerError("EVIDENCE_INVALID"); // before any SQL
   return value;
 }
 function assertNoticeVersion(value: unknown): string {
-  if (typeof value !== "string" || value.length < 1 || value.length > MAX_NOTICE_VERSION) throw new LedgerError("INVALID_INPUT"); // forfeiture needs a non-null notice
+  if (typeof value !== "string" || value.length < 1 || value.length > MAX_NOTICE_VERSION || !PRINTABLE.test(value)) throw new LedgerError("INVALID_INPUT"); // forfeiture needs a non-null notice
   return value;
 }
 
@@ -97,11 +99,16 @@ function toSlotRecord(row: SlotRow): RefinementSlotRecord {
 /** Owner-scoped read. An absent and a foreign package are the same NOT_FOUND (D11). */
 export async function getBundleState(db: LedgerQueryable, userId: string, packageId: string): Promise<BundleRecord> {
   const uid = assertUuid(userId), pid = assertUuid(packageId);
-  const pkg = (await db.query(`SELECT package_id, authorization_id, state FROM ${S}.ledger_packages WHERE package_id = $1 AND user_id = $2`, [pid, uid])).rows[0] as PackageRow | undefined;
-  if (!pkg) throw new LedgerError("NOT_FOUND");
-  const rows = (await db.query(`SELECT ${SLOT_COLUMNS} FROM ${S}.refinement_slots WHERE package_id = $1 AND user_id = $2 ORDER BY ordinal`, [pid, uid])).rows as unknown as SlotRow[];
-  const state = toBundleState(pkg.state);
-  return { packageId: pkg.package_id, authorizationId: pkg.authorization_id, state, customerState: toCustomerPackageState(state), slots: rows.map(toSlotRecord) };
+  try {
+    const pkg = (await db.query(`SELECT package_id, authorization_id, state FROM ${S}.ledger_packages WHERE package_id = $1 AND user_id = $2`, [pid, uid])).rows[0] as PackageRow | undefined;
+    if (!pkg) throw new LedgerError("NOT_FOUND");
+    const rows = (await db.query(`SELECT ${SLOT_COLUMNS} FROM ${S}.refinement_slots WHERE package_id = $1 AND user_id = $2 ORDER BY ordinal`, [pid, uid])).rows as unknown as SlotRow[];
+    const state = toBundleState(pkg.state);
+    return { packageId: pkg.package_id, authorizationId: pkg.authorization_id, state, customerState: toCustomerPackageState(state), slots: rows.map(toSlotRecord) };
+  } catch (error) {
+    if (error instanceof LedgerError) throw error;
+    throw new LedgerError("TRANSIENT"); // never surface a driver error
+  }
 }
 
 /**
@@ -392,6 +399,12 @@ export async function reopenBundleAfterUnchargedFinal(db: LedgerDb, input: Reope
     const r = (await tx.query(`SELECT state, pre_attempt_package_state FROM ${S}.credit_reservations WHERE reservation_id = $1 AND user_id = $2 AND original_package_id = $3 AND operation_kind IN ('final_standard', 'final_premium')`, [finalReservationId, userId, packageId])).rows[0] as { state: string; pre_attempt_package_state: string | null } | undefined;
     if (!r) throw new LedgerError("NOT_FOUND");
     const release = (await tx.query(`SELECT 1 FROM ${S}.ledger_entries WHERE reservation_id = $1 AND user_id = $2 AND entry_kind = 'release' AND evidence_kind = 'verified_zero_charge_failure'`, [finalReservationId, userId])).rows.length === 1;
+    // The same preconditions the 0007 binding trigger enforces, checked first so a refusal is a persisted INVALID_TRANSITION, not a bare database error.
+    const began = (await tx.query(`SELECT 1 FROM ${S}.ledger_package_events pe WHERE pe.package_id = $1 AND pe.user_id = $2 AND pe.to_state = 'closure_pending' AND pe.begin_reason = 'final_authorized' AND pe.final_reservation_id = $3
+      AND NOT EXISTS (SELECT 1 FROM ${S}.ledger_package_events pl WHERE pl.package_id = pe.package_id AND pl.user_id = pe.user_id AND pl.to_state = 'closure_pending' AND pl.created_at > pe.created_at)`, [packageId, userId, finalReservationId])).rows.length > 0;
+    if (!began) throw new LedgerBusinessRejection("INVALID_TRANSITION"); // closure began some other way (e.g. the customer's explicit request): never reversed by this final
+    const live = (await tx.query(`SELECT 1 FROM ${S}.credit_reservations WHERE original_package_id = $1 AND user_id = $2 AND state IN ('authorization_requested', 'reserved', 'settled', 'reconciliation_hold', 'operator_remedy')`, [packageId, userId])).rows.length > 0;
+    if (live) throw new LedgerBusinessRejection("INVALID_TRANSITION"); // a sibling final is settled or unresolved
     const context: BundleReopenContextV1 = {
       finalAttempt: r.pre_attempt_package_state === "open_for_refinements" ? "first_final" : "later_revision",
       outcome: r.state === "released" && release ? "verified_uncharged" : r.state === "settled" ? "charged" : "unknown",

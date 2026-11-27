@@ -53,11 +53,11 @@ CREATE TABLE vynvori_ledger.ledger_package_events(
   from_state text NOT NULL,
   to_state text NOT NULL,
   artifact_count smallint NULL CONSTRAINT ledger_package_events_artifact_count CHECK (artifact_count BETWEEN 0 AND 3),
-  evidence_ref text NULL CONSTRAINT ledger_package_events_evidence_ref CHECK (length(evidence_ref) BETWEEN 1 AND 512),
+  evidence_ref text NULL CONSTRAINT ledger_package_events_evidence_ref CHECK (length(evidence_ref) BETWEEN 1 AND 512 AND evidence_ref ~ '^[ -~]+$'),
   begin_reason text NULL CONSTRAINT ledger_package_events_begin_reason CHECK (begin_reason IN ('final_authorized', 'explicit_close_request')),
   final_reservation_id uuid NULL,
   closure_cause text NULL CONSTRAINT ledger_package_events_closure_cause CHECK (closure_cause IN ('final_delivered', 'explicit_close')),
-  closure_notice_version text NULL CONSTRAINT ledger_package_events_notice_shape CHECK (length(closure_notice_version) BETWEEN 1 AND 256),
+  closure_notice_version text NULL CONSTRAINT ledger_package_events_notice_shape CHECK (length(closure_notice_version) BETWEEN 1 AND 256 AND closure_notice_version ~ '^[ -~]+$'),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT ledger_package_events_package_fk FOREIGN KEY (package_id, user_id) REFERENCES vynvori_ledger.ledger_packages(package_id, user_id) ON DELETE RESTRICT,
   CONSTRAINT ledger_package_events_command_fk FOREIGN KEY (command_id, user_id) REFERENCES vynvori_ledger.ledger_commands(command_id, user_id) ON DELETE RESTRICT,
@@ -87,7 +87,7 @@ CREATE TABLE vynvori_ledger.refinement_slots(
   operation_id text NULL CONSTRAINT refinement_slots_operation_shape CHECK (operation_id ~ '^[A-Za-z0-9._:-]{1,128}$'),
   delivered_version_id text NULL CONSTRAINT refinement_slots_delivered_shape CHECK (delivered_version_id ~ '^[A-Za-z0-9._:-]{1,128}$'),
   closure_cause text NULL CONSTRAINT refinement_slots_closure_cause CHECK (closure_cause IN ('final_delivered', 'explicit_close')),
-  closure_notice_version text NULL CONSTRAINT refinement_slots_notice_shape CHECK (length(closure_notice_version) BETWEEN 1 AND 256),
+  closure_notice_version text NULL CONSTRAINT refinement_slots_notice_shape CHECK (length(closure_notice_version) BETWEEN 1 AND 256 AND closure_notice_version ~ '^[ -~]+$'),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT refinement_slots_package_fk FOREIGN KEY (package_id, user_id) REFERENCES vynvori_ledger.ledger_packages(package_id, user_id) ON DELETE RESTRICT,
   CONSTRAINT refinement_slots_package_ordinal UNIQUE (package_id, ordinal),
@@ -118,9 +118,9 @@ CREATE TABLE vynvori_ledger.refinement_slot_events(
   source_version_id text NULL CONSTRAINT refinement_slot_events_source_shape CHECK (source_version_id ~ '^[A-Za-z0-9._:-]{1,128}$'),
   operation_id text NULL CONSTRAINT refinement_slot_events_operation_shape CHECK (operation_id ~ '^[A-Za-z0-9._:-]{1,128}$'),
   delivered_version_id text NULL CONSTRAINT refinement_slot_events_delivered_shape CHECK (delivered_version_id ~ '^[A-Za-z0-9._:-]{1,128}$'),
-  evidence_ref text NULL CONSTRAINT refinement_slot_events_evidence_ref CHECK (length(evidence_ref) BETWEEN 1 AND 512),
+  evidence_ref text NULL CONSTRAINT refinement_slot_events_evidence_ref CHECK (length(evidence_ref) BETWEEN 1 AND 512 AND evidence_ref ~ '^[ -~]+$'),
   closure_cause text NULL CONSTRAINT refinement_slot_events_closure_cause CHECK (closure_cause IN ('final_delivered', 'explicit_close')),
-  closure_notice_version text NULL CONSTRAINT refinement_slot_events_notice_shape CHECK (length(closure_notice_version) BETWEEN 1 AND 256),
+  closure_notice_version text NULL CONSTRAINT refinement_slot_events_notice_shape CHECK (length(closure_notice_version) BETWEEN 1 AND 256 AND closure_notice_version ~ '^[ -~]+$'),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT refinement_slot_events_slot_fk FOREIGN KEY (slot_id, user_id) REFERENCES vynvori_ledger.refinement_slots(slot_id, user_id) ON DELETE RESTRICT,
   CONSTRAINT refinement_slot_events_slot_package_fk FOREIGN KEY (slot_id, package_id) REFERENCES vynvori_ledger.refinement_slots(slot_id, package_id) ON DELETE RESTRICT,
@@ -253,6 +253,14 @@ BEGIN
         AND cr.operation_kind IN ('final_standard', 'final_premium') FOR UPDATE;
     IF NOT FOUND OR r.state <> 'released' OR r.pre_attempt_package_state IS DISTINCT FROM 'open_for_refinements' THEN
       RAISE EXCEPTION 'reopening needs the released first final of this package that began on an open package' USING ERRCODE = 'integrity_constraint_violation';
+    END IF;
+    -- Closure must have BEGUN because of this very final (the package's latest closure_pending event is final_authorized for it): a
+    -- customer's explicit close request is never reversed by an unrelated, earlier released final.
+    IF NOT EXISTS (SELECT 1 FROM vynvori_ledger.ledger_package_events pe WHERE pe.package_id = NEW.package_id AND pe.user_id = NEW.user_id
+                   AND pe.to_state = 'closure_pending' AND pe.begin_reason = 'final_authorized' AND pe.final_reservation_id = NEW.final_reservation_id
+                   AND NOT EXISTS (SELECT 1 FROM vynvori_ledger.ledger_package_events pl WHERE pl.package_id = pe.package_id AND pl.user_id = pe.user_id
+                                   AND pl.to_state = 'closure_pending' AND pl.created_at > pe.created_at)) THEN
+      RAISE EXCEPTION 'reopening needs closure to have begun because of this final' USING ERRCODE = 'integrity_constraint_violation';
     END IF;
     IF NOT EXISTS (SELECT 1 FROM vynvori_ledger.ledger_entries e WHERE e.reservation_id = NEW.final_reservation_id AND e.user_id = NEW.user_id
                    AND e.entry_kind = 'release' AND e.evidence_kind = 'verified_zero_charge_failure') THEN
