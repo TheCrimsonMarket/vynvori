@@ -4,6 +4,8 @@ import { Client } from "pg";
 import { grantSyntheticCredits, databaseFor, dropLedger, freshLedger, ledgerPool, ledgerTarget, registerSyntheticGrantSource, syntheticProfileWithWallet } from "./ledger-fixture";
 import { getWalletSummary } from "../src/ledger-core";
 import { assessQuoteForAuthorization, issueQuote, renewQuote } from "../src/ledger-quotes";
+import { authorizeQuote, recordWorkflowRef, releaseReservation } from "../src/ledger-reservations";
+import { SYNTHETIC_BUNDLE_HOLD, bundleAllocations, bundleView, consent, currentPricePolicy, eligibilityPort, issueTestQuote, releaseEvidence } from "./ledger-reservation-fixture";
 
 /**
  * The ONLY ledger test file allowed more than 5 pool connections (ADR-0021 D15): up to 110 over one disposable database.
@@ -114,6 +116,70 @@ test("100-way concurrent grants in disposable PostgreSQL", { skip: ledgerTarget.
       }
       const rows = (await client.query("SELECT version_no FROM vynvori_ledger.ledger_quotes WHERE quote_id = $1 ORDER BY version_no", [quoteId])).rows.map(r => r.version_no as number);
       assert.deepEqual(rows, [1, 2, 3, 4, 5, 6]);
+    });
+
+
+    // ---- S5 (ADR-0021 S5 addendum): authorizations and releases race only through the owner's wallet lock ----------------------
+    const authorizeIn = (userId: string, quoteVersionId: string, idempotencyKey: string) =>
+      authorizeQuote(pool, { userId, quoteVersionId, idempotencyKey, consent: consent(), now: new Date(), pricePolicy: currentPricePolicy, eligibility: eligibilityPort() });
+    const reservedSum = async (userId: string) => Number((await client.query("SELECT coalesce(sum(hold_units), 0)::text s FROM vynvori_ledger.credit_reservations WHERE user_id = $1 AND state = 'reserved'", [userId])).rows[0].s);
+    for (const funded of [1, 7]) {
+      await t.test(`S5: 100 authorizations of 100 distinct quotes against a wallet funding exactly ${funded} -> exactly ${funded} succeed, the rest INSUFFICIENT_CREDITS; reserved = the sum of reserved holds`, async () => {
+        const userId = await syntheticProfileWithWallet(client);
+        await grantSyntheticCredits(pool, { userId, grantSourceId: source, sourceRef: `s5-funds-${funded}`, units: funded * SYNTHETIC_BUNDLE_HOLD });
+        const versions = await Promise.all(Array.from({ length: IN_FLIGHT }, (_, i) => issueTestQuote(pool, userId, "bundle", `s5-race-${funded}-${i}`)));
+        const settled = await Promise.allSettled(versions.map((v, i) => authorizeIn(userId, v, `s5-race-key-${funded}-${String(i).padStart(4, "0")}`)));
+        assert.equal(settled.filter(r => r.status === "fulfilled").length, funded);
+        assert.ok(settled.filter(r => r.status === "rejected").every(r => (r as PromiseRejectedResult).reason?.code === "INSUFFICIENT_CREDITS"), "every loser is INSUFFICIENT_CREDITS");
+        const summary = await getWalletSummary(client, userId);
+        assert.deepEqual({ a: summary.availableUnits, r: summary.reservedUnits }, { a: 0, r: funded * SYNTHETIC_BUNDLE_HOLD }, "no bucket went negative; nothing over-reserved");
+        assert.equal(await reservedSum(userId), summary.reservedUnits, "wallet reserved == sum of reserved reservation holds");
+        assert.equal((await client.query("SELECT count(*)::int n FROM vynvori_ledger.ledger_authorizations WHERE user_id = $1", [userId])).rows[0].n, funded);
+      });
+    }
+
+    await t.test("S5: 100 identical authorizations (same key) in flight -> exactly one authorization; every caller sees it", async () => {
+      const userId = await syntheticProfileWithWallet(client);
+      await grantSyntheticCredits(pool, { userId, grantSourceId: source, sourceRef: "s5-same-key", units: 2 * SYNTHETIC_BUNDLE_HOLD });
+      const quoteVersionId = await issueTestQuote(pool, userId, "bundle", "s5-same-key-quote");
+      const results = await Promise.all(Array.from({ length: IN_FLIGHT }, () => authorizeIn(userId, quoteVersionId, "s5-same-authorize-key")));
+      assert.equal(new Set(results.map(r => r.authorizationId)).size, 1);
+      assert.equal(results.filter(r => !r.replayed).length, 1, "exactly one execution; the rest replayed");
+      const summary = await getWalletSummary(client, userId);
+      assert.deepEqual({ a: summary.availableUnits, r: summary.reservedUnits }, { a: SYNTHETIC_BUNDLE_HOLD, r: SYNTHETIC_BUNDLE_HOLD });
+      assert.equal((await client.query("SELECT count(*)::int n FROM vynvori_ledger.credit_reservations WHERE user_id = $1", [userId])).rows[0].n, bundleAllocations.length);
+    });
+
+    await t.test("S5: 50 renewals and 50 authorizations of version 1 race -> exactly one of them succeeds; at most one authorization per lineage, never one of a superseded version", async () => {
+      const userId = await syntheticProfileWithWallet(client);
+      await grantSyntheticCredits(pool, { userId, grantSourceId: source, sourceRef: "s5-renew-race", units: 2 * SYNTHETIC_BUNDLE_HOLD });
+      const quoteId = "s5-renew-race-quote", v1 = await issueTestQuote(pool, userId, "bundle", quoteId);
+      const half = IN_FLIGHT / 2;
+      const settled = await Promise.allSettled(Array.from({ length: IN_FLIGHT }, (_, i) => i % 2 === 0
+        ? renewQuote(pool, { userId, quoteId, expectedLatestVersionNo: 1, quoteView: bundleView(quoteId, `${quoteId}-v2-${i}`), modelRef: "s5-model", allocations: bundleAllocations, idempotencyKey: `s5-renew-race-renew-${i}` })
+        : authorizeIn(userId, v1, `s5-renew-race-auth-${String(i).padStart(4, "0")}`)));
+      assert.equal(settled.length, 2 * half);
+      assert.equal(settled.filter(r => r.status === "fulfilled").length, 1, "exactly one winner");
+      assert.ok(settled.filter(r => r.status === "rejected").every(r => (r as PromiseRejectedResult).reason?.code === "QUOTE_STALE"), "every loser is QUOTE_STALE");
+      const authorizations = (await client.query("SELECT quote_version_id FROM vynvori_ledger.ledger_authorizations WHERE quote_id = $1", [quoteId])).rows;
+      const versions = (await client.query("SELECT max(version_no)::int v FROM vynvori_ledger.ledger_quotes WHERE quote_id = $1", [quoteId])).rows[0].v as number;
+      assert.ok((authorizations.length === 1 && versions === 1) || (authorizations.length === 0 && versions === 2), `either v1 was authorized and never renewed, or it was renewed and never authorized (auth ${authorizations.length}, latest v${versions})`);
+      assert.equal(await reservedSum(userId), (await getWalletSummary(client, userId)).reservedUnits);
+    });
+
+    await t.test("S5: 100 releases of one dispatched reservation under distinct keys -> exactly one release, the rest INVALID_TRANSITION; the hold returns once", async () => {
+      const userId = await syntheticProfileWithWallet(client);
+      await grantSyntheticCredits(pool, { userId, grantSourceId: source, sourceRef: "s5-release-race", units: SYNTHETIC_BUNDLE_HOLD });
+      const auth = await authorizeIn(userId, await issueTestQuote(pool, userId, "bundle", "s5-release-race-quote"), "s5-release-race-authorize");
+      const target = auth.reservations[0]!;
+      await recordWorkflowRef(pool, { userId, component: "workflow", reservationId: target.reservationId, workflowRef: "wf/race-1", idempotencyKey: "s5-release-race-dispatch" });
+      const settled = await Promise.allSettled(Array.from({ length: IN_FLIGHT }, (_, i) =>
+        releaseReservation(pool, { userId, component: "workflow", reservationId: target.reservationId, evidence: releaseEvidence(target.operationId, `plane-b/${i}`), idempotencyKey: `s5-release-race-${String(i).padStart(4, "0")}` })));
+      assert.equal(settled.filter(r => r.status === "fulfilled").length, 1);
+      assert.ok(settled.filter(r => r.status === "rejected").every(r => (r as PromiseRejectedResult).reason?.code === "INVALID_TRANSITION"));
+      const summary = await getWalletSummary(client, userId);
+      assert.deepEqual({ a: summary.availableUnits, r: summary.reservedUnits }, { a: target.holdUnits, r: SYNTHETIC_BUNDLE_HOLD - target.holdUnits });
+      assert.equal((await client.query("SELECT count(*)::int n FROM vynvori_ledger.ledger_entries WHERE reservation_id = $1 AND entry_kind = 'release'", [target.reservationId])).rows[0].n, 1);
     });
 
     await t.test("A2 fail-safe: two raw connections (no runLedgerCommand, no wallet lock) race to insert version k+1 directly -> exactly one succeeds, never a duplicate, never a gap", async () => {
