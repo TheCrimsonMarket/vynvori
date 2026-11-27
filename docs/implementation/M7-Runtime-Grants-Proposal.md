@@ -17,7 +17,7 @@ granted the runtime, checker or reconciliation role (§4 step 7). The four defin
 
 | Role (psql variable) | Suggested name | Purpose | Privileges, exactly |
 |---|---|---|---|
-| `ledger_runtime` | `vynvori_ledger_runtime` | The library's customer-path and system-path commands (`runLedgerCommand` and everything built on it) | `USAGE` on `vynvori_ledger`; `SELECT, INSERT` on `wallets`, `ledger_commands`, `ledger_entries`, `ledger_quote_lineages`, `ledger_quotes`, `ledger_quote_allocations`, `promo_claims`, `promo_claim_events`, `ledger_authorizations`, `ledger_packages`, `credit_reservations`, `ledger_package_events`, `refinement_slot_events`; `SELECT` on `refinement_slots`; column `UPDATE` on `wallets (user_id)`, `promo_claims (state, event_seq)`, `credit_reservations (workflow_ref)`, `ledger_packages (package_id)`, `refinement_slots (slot_id)`; `USAGE` on `vynvori_identity` and column `SELECT (id, issuer, subject)` on `vynvori_identity.profiles`. Nothing on `ledger_grant_sources` or `vendor_cost_evidence`. No `DELETE`, `TRUNCATE`, `REFERENCES`, `TRIGGER`, no `EXECUTE` on any ledger function, no `TEMP`. |
+| `ledger_runtime` | `vynvori_ledger_runtime` | The library's customer-path and system-path commands (`runLedgerCommand` and everything built on it) | `USAGE` on `vynvori_ledger`; `SELECT, INSERT` on `wallets`, `ledger_commands`, `ledger_entries`, `ledger_quote_lineages`, `ledger_quotes`, `ledger_quote_allocations`, `promo_claims`, `promo_claim_events`, `ledger_authorizations`, `ledger_packages`, `credit_reservations`, `ledger_package_events`; `INSERT` only on `refinement_slot_events`; `SELECT` on `refinement_slots`; column `UPDATE` on `wallets (user_id)`, `promo_claims (state, event_seq)`, `credit_reservations (workflow_ref)`, `ledger_packages (package_id)`, `refinement_slots (slot_id)`; `USAGE` on `vynvori_identity` and column `SELECT (id, issuer, subject)` on `vynvori_identity.profiles`. Nothing on `ledger_grant_sources` or `vendor_cost_evidence`. No `DELETE`, `TRUNCATE`, `REFERENCES`, `TRIGGER`, no `EXECUTE` on any ledger function, no `TEMP`. |
 | `ledger_wallet_definer` | `vynvori_ledger_wallet_definer` | Owns `ledger_entries_apply_to_wallet()` (S2) | `USAGE` on `vynvori_ledger`; `SELECT, UPDATE` on `wallets` |
 | `ledger_reservation_definer` | `vynvori_ledger_reservation_definer` | Owns `ledger_entries_apply_to_reservation()` (S5, also S6's settle and hold) | `USAGE`; `SELECT` and `UPDATE (state)` on `credit_reservations` |
 | `ledger_package_definer` | `vynvori_ledger_package_definer` | Owns `ledger_package_events_apply()` (S7) | `USAGE`; `SELECT` and `UPDATE (state)` on `ledger_packages`; `INSERT` on `refinement_slots` |
@@ -28,7 +28,7 @@ granted the runtime, checker or reconciliation role (§4 step 7). The four defin
 Every list above is **derived by test, not from memory** (§9): the test applies exactly these blocks, shows the real library path works
 under them, then removes each privilege one at a time and shows the path fails with `42501`. So each list is necessary and not padded.
 
-Two deliberate differences from what the earlier addenda wrote, both found by that test:
+Three deliberate differences from what the earlier addenda wrote, all found by that test:
 
 1. **The checker also needs `SELECT` on `ledger_commands`.** The S8 addendum lists ten tables. `checkWalletInvariants` re-derives the
    `ledger_commands (scope, idempotency_key)` idempotency guard (`UNIQUE_KEY_VIOLATED`), so it reads that table; without it the check
@@ -37,6 +37,10 @@ Two deliberate differences from what the earlier addenda wrote, both found by th
    synthetic credits as the runtime role. Funding is not a runtime operation: no grant source exists in W1 and the HARD GATE (§7)
    forbids registering one before a definer-only grant command exists. Without `SELECT`, the library's grant path
    (`appendGrantEntry`) fails with `42501` for the runtime role, and a raw grant entry is still rejected because no source exists.
+3. **The runtime role gets only `INSERT` on `refinement_slot_events`, not `SELECT`.** The S7 addendum lists `SELECT, INSERT`. Nothing
+   in the library or in any trigger reads that table (the library inserts without `RETURNING`, and every replay or precondition reads
+   `refinement_slots` or `ledger_package_events` instead), so with `SELECT` revoked the whole runtime path still works; the test
+   would fail on an unneeded privilege. `SELECT` on `ledger_package_events` stays: `reopenBundleAfterUnchargedFinal` reads it.
 
 ## 2. Founder decisions this follows
 
@@ -158,7 +162,8 @@ GRANT SELECT, INSERT ON vynvori_ledger.promo_claims, vynvori_ledger.promo_claim_
 GRANT UPDATE (state, event_seq) ON vynvori_ledger.promo_claims TO :"ledger_runtime";
 GRANT SELECT, INSERT ON vynvori_ledger.ledger_authorizations, vynvori_ledger.ledger_packages, vynvori_ledger.credit_reservations TO :"ledger_runtime";
 GRANT UPDATE (workflow_ref) ON vynvori_ledger.credit_reservations TO :"ledger_runtime";
-GRANT SELECT, INSERT ON vynvori_ledger.ledger_package_events, vynvori_ledger.refinement_slot_events TO :"ledger_runtime";
+GRANT SELECT, INSERT ON vynvori_ledger.ledger_package_events TO :"ledger_runtime";
+GRANT INSERT ON vynvori_ledger.refinement_slot_events TO :"ledger_runtime";
 GRANT SELECT ON vynvori_ledger.refinement_slots TO :"ledger_runtime";
 GRANT UPDATE (package_id) ON vynvori_ledger.ledger_packages TO :"ledger_runtime";
 GRANT UPDATE (slot_id) ON vynvori_ledger.refinement_slots TO :"ledger_runtime";
@@ -244,7 +249,7 @@ expected(grantee, object, col, privilege) AS (VALUES
   (:'ledger_runtime', 'table vynvori_ledger.credit_reservations', '', 'SELECT'), (:'ledger_runtime', 'table vynvori_ledger.credit_reservations', '', 'INSERT'),
   (:'ledger_runtime', 'table vynvori_ledger.credit_reservations', 'workflow_ref', 'UPDATE'),
   (:'ledger_runtime', 'table vynvori_ledger.ledger_package_events', '', 'SELECT'), (:'ledger_runtime', 'table vynvori_ledger.ledger_package_events', '', 'INSERT'),
-  (:'ledger_runtime', 'table vynvori_ledger.refinement_slot_events', '', 'SELECT'), (:'ledger_runtime', 'table vynvori_ledger.refinement_slot_events', '', 'INSERT'),
+  (:'ledger_runtime', 'table vynvori_ledger.refinement_slot_events', '', 'INSERT'),
   (:'ledger_runtime', 'table vynvori_ledger.refinement_slots', '', 'SELECT'), (:'ledger_runtime', 'table vynvori_ledger.refinement_slots', 'slot_id', 'UPDATE'),
   (:'ledger_runtime', 'schema vynvori_identity', '', 'USAGE'),
   (:'ledger_runtime', 'table vynvori_identity.profiles', 'id', 'SELECT'), (:'ledger_runtime', 'table vynvori_identity.profiles', 'issuer', 'SELECT'), (:'ledger_runtime', 'table vynvori_identity.profiles', 'subject', 'SELECT'),
@@ -460,9 +465,9 @@ There is no code bypass and none is added. After step 5:
 
 `packages/db/tests/ledger-acceptance.test.ts`:
 
-- a unit test (runs everywhere) parses the eight `s9-sql:*` blocks, refuses `$$` and unknown variables, and checks that step 1's
+- a unit test (runs everywhere) parses the nine `s9-sql:*` blocks, refuses `$$` and unknown variables, and checks that step 1's
   journal list equals `plan.json` and that every definer function and table named here exists in the migrations;
-- `S9-GRANTS-*` database tests apply the blocks verbatim as the non-superuser executor on a fresh database, then: step 6 returns zero
+- the `S9-B*` and `S9-G*` database subtests apply the blocks verbatim as the non-superuser executor on a fresh database, then: step 6 returns zero
   rows; the real library runs every runtime command kind as the runtime role, the checker report is clean as the checker role, and
   vendor-cost evidence is recorded as the reconciliation role; each privilege removed one at a time makes its path fail with `42501`;
   no role can act as a definer (catalog and a real `LOGIN` that tries `SET ROLE`, also with `pg_write_all_data`); the re-own was done

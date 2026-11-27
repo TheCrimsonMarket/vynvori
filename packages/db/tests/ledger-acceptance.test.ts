@@ -13,7 +13,7 @@ import { holdReservation, settleReservation } from "../src/ledger-settlement";
 import { recordVendorCostEvidence } from "../src/ledger-evidence";
 import {
   beginBundleClosure, closeBundleWithForfeiture, consumeRefinementSlot, getBundleState, markRefinementPending, markRefinementUnknown, openRefinements,
-  recordBundleDelivery, restoreRefinementSlot, skipRefinementSlot,
+  recordBundleDelivery, reopenBundleAfterUnchargedFinal, restoreRefinementSlot, skipRefinementSlot,
 } from "../src/ledger-entitlements";
 import { checkWalletInvariants, findOrphanedReservations } from "../src/ledger-invariants";
 import { assertDisposableTarget, databaseFor, dropLedger, freshEmptyDatabase, grantSyntheticCredits, ledgerPoolAs, ledgerTarget, registerSyntheticGrantSource } from "./ledger-fixture";
@@ -366,10 +366,10 @@ test("S9 grants proposal: applied verbatim by a non-superuser executor; exact en
 
     const SCENARIO_FUNDS = 2 * SYNTHETIC_BUNDLE_HOLD + SYNTHETIC_FINAL_HOLD;
     /** Every runtime command kind through the REAL library, as the runtime login. Funding comes from the superuser fixture. */
-    const runtimeScenario = async (db: Pool, user: string) => {
+    const runtimeScenario = async (db: Pool, user: string, fundWith: (userId: string, units: number) => Promise<unknown> = fund) => {
       const tag = randomUUID().slice(0, 8);
       await ensureWallet(db, user);
-      await fund(user, SCENARIO_FUNDS);
+      await fundWith(user, SCENARIO_FUNDS);
       await getWalletSummary(db, user);
       const promoOp = `s9-promo-${tag}`;
       const { claim } = await claimPromo(db, { userId: user, operationId: promoOp, idempotencyKey: key("claim") });
@@ -401,8 +401,10 @@ test("S9 grants proposal: applied verbatim by a non-superuser executor; exact en
       await consumeRefinementSlot(db, { ...base, ordinal: 2, operationId: op2, deliveredVersionId: `dv-${tag}-2`, evidenceRef: "s9/ref-2b", idempotencyKey: key("consume") });
       const final = await authorizeQuote(db, { userId: user, quoteVersionId: await issueTestQuote(db, user, "final", `s9-f-${tag}`, { paidTerms: terms(NOTICE) }), idempotencyKey: key("final"), consent: consent(), now: new Date(), pricePolicy: currentPricePolicy, eligibility: eligibilityPort(), originalPackageId: base.packageId });
       const fr = final.reservations[0]!;
+      await beginBundleClosure(db, { ...base, trigger: { kind: "final_authorized", finalReservationId: fr.reservationId }, idempotencyKey: key("begin") });
       await recordWorkflowRef(db, { userId: user, component: "s9", reservationId: fr.reservationId, workflowRef: "wf/" + randomUUID(), idempotencyKey: key("wf") });
       await releaseReservation(db, { userId: user, component: "s9", reservationId: fr.reservationId, evidence: releaseEvidence(fr.operationId), idempotencyKey: key("release") });
+      await reopenBundleAfterUnchargedFinal(db, { ...base, finalReservationId: fr.reservationId, idempotencyKey: key("reopen") });
       await beginBundleClosure(db, { ...base, trigger: { kind: "explicit_close_request" }, idempotencyKey: key("begin") });
       await closeBundleWithForfeiture(db, { ...base, cause: { kind: "explicit_close" }, refinementClosureNoticeVersion: NOTICE, idempotencyKey: key("close") });
       return (await getBundleState(db, user, base.packageId)).state;
@@ -417,6 +419,357 @@ test("S9 grants proposal: applied verbatim by a non-superuser executor; exact en
       assert.deepEqual(await buckets(user), SCENARIO_END);
     });
 
-    void [closePool, before, ledgerCode, issueQuote, recordVendorCostEvidence, checkWalletInvariants, findOrphanedReservations, finalView, stalePricePolicy, SYNTHETIC_BUNDLE_CHARGE];
+    // ---- shared helpers for the acceptance rows (all as the runtime login unless named) --------------------------------------
+    const fd = recording(funder);
+    const settleEv = (operationId: string, overrides: Record<string, unknown> = {}) => ({ transition: "settle", operationId, evidenceKind: "persisted_delivered", evidenceRef: "s9-settle", hasVerifiedManifestHash: true, ownerAndRightsVerified: true, ...overrides });
+    const holdEv = (operationId: string, kind: "outcome_unknown" | "persistence_failed_under_review" = "outcome_unknown") => ({ transition: "hold", operationId, evidenceKind: kind, evidenceRef: "s9-hold", reason: kind === "outcome_unknown" ? "outcome_unknown" : "persistence_unconfirmed" });
+    const newUser = async (units: number) => { const user = await env!.profile(); await ensureWallet(rt.db, user); if (units > 0) await fund(user, units); return user; };
+    const dispatchedBundle = async (db: Pool, user: string) => {
+      const auth = await authorizeQuote(db, { userId: user, quoteVersionId: await issueTestQuote(db, user, "bundle", `s9-q-${randomUUID().slice(0, 12)}`), idempotencyKey: key("auth"), consent: consent(), now: new Date(), pricePolicy: currentPricePolicy, eligibility: eligibilityPort() });
+      for (const r of auth.reservations) await recordWorkflowRef(db, { userId: user, component: "s9", reservationId: r.reservationId, workflowRef: "wf/" + randomUUID(), idempotencyKey: key("wf") });
+      return auth;
+    };
+    const entriesFor = async (reservationId: string) => (await admin.query("SELECT entry_kind FROM vynvori_ledger.ledger_entries WHERE reservation_id = $1 ORDER BY entry_kind", [reservationId])).rows.map(r => r.entry_kind as string);
+    const rows = <T>(r: { rows: unknown[] }) => r.rows as T[];
+
+    // ---- S9-G2: each runtime and definer privilege is necessary ---------------------------------------------------------------
+    type Unit = { privilege: string; column: string | null; schema: boolean; object: string; grantee: keyof Vars };
+    /** Splits the proposal's GRANT statements into single privilege units (one privilege, one column, one object, one grantee). */
+    const grantUnits = (sql: string): Unit[] => sql.split("\n").filter(line => line.trim() !== "").flatMap(line => {
+      const m = /^GRANT (.+?) ON (SCHEMA )?(.+?) TO (.+);$/.exec(line.trim());
+      if (!m) throw new Error("not a single GRANT statement: " + line);
+      const priv = /^([A-Z]+) \(([^)]+)\)$/.exec(m[1]!);
+      const parts: [string, string | null][] = priv ? priv[2]!.split(", ").map(c => [priv[1]!, c]) : m[1]!.split(", ").map(x => [x, null]);
+      const grantees = m[4]!.split(", ").map(g => { const v = /^:"([a-z_]+)"$/.exec(g)?.[1]; if (!v || !(v in vars)) throw new Error("bad grantee " + g); return v as keyof Vars; });
+      return parts.flatMap(([privilege, column]) => m[3]!.split(", ").flatMap(object => grantees.map(grantee => ({ privilege, column, schema: !!m[2], object, grantee }))));
+    });
+    const unitSql = (verb: "GRANT" | "REVOKE", u: Unit) => `${verb} ${u.privilege}${u.column ? ` (${u.column})` : ""} ON ${u.schema ? "SCHEMA " : ""}${u.object} ${verb === "GRANT" ? "TO" : "FROM"} ${q(vars[u.grantee])}`;
+    const label = (u: Unit) => `${u.grantee}: ${u.privilege}${u.column ? `(${u.column})` : ""} on ${u.object}`;
+    const units = [...grantUnits(proposalBlocks().get("runtime")!), ...grantUnits(proposalBlocks().get("privileges")!)];
+    /** Revokes one unit as the executor, runs the path, expects it to fail with a recorded 42501, and grants the unit back. */
+    const withoutUnit = async (u: Unit, path: () => Promise<unknown>, recorders: { codes: string[] }[]) => {
+      for (const r of recorders) r.codes.length = 0;
+      await env!.asExec(unitSql("REVOKE", u));
+      let threw = false;
+      try { await path(); } catch { threw = true; } finally { await env!.asExec(unitSql("GRANT", u)); }
+      const codes = recorders.flatMap(r => r.codes);
+      assert.ok(threw && codes.includes("42501"), `removing ${label(u)} makes the path fail with 42501 (threw ${threw}, codes ${JSON.stringify(codes)})`);
+      for (const r of recorders) r.codes.length = 0;
+    };
+    const fundVia = (db: Pool) => (userId: string, units: number) => grantSyntheticCredits(db, { userId, grantSourceId: source, sourceRef: `s9-funds-${++funds}`, units });
+
+    // ---- S9-G4 and D15-T3: reconciliation and vendor-cost isolation ------------------------------------------------------------
+    await t.test("S9-G4 / D15-T3: as the reconciliation login, vendor-cost evidence (usage, invoice, unknown) is recorded and replayed without moving any credit or state; each unit is necessary; the runtime has no vendor-cost access", async () => {
+      const reconPool = await openAs(vars.ledger_reconciliation_login, 1), rc = recording(reconPool);
+      try {
+        const user = await newUser(SYNTHETIC_BUNDLE_HOLD);
+        const auth = await dispatchedBundle(rt.db, user);
+        const r = auth.reservations[0]!, before = await buckets(user);
+        const input = { component: "reconciler", operationId: r.operationId, reservationId: r.reservationId, evidenceKind: "invoice" as const, evidenceRef: "s9-inv", amountUsdMicros: 1234 };
+        const first = await recordVendorCostEvidence(rc.db, input);
+        assert.equal(first.replayed, false);
+        assert.deepEqual(await recordVendorCostEvidence(rc.db, input), { ...first, replayed: true });
+        await recordVendorCostEvidence(rc.db, { ...input, evidenceKind: "usage", evidenceRef: "s9-use" });
+        await recordVendorCostEvidence(rc.db, { ...input, evidenceKind: "unknown", evidenceRef: "s9-unk", amountUsdMicros: null });
+        assert.deepEqual(await buckets(user), before, "D15-T3: vendor cost never moves a wallet bucket");
+        assert.equal((await getReservation(rt.db, user, r.reservationId)).state, "reserved", "D15-T3: an invoice or unknown cost never settles, releases or holds");
+        assert.deepEqual(rc.codes, []);
+        for (const u of units.filter(x => x.grantee === "ledger_reconciliation"))
+          await withoutUnit(u, async () => { const ref = "s9-" + randomUUID().slice(0, 8); await recordVendorCostEvidence(rc.db, { ...input, evidenceRef: ref }); await recordVendorCostEvidence(rc.db, { ...input, evidenceRef: ref }); }, [rc]);
+        for (const sql of ["UPDATE vynvori_ledger.vendor_cost_evidence SET amount_usd_micros = 0", "DELETE FROM vynvori_ledger.vendor_cost_evidence", "SELECT count(*) FROM vynvori_ledger.wallets", "SELECT count(*) FROM vynvori_ledger.credit_reservations"])
+          await assert.rejects(reconPool.query(sql), sqlstate("42501"), sql);
+        await assert.rejects(runtimePool.query("SELECT count(*) FROM vynvori_ledger.vendor_cost_evidence"), sqlstate("42501"), "the runtime role cannot read vendor cost");
+        await assert.rejects(recordVendorCostEvidence(runtimePool, { ...input, evidenceRef: "s9-rt" }), "the runtime role cannot record vendor cost");
+      } finally { await closePool(reconPool); }
+      assert.deepEqual(await endState(), [HARD_GATE_ROW]);
+    });
+
+    // ---- doc 15 acceptance targets (small-scale, under the proposed roles; the 100-way cases are in ledger-concurrency) ---------
+    const authorizeFor = (user: string, quoteVersionId: string, pricePolicy = currentPricePolicy) =>
+      authorizeQuote(rt.db, { userId: user, quoteVersionId, idempotencyKey: key("auth"), consent: consent(), now: new Date(), pricePolicy, eligibility: eligibilityPort() });
+    await t.test("D15-T1: concurrent authorizations against a wallet that funds exactly three bundles: exactly three win, the fourth is INSUFFICIENT_CREDITS, nothing is lost", async () => {
+      const user = await newUser(3 * SYNTHETIC_BUNDLE_HOLD);
+      const quotes = await Promise.all([0, 1, 2, 3].map(i => issueTestQuote(rt.db, user, "bundle", `s9-t1-${i}-${randomUUID().slice(0, 8)}`)));
+      const settled = await Promise.allSettled(quotes.map(qv => authorizeFor(user, qv)));
+      assert.equal(settled.filter(x => x.status === "fulfilled").length, 3);
+      assert.ok(settled.filter(x => x.status === "rejected").every(x => ledgerCode("INSUFFICIENT_CREDITS")((x as PromiseRejectedResult).reason)));
+      assert.deepEqual(await buckets(user), { a: "0", r: String(3 * SYNTHETIC_BUNDLE_HOLD), h: "0", c: "0" });
+    });
+    await t.test("D15-T2: a duplicated settle (same key, concurrent) writes one entry; out-of-order evidence (before the reservation exists, after a terminal transition, or for another operation) moves nothing", async () => {
+      const user = await newUser(SYNTHETIC_BUNDLE_HOLD);
+      const [r0, r1] = (await dispatchedBundle(rt.db, user)).reservations;
+      const k = key("dup");
+      const both = await Promise.all([0, 1].map(() => settleReservation(rt.db, { userId: user, component: "s9", reservationId: r0!.reservationId, evidence: settleEv(r0!.operationId), idempotencyKey: k })));
+      assert.deepEqual(both.map(b => b.state), ["settled", "settled"]);
+      assert.deepEqual(await entriesFor(r0!.reservationId), ["reserve", "settle"]);
+      await assert.rejects(settleReservation(rt.db, { userId: user, component: "s9", reservationId: randomUUID(), evidence: settleEv("op-unseen"), idempotencyKey: key("early") }), ledgerCode("NOT_FOUND"), "evidence for a reservation that does not exist yet");
+      await assert.rejects(releaseReservation(rt.db, { userId: user, component: "s9", reservationId: r0!.reservationId, evidence: releaseEvidence(r0!.operationId), idempotencyKey: key("late") }), ledgerCode("INVALID_TRANSITION"));
+      await assert.rejects(holdReservation(rt.db, { userId: user, component: "s9", reservationId: r0!.reservationId, evidence: holdEv(r0!.operationId), idempotencyKey: key("late") }), ledgerCode("INVALID_TRANSITION"));
+      await assert.rejects(settleReservation(rt.db, { userId: user, component: "s9", reservationId: r1!.reservationId, evidence: settleEv(r0!.operationId), idempotencyKey: key("wrongop") }), ledgerCode("EVIDENCE_INVALID"), "evidence for another operation");
+      assert.deepEqual(await entriesFor(r0!.reservationId), ["reserve", "settle"]);
+      assert.deepEqual(await entriesFor(r1!.reservationId), ["reserve"]);
+    });
+    await t.test("D15-T4: a renewed quote makes version 1 stale for assessment and authorization; a stale price version is refused; the renewed version authorizes", async () => {
+      const user = await newUser(SYNTHETIC_BUNDLE_HOLD);
+      const quoteId = `s9-t4-${randomUUID().slice(0, 8)}`, v1 = await issueTestQuote(rt.db, user, "bundle", quoteId);
+      await renewQuote(rt.db, { userId: user, quoteId, expectedLatestVersionNo: 1, quoteView: bundleView(quoteId, quoteId + "-v2"), modelRef: "s5-model", allocations: bundleAllocations, idempotencyKey: key("renew") });
+      assert.deepEqual(await assessQuoteForAuthorization(rt.db, { userId: user, quoteVersionId: v1, now: new Date(), pricePolicy: currentPricePolicy }), { ok: false, code: "QUOTE_STALE" });
+      await assert.rejects(authorizeFor(user, v1), ledgerCode("QUOTE_STALE"));
+      await assert.rejects(authorizeFor(user, quoteId + "-v2", stalePricePolicy), ledgerCode("QUOTE_STALE"));
+      assert.equal((await authorizeFor(user, quoteId + "-v2")).reservations.length, 3);
+    });
+    await t.test("D15-T5: no negative balance, no double charge, no double grant: an over-budget authorization moves nothing; a second settle under a new key is INVALID_TRANSITION; a second grant of the same source reference is DUPLICATE_CAUSE", async () => {
+      const user = await newUser(SYNTHETIC_BUNDLE_HOLD - 1);
+      await assert.rejects(authorizeFor(user, await issueTestQuote(rt.db, user, "bundle", `s9-t5-${randomUUID().slice(0, 8)}`)), ledgerCode("INSUFFICIENT_CREDITS"));
+      assert.deepEqual(await buckets(user), { a: String(SYNTHETIC_BUNDLE_HOLD - 1), r: "0", h: "0", c: "0" });
+      await fund(user, 1);
+      const [r0] = (await dispatchedBundle(rt.db, user)).reservations;
+      await settleReservation(rt.db, { userId: user, component: "s9", reservationId: r0!.reservationId, evidence: settleEv(r0!.operationId), idempotencyKey: key("s1") });
+      await assert.rejects(settleReservation(rt.db, { userId: user, component: "s9", reservationId: r0!.reservationId, evidence: settleEv(r0!.operationId), idempotencyKey: key("s2") }), ledgerCode("INVALID_TRANSITION"));
+      assert.equal((await buckets(user)).c, String(SYNTHETIC_CHARGES[0]));
+      const ref = "s9-capture-" + randomUUID();
+      await grantSyntheticCredits(funder, { userId: user, grantSourceId: source, sourceRef: ref, units: 1, idempotencyKey: key("g1") });
+      await assert.rejects(grantSyntheticCredits(funder, { userId: user, grantSourceId: source, sourceRef: ref, units: 1, idempotencyKey: key("g2") }), ledgerCode("DUPLICATE_CAUSE"));
+      assert.equal(Number((await buckets(user)).a), SYNTHETIC_HOLDS[0] - SYNTHETIC_CHARGES[0] + 1);
+    });
+
+    // ---- doc 06 test-matrix rows ------------------------------------------------------------------------------------------------
+    await t.test("D06-R01: simultaneous requests against a wallet that covers exactly one: one authorization wins, the other is INSUFFICIENT_CREDITS; a wallet one unit short refuses both", async () => {
+      for (const [units, wins] of [[SYNTHETIC_BUNDLE_HOLD, 1], [SYNTHETIC_BUNDLE_HOLD - 1, 0]] as const) {
+        const user = await newUser(units);
+        const quotes = await Promise.all([0, 1].map(i => issueTestQuote(rt.db, user, "bundle", `s9-r01-${i}-${randomUUID().slice(0, 8)}`)));
+        const settled = await Promise.allSettled(quotes.map(qv => authorizeFor(user, qv)));
+        assert.equal(settled.filter(x => x.status === "fulfilled").length, wins);
+        assert.ok(settled.filter(x => x.status === "rejected").every(x => ledgerCode("INSUFFICIENT_CREDITS")((x as PromiseRejectedResult).reason)));
+        assert.ok(Number((await buckets(user)).a) >= 0);
+      }
+    });
+    await t.test("D06-R02 (NOT IN W1): no runtime path can register or use a payment-capture grant source; the capture flow itself is M4 and NOT RUN", async () => {
+      // W1 has no Medusa capture path (M4). What exists today: the same source_ref under a second key is DUPLICATE_CAUSE (D15-T5), and
+      // the runtime role cannot register or read a source (S9-B6). This row stays NOT_IN_W1 in the evidence record.
+      await assert.rejects(runtimePool.query("INSERT INTO vynvori_ledger.ledger_grant_sources(grant_source_id, kind, label) VALUES ($1, 'medusa_payment_capture', 'x')", [randomUUID()]), sqlstate("42501"));
+    });
+    await t.test("D06-R03: provider timeout after billing: the reservation is held (outcome_unknown), never settled or released by a retry; the orphan finder reports it", async () => {
+      const user = await newUser(SYNTHETIC_BUNDLE_HOLD);
+      const [r0] = (await dispatchedBundle(rt.db, user)).reservations;
+      await holdReservation(rt.db, { userId: user, component: "s9", reservationId: r0!.reservationId, evidence: holdEv(r0!.operationId), idempotencyKey: key("hold") });
+      await assert.rejects(settleReservation(rt.db, { userId: user, component: "s9", reservationId: r0!.reservationId, evidence: settleEv(r0!.operationId), idempotencyKey: key("retry") }), ledgerCode("INVALID_TRANSITION"));
+      await assert.rejects(releaseReservation(rt.db, { userId: user, component: "s9", reservationId: r0!.reservationId, evidence: releaseEvidence(r0!.operationId), idempotencyKey: key("retry") }), ledgerCode("INVALID_TRANSITION"));
+      assert.equal((await getReservation(rt.db, user, r0!.reservationId)).state, "reconciliation_hold");
+      assert.deepEqual(await buckets(user), { a: "0", r: String(SYNTHETIC_BUNDLE_HOLD - SYNTHETIC_HOLDS[0]), h: String(SYNTHETIC_HOLDS[0]), c: "0" });
+      const checkerPool = await openAs(vars.ledger_checker_login, 1);
+      try { assert.ok((await findOrphanedReservations(checkerPool, { olderThan: new Date(Date.now() + 60_000) })).orphans.some(o => o.reservationId === r0!.reservationId && o.orphanClass === "hold_present")); }
+      finally { await closePool(checkerPool); }
+    });
+    await t.test("D06-R04: the provider returned an artifact but the DB write failed: settle needs persisted, verified evidence (anything else is EVIDENCE_INVALID); the reservation is held under review", async () => {
+      const user = await newUser(SYNTHETIC_BUNDLE_HOLD);
+      const [r0] = (await dispatchedBundle(rt.db, user)).reservations;
+      for (const bad of [{ evidenceKind: "outcome_unknown" }, { hasVerifiedManifestHash: false }, { ownerAndRightsVerified: false }])
+        await assert.rejects(settleReservation(rt.db, { userId: user, component: "s9", reservationId: r0!.reservationId, evidence: settleEv(r0!.operationId, bad), idempotencyKey: key("bad") }), ledgerCode("EVIDENCE_INVALID"), JSON.stringify(bad));
+      assert.deepEqual(await entriesFor(r0!.reservationId), ["reserve"]);
+      await holdReservation(rt.db, { userId: user, component: "s9", reservationId: r0!.reservationId, evidence: holdEv(r0!.operationId, "persistence_failed_under_review"), idempotencyKey: key("hold") });
+      assert.equal((await getReservation(rt.db, user, r0!.reservationId)).state, "reconciliation_hold");
+    });
+    await t.test("D06-R05: webhook replay and out-of-order: the same settle replays (one entry); a hold after the settle is INVALID_TRANSITION; a release naming another operation is EVIDENCE_INVALID", async () => {
+      const user = await newUser(SYNTHETIC_BUNDLE_HOLD);
+      const [r0, r1] = (await dispatchedBundle(rt.db, user)).reservations;
+      const input = { userId: user, component: "s9", reservationId: r0!.reservationId, evidence: settleEv(r0!.operationId), idempotencyKey: key("hook") };
+      await settleReservation(rt.db, input); await settleReservation(rt.db, input);
+      assert.deepEqual(await entriesFor(r0!.reservationId), ["reserve", "settle"]);
+      await assert.rejects(holdReservation(rt.db, { userId: user, component: "s9", reservationId: r0!.reservationId, evidence: holdEv(r0!.operationId), idempotencyKey: key("late") }), ledgerCode("INVALID_TRANSITION"));
+      await assert.rejects(releaseReservation(rt.db, { userId: user, component: "s9", reservationId: r1!.reservationId, evidence: releaseEvidence(r0!.operationId), idempotencyKey: key("wrong") }), ledgerCode("EVIDENCE_INVALID"));
+    });
+    await t.test("D06-R07 (partly): ownership on every ID: another user's reservation, quote and package are NOT_FOUND for every read and command (no existence leak)", async () => {
+      const owner = await newUser(SYNTHETIC_BUNDLE_HOLD), other = await newUser(SYNTHETIC_BUNDLE_HOLD);
+      const quoteVersionId = await issueTestQuote(rt.db, owner, "bundle", `s9-r07-${randomUUID().slice(0, 8)}`);
+      const auth = await authorizeFor(owner, quoteVersionId);
+      const r0 = auth.reservations[0]!, pkg = auth.packageId!;
+      const attempts: [string, () => Promise<unknown>][] = [
+        ["getReservation", () => getReservation(rt.db, other, r0.reservationId)],
+        ["getQuote", () => getQuote(rt.db, other, quoteVersionId)],
+        ["getBundleState", () => getBundleState(rt.db, other, pkg)],
+        ["recordWorkflowRef", () => recordWorkflowRef(rt.db, { userId: other, component: "s9", reservationId: r0.reservationId, workflowRef: "wf/x", idempotencyKey: key("x") })],
+        ["settle", () => settleReservation(rt.db, { userId: other, component: "s9", reservationId: r0.reservationId, evidence: settleEv(r0.operationId), idempotencyKey: key("x") })],
+        ["release", () => releaseReservation(rt.db, { userId: other, component: "s9", reservationId: r0.reservationId, evidence: releaseEvidence(r0.operationId), idempotencyKey: key("x") })],
+        ["authorize", () => authorizeFor(other, quoteVersionId)],
+        ["delivery", () => recordBundleDelivery(rt.db, { userId: other, component: "s9", packageId: pkg, artifactCount: 3, evidenceRef: "s9/x", idempotencyKey: key("x") })],
+      ];
+      for (const [name, attempt] of attempts) await assert.rejects(attempt(), ledgerCode("NOT_FOUND"), name);
+      assert.deepEqual(await buckets(other), { a: String(SYNTHETIC_BUNDLE_HOLD), r: "0", h: "0", c: "0" });
+      assert.equal((await getReservation(rt.db, owner, r0.reservationId)).state, "reserved");
+    });
+    await t.test("D06-R10: a guest (no verified profile) cannot hold a wallet, claim a promo or be granted credit, and the runtime role has no purchase path", async () => {
+      const guest = randomUUID();
+      await assert.rejects(ensureWallet(rt.db, guest));
+      await assert.rejects(claimPromo(rt.db, { userId: guest, operationId: "s9-guest", idempotencyKey: key("guest") }));
+      await assert.rejects(grantSyntheticCredits(funder, { userId: guest, grantSourceId: source, sourceRef: "s9-guest-" + randomUUID(), units: 1 }));
+      assert.equal((await admin.query("SELECT count(*)::int AS n FROM vynvori_ledger.wallets WHERE user_id = $1", [guest])).rows[0].n, 0);
+    });
+    await t.test("D06-R11 (partly): fractional amounts are refused before SQL, never rounded: credit units, allocations and vendor USD micros", async () => {
+      const user = await newUser(0);
+      await assert.rejects(grantSyntheticCredits(funder, { userId: user, grantSourceId: source, sourceRef: "s9-frac-" + randomUUID(), units: 1.5 }), ledgerCode("INVALID_INPUT"));
+      const quoteId = `s9-r11-${randomUUID().slice(0, 8)}`;
+      await assert.rejects(issueQuote(rt.db, { userId: user, quoteView: bundleView(quoteId, quoteId + "-v1"), modelRef: "s5-model", allocations: bundleAllocations.map((a, i) => i === 0 ? { ...a, holdUnits: 3.5 } : a), idempotencyKey: key("frac") }));
+      const reconPool = await openAs(vars.ledger_reconciliation_login, 1);
+      try { await assert.rejects(recordVendorCostEvidence(reconPool, { component: "reconciler", operationId: "s9-frac", evidenceKind: "invoice", evidenceRef: "s9-frac", amountUsdMicros: 0.5 }), ledgerCode("INVALID_INPUT")); }
+      finally { await closePool(reconPool); }
+      assert.deepEqual(await buckets(user), { a: "0", r: "0", h: "0", c: "0" });
+    });
+    await t.test("D06-R12 (partly): package fee: a bundle that settles all three operations consumes exactly the frozen charges and returns the rest of each hold", async () => {
+      const user = await newUser(SYNTHETIC_BUNDLE_HOLD);
+      for (const r of (await dispatchedBundle(rt.db, user)).reservations)
+        await settleReservation(rt.db, { userId: user, component: "s9", reservationId: r.reservationId, evidence: settleEv(r.operationId), idempotencyKey: key("fee") });
+      assert.deepEqual(await buckets(user), { a: String(SYNTHETIC_BUNDLE_HOLD - SYNTHETIC_BUNDLE_CHARGE), r: "0", h: "0", c: String(SYNTHETIC_BUNDLE_CHARGE) });
+    });
+
+    // ---- privilege minimality and the checker run after the rows above (the orphan finder caps its report at 100) ----------
+    await t.test("S9-G2: each runtime and definer privilege unit of steps 3 and 4 is necessary: revoked alone, the runtime scenario fails with 42501; granted back, the end state is exact again", async () => {
+      const mine = units.filter(u => u.grantee === "ledger_runtime" || u.grantee.endsWith("_definer"));
+      assert.ok(mine.length >= 50, `${mine.length} units`);
+      const fundRecorded = fundVia(fd.db);
+      for (const u of mine) await withoutUnit(u, async () => runtimeScenario(rt.db, await env!.profile(), fundRecorded), [rt, fd]);
+      assert.deepEqual(await endState(), [HARD_GATE_ROW]);
+      const user = await env!.profile();
+      assert.equal(await runtimeScenario(rt.db, user), "closed", "and the full path works again");
+      assert.deepEqual(await buckets(user), SCENARIO_END);
+    });
+
+    // ---- S9-G3: the checker ----------------------------------------------------------------------------------------------------
+    await t.test("S9-G3: as the checker login the S8 invariant check and the orphan finder run clean (only the synthetic-source finding); each checker unit is necessary; the checker cannot write and has no vendor-cost access; the runtime cannot run the checker", async () => {
+      const checkerPool = await openAs(vars.ledger_checker_login, 1), ck = recording(checkerPool);
+      try {
+        const report = await checkWalletInvariants(ck.db);
+        assert.deepEqual(report.findings.map(f => f.invariant), ["SYNTHETIC_GRANT_SOURCE_REGISTERED"], JSON.stringify(report.findings));
+        const orphans = await findOrphanedReservations(ck.db, { olderThan: new Date(Date.now() + 60_000) });
+        assert.ok(orphans.orphans.length > 0, "the scenario's held operation is reported");
+        assert.deepEqual(ck.codes, []);
+        for (const u of units.filter(x => x.grantee === "ledger_checker"))
+          await withoutUnit(u, async () => { await checkWalletInvariants(ck.db); await findOrphanedReservations(ck.db, { olderThan: new Date() }); }, [ck]);
+        for (const sql of ["INSERT INTO vynvori_ledger.ledger_grant_sources(grant_source_id, kind, label) VALUES (gen_random_uuid(), 'synthetic_test', 'x')", "UPDATE vynvori_ledger.wallets SET user_id = user_id", "SELECT count(*) FROM vynvori_ledger.vendor_cost_evidence", "SELECT count(*) FROM vynvori_ledger.refinement_slots", "SELECT id FROM vynvori_identity.profiles LIMIT 1"])
+          await assert.rejects(checkerPool.query(sql), sqlstate("42501"), sql);
+        rt.codes.length = 0;
+        await assert.rejects(checkWalletInvariants(rt.db), "the runtime role cannot read the grant-source registry, so it cannot run the checker");
+        assert.ok(rt.codes.includes("42501")); rt.codes.length = 0;
+      } finally { await closePool(checkerPool); }
+      assert.deepEqual(await endState(), [HARD_GATE_ROW]);
+    });
+
+    // ---- S9-B4: trigger-context branches ------------------------------------------------------------------------------------------
+    await t.test("S9-B4: every ledger trigger function refuses each wrong context alone: wrong table (TG_RELID / schema), wrong TG_OP, wrong TG_WHEN and wrong TG_LEVEL, with 23000 'unexpected context'", async () => {
+      type Guard = { fn: string; tables: string[]; op: string; when: string; level: string };
+      const fns = rows<{ proname: string; src: string }>(await admin.query("SELECT p.proname::text AS proname, p.prosrc AS src FROM pg_proc p WHERE p.pronamespace = 'vynvori_ledger'::regnamespace AND p.prorettype = 'trigger'::regtype ORDER BY 1"));
+      const attached = async (fn: string) => rows<{ t: string }>(await admin.query("SELECT DISTINCT c.relname::text AS t FROM pg_trigger g JOIN pg_class c ON c.oid = g.tgrelid WHERE g.tgfoid = ('vynvori_ledger.' || $1 || '()')::regprocedure AND NOT g.tgisinternal ORDER BY 1", [fn])).map(r => r.t);
+      const guards: Guard[] = [];
+      for (const { proname, src } of fns) {
+        const head = /IF ([\s\S]*?) THEN\s+RAISE EXCEPTION 'trigger function fired from an unexpected context'/.exec(src)?.[1];
+        assert.ok(head, `${proname} starts with a context guard`);
+        if (proname === "reject_mutation") { guards.push({ fn: proname, tables: await attached(proname), op: "UPDATE", when: "BEFORE", level: "ROW" }); continue; }
+        const tables = [...head.matchAll(/'vynvori_ledger\.([a-z_]+)'::pg_catalog\.regclass/g)].map(m => m[1]!);
+        const one = (name: string) => { const v = new RegExp(`TG_${name} <> '([A-Z]+)'`).exec(head)?.[1]; assert.ok(v, `${proname}: TG_${name}`); return v; };
+        assert.ok(tables.length >= 1, `${proname}: TG_RELID`);
+        for (const x of await attached(proname)) assert.ok(tables.includes(x), `${proname} is attached only to a table its guard names (${x})`);
+        guards.push({ fn: proname, tables, op: one("OP"), when: one("WHEN"), level: one("LEVEL") });
+      }
+      const firstColumn = async (table: string) => (await admin.query("SELECT quote_ident(attname) AS a FROM pg_attribute WHERE attrelid = $1::regclass AND attnum > 0 AND NOT attisdropped ORDER BY attnum LIMIT 1", [table])).rows[0].a as string;
+      const statement = async (table: string, op: string) => op === "INSERT" ? `INSERT INTO ${table} OVERRIDING SYSTEM VALUE SELECT * FROM ${table} LIMIT 1` : op === "UPDATE" ? `UPDATE ${table} SET ${await firstColumn(table)} = ${await firstColumn(table)}` : op === "DELETE" ? `DELETE FROM ${table}` : `TRUNCATE ${table}`;
+      /** One wrong context on the REAL table: every other user trigger disabled and every unique/foreign key dropped, inside a rolled-back transaction. */
+      const probe = async (table: string, fn: string, when: string, op: string, level: string, what: string) => {
+        await admin.query("BEGIN");
+        try {
+          await admin.query(`ALTER TABLE ${table} DISABLE TRIGGER USER`);
+          for (const c of rows<{ conname: string }>(await admin.query("SELECT conname::text AS conname FROM pg_constraint WHERE conrelid = $1::regclass AND contype IN ('p', 'u', 'x', 'f')", [table]))) await admin.query(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${q(c.conname)} CASCADE`);
+          for (const i of rows<{ i: string }>(await admin.query("SELECT indexrelid::regclass::text AS i FROM pg_index WHERE indrelid = $1::regclass AND indisunique", [table]))) await admin.query(`DROP INDEX ${i.i}`);
+          assert.equal((await admin.query(`SELECT 1 FROM ${table} LIMIT 1`)).rowCount, 1, `${table} has a row to fire on (this runs after the scenario)`);
+          await admin.query(`CREATE TRIGGER "0_s9_probe" ${when} ${op} ON ${table} FOR EACH ${level} EXECUTE FUNCTION vynvori_ledger.${fn}()`);
+          await assert.rejects(admin.query(await statement(table, op)), sqlstate("23000", /unexpected context/), `${fn}: ${what}`);
+        } finally { await admin.query("ROLLBACK"); }
+      };
+      let probes = 0;
+      for (const g of guards) {
+        const table = "vynvori_ledger." + g.tables[0]!;
+        const wrongOp = g.op === "INSERT" ? "UPDATE" : "INSERT";
+        await probe(table, g.fn, g.when, wrongOp, g.level, `wrong TG_OP (${wrongOp})`);
+        await probe(table, g.fn, g.when === "BEFORE" ? "AFTER" : "BEFORE", g.op, g.level, "wrong TG_WHEN");
+        await probe(table, g.fn, g.when, g.op, g.level === "ROW" ? "STATEMENT" : "ROW", "wrong TG_LEVEL");
+        await admin.query("BEGIN");
+        try {
+          // Same columns as the real table, different relation (and schema): only TG_RELID / TG_TABLE_SCHEMA is wrong.
+          await admin.query(`CREATE TABLE public.s9_scratch (LIKE ${table})`); await admin.query(`INSERT INTO public.s9_scratch SELECT * FROM ${table} LIMIT 1`);
+          await admin.query(`CREATE TRIGGER "0_s9_probe" ${g.when} ${g.op} ON public.s9_scratch FOR EACH ${g.level} EXECUTE FUNCTION vynvori_ledger.${g.fn}()`);
+          await assert.rejects(admin.query((await statement("public.s9_scratch", g.op)).replace(" OVERRIDING SYSTEM VALUE", "")), sqlstate("23000", /unexpected context/), `${g.fn}: wrong table`);
+        } finally { await admin.query("ROLLBACK"); }
+        probes += 4;
+      }
+      assert.ok(guards.length === fns.length && guards.length >= 25 && probes === 4 * guards.length, `${guards.length} trigger functions, ${probes} probes`);
+      assert.deepEqual(await endState(), [HARD_GATE_ROW], "the probes changed nothing");
+    });
+
+    // ---- S9-B5: break-glass --------------------------------------------------------------------------------------------------------
+    await t.test("S9-B5: break-glass: neither a superuser nor any definer owner can UPDATE a bucket or a state directly; the table owner can only by disabling the named guard in a reviewed transaction", async () => {
+      // [table, correction, a row the correction is shape-valid for]
+      const targets = [
+        ["vynvori_ledger.wallets", "available_units = available_units + 1", "true"], ["vynvori_ledger.credit_reservations", "state = 'released'", "state = 'reserved'"],
+        ["vynvori_ledger.ledger_packages", "state = 'authorized'", "state = 'closed'"], ["vynvori_ledger.refinement_slots", "delivered_version_id = delivered_version_id || '-corrected'", "state = 'used'"],
+      ] as const;
+      for (const [table, set, where] of targets) {
+        assert.equal((await admin.query(`SELECT 1 FROM ${table} WHERE ${where} LIMIT 1`)).rowCount, 1, `${table} has a row (${where})`);
+        await assert.rejects(admin.query(`UPDATE ${table} SET ${set} WHERE ${where}`), sqlstate("23000"), `superuser: ${table}`);
+        for (const d of DEFINERS) {
+          await admin.query("BEGIN");
+          try {
+            await admin.query(`SET LOCAL ROLE ${q(vars[d])}`);
+            await assert.rejects(admin.query(`UPDATE ${table} SET ${set} WHERE ${where}`), (e: unknown) => sqlstate("23000")(e) || sqlstate("42501")(e), `${d} (a definer owner, depth 1): ${table}`);
+          } finally { await admin.query("ROLLBACK"); }
+        }
+        const guard = rows<{ tgname: string }>(await admin.query("SELECT tgname::text AS tgname FROM pg_trigger WHERE tgrelid = $1::regclass AND NOT tgisinternal AND tgtype & 2 <> 0 AND tgtype & 16 <> 0 AND tgname LIKE '%update_guard'", [table]));
+        assert.equal(guard.length, 1, `${table} has one named update guard`);
+        await admin.query("BEGIN");
+        try {
+          await admin.query(`SET LOCAL ROLE ${q(exec)}`);
+          await admin.query(`ALTER TABLE ${table} DISABLE TRIGGER ${q(guard[0]!.tgname)}`);
+          const changed = await admin.query(`UPDATE ${table} SET ${set} WHERE ctid = (SELECT ctid FROM ${table} WHERE ${where} LIMIT 1)`);
+          assert.equal(changed.rowCount, 1, `the table owner, with ${guard[0]!.tgname} disabled, can correct ${table}`);
+        } finally { await admin.query("ROLLBACK"); }
+        assert.equal((await admin.query("SELECT tgenabled FROM pg_trigger WHERE tgrelid = $1::regclass AND tgname = $2", [table, guard[0]!.tgname])).rows[0].tgenabled, "O", "rolled back: the guard is enabled again");
+      }
+      assert.deepEqual(await endState(), [HARD_GATE_ROW]);
+    });
+
+    // ---- S9-G5: the end-state check detects deviations -----------------------------------------------------------------------------
+    await t.test("S9-G5: step 6 reports each deviation: a definer granted to the runtime, an extra privilege, a missing privilege, EXECUTE on a definer, CREATE for a definer, PUBLIC TEMPORARY, an extra identity column, and a dangerous login attribute", async () => {
+      const cases: [string, string, string][] = [
+        ["definer membership", `GRANT ${q(vars.ledger_wallet_definer)} TO ${q(vars.ledger_runtime)}`, `REVOKE ${q(vars.ledger_wallet_definer)} FROM ${q(vars.ledger_runtime)}`],
+        ["extra privilege", `GRANT INSERT ON vynvori_ledger.vendor_cost_evidence TO ${q(vars.ledger_runtime)}`, `REVOKE INSERT ON vynvori_ledger.vendor_cost_evidence FROM ${q(vars.ledger_runtime)}`],
+        ["missing privilege", `REVOKE UPDATE (state) ON vynvori_ledger.credit_reservations FROM ${q(vars.ledger_reservation_definer)}`, `GRANT UPDATE (state) ON vynvori_ledger.credit_reservations TO ${q(vars.ledger_reservation_definer)}`],
+        ["CREATE for a definer", `GRANT CREATE ON SCHEMA vynvori_ledger TO ${q(vars.ledger_slot_definer)}`, `REVOKE CREATE ON SCHEMA vynvori_ledger FROM ${q(vars.ledger_slot_definer)}`],
+        ["PUBLIC TEMPORARY", `GRANT TEMPORARY ON DATABASE ${q(env!.database)} TO PUBLIC`, `REVOKE TEMPORARY ON DATABASE ${q(env!.database)} FROM PUBLIC`],
+      ];
+      for (const [name, change, undo] of cases) {
+        await env!.asExec(change);
+        try { assert.ok((await endState()).some(x => x !== HARD_GATE_ROW), `${name} is reported`); }
+        finally { await env!.asExec(undo); }
+      }
+      await admin.query(`GRANT EXECUTE ON FUNCTION vynvori_ledger.ledger_entries_apply_to_wallet() TO ${q(vars.ledger_runtime)}`); // the executor cannot: it no longer owns it
+      try { assert.ok((await endState()).some(x => /EXECUTE on function vynvori_ledger\.ledger_entries_apply_to_wallet/.test(x)), "EXECUTE on a definer is reported"); }
+      finally { await admin.query(`REVOKE EXECUTE ON FUNCTION vynvori_ledger.ledger_entries_apply_to_wallet() FROM ${q(vars.ledger_runtime)}`); }
+      await admin.query(`GRANT SELECT (created_at) ON vynvori_identity.profiles TO ${q(vars.ledger_runtime)}`);
+      try { assert.ok((await endState()).some(x => x.includes("created_at")), "an identity column beyond id, issuer, subject is reported"); }
+      finally { await admin.query(`REVOKE SELECT (created_at) ON vynvori_identity.profiles FROM ${q(vars.ledger_runtime)}`); }
+      await admin.query(`ALTER ROLE ${q(vars.ledger_checker_login)} BYPASSRLS`);
+      try { assert.ok((await endState()).some(x => x.includes(vars.ledger_checker_login)), "a login holding a ledger role with BYPASSRLS is reported"); }
+      finally { await admin.query(`ALTER ROLE ${q(vars.ledger_checker_login)} NOBYPASSRLS`); }
+      assert.deepEqual(await endState(), [HARD_GATE_ROW]);
+    });
+
+    // ---- S9-G6: undo --------------------------------------------------------------------------------------------------------------
+    await t.test("S9-G6: undo (detach logins, reown_back, drop_roles) returns every ledger, identity and database privilege and every function owner to the pre-proposal snapshot", async () => {
+      for (const [login, role] of [[vars.ledger_runtime_login, vars.ledger_runtime], [vars.ledger_checker_login, vars.ledger_checker], [vars.ledger_reconciliation_login, vars.ledger_reconciliation]] as const)
+        await env!.asExec(`REVOKE ${q(role)} FROM ${q(login)}`);
+      for (const pool of [...pools]) await closePool(pool);
+      await env!.block("reown_back");
+      await env!.block("drop_roles");
+      assert.deepEqual((await admin.query(PRIVILEGE_SNAPSHOT)).rows, before, "exact pre-proposal privileges and owners");
+      assert.deepEqual(rows(await admin.query("SELECT rolname FROM pg_roles WHERE rolname = ANY($1)", [ROLE_VARIABLES.map(v => vars[v])])), []);
+    });
   } finally { await teardown(env, pools); }
 });
