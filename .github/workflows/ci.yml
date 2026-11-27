@@ -343,7 +343,6 @@ jobs:
   browser:
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
-    name: browser (${{ matrix.engine }})
     runs-on: ubuntu-latest
     # One engine per job. Measured with all three in one job (run 41584515832): about 75-105 s of harness per engine
     # plus install and build; 15 min keeps wide headroom.
