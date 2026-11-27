@@ -50,7 +50,7 @@ function useDebounced<T>(value: T, ms: number): T {
 function NumericField({ label, unit, value, error, onApply, onInvalid, onEdit }: Readonly<{ label: string; unit: string; value: number; error: string | null; onApply: (n: number) => void; onInvalid: (text: string) => void; onEdit: () => void }>) {
   const [draft, setDraft] = useState<string | null>(null), errorId = useId();
   const commitDraft = () => {
-    if (draft === null) return; setDraft(null);
+    if (draft === null) { if (error) onEdit(); return; } setDraft(null); // leaving the field without typing clears a stale error
     const n = parseMm(draft);
     if (n === null) onInvalid(`${label}: enter a number.`); else if (n !== value) onApply(n); else onEdit();
   };
@@ -80,6 +80,8 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
   // --- assistive-technology feedback: one polite announcer for editor actions (separate from the visible status line),
   // an inline error per numeric field, and an explicit focus target after any change that removes the focused element.
   const [announcement, setAnnouncement] = useState(""), [fieldError, setFieldError] = useState<{ layerId: string; label: string; text: string } | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a field error belongs to the selection it was raised for
+  useEffect(() => setFieldError(null), [selected]);
   const announceTimer = useRef<ReturnType<typeof setTimeout> | null>(null), rootRef = useRef<HTMLElement | null>(null), pendingFocus = useRef<FocusTarget | null>(null);
   const speak = (text: string) => setAnnouncement(previous => (previous.replace(/ $/, "") === text && !previous.endsWith(" ") ? `${text} ` : text)); // a repeated sentence still changes the text node
   const announce = (text: string) => { if (announceTimer.current) clearTimeout(announceTimer.current); announceTimer.current = null; speak(text); };
@@ -88,10 +90,10 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
   useEffect(() => { // runs after every commit; acts only when an action asked for focus to move
     const target = pendingFocus.current; if (!target) return; pendingFocus.current = null;
     const root = rootRef.current; if (!root) return;
-    const find = (selector: string) => root.querySelector<HTMLElement | SVGElement>(selector);
-    const element = target.kind === "tab" ? find(`#ed-tab-${target.zoneId}`)
-      : target.kind === "action" ? find(`[data-row-id="${target.layerId}"] [data-action="${target.action}"]`)
-      : target.layerId === null ? null : (target.kind === "layer" ? find(`[data-layer-id="${target.layerId}"]`) : null) ?? find(`[data-row-id="${target.layerId}"] .ed-layer-name`);
+    const find = (selector: string) => root.querySelector<HTMLElement | SVGElement>(selector), id = (value: string) => CSS.escape(value);
+    const element = target.kind === "tab" ? find(`#ed-tab-${id(target.zoneId)}`)
+      : target.kind === "action" ? find(`[data-row-id="${id(target.layerId)}"] [data-action="${target.action}"]`)
+      : target.layerId === null ? null : (target.kind === "layer" ? find(`[data-layer-id="${id(target.layerId)}"]`) : null) ?? find(`[data-row-id="${id(target.layerId)}"] .ed-layer-name`);
     (element ?? find("#ed-add-text"))?.focus();
   });
   function switchZone(nextZoneId: string, moveFocus: boolean) {
@@ -99,6 +101,7 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
     announce(`${nextZoneId === "front" ? "Front" : nextZoneId === "back" ? "Back" : nextZoneId} side. ${describeLayerCount(layersOf(scene, nextZoneId).length)}.`);
   }
   function onTabKeyDown(event: React.KeyboardEvent, index: number) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return; // keep browser shortcuts such as Alt+Left (history back)
     const zones = profile.zones, last = zones.length - 1;
     const target = event.key === "ArrowRight" ? (index === last ? 0 : index + 1) : event.key === "ArrowLeft" ? (index === 0 ? last : index - 1) : event.key === "Home" ? 0 : event.key === "End" ? last : null;
     if (target === null) return; event.preventDefault(); switchZone(zones[target]!.zoneId, true);
@@ -266,16 +269,21 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
   const issueSummary = useDebounced(summarizeIssues(issues), ISSUE_SUMMARY_DEBOUNCE_MS);
   const layerName = (layer: EditorLayerV1) => layerTitle(layer, layer.kind === "image" ? assets.get(layer.sourceAssetId)?.name : undefined);
   /** Applies a validated number, skips a no-op (no empty undo step), and says what changed, including side effects such as the locked aspect ratio. */
-  function applyNumber(layer: EditorLayerV1, label: string, unit: string, apply: (n: number) => CompositionSceneV1) {
+  function applyNumber(layer: EditorLayerV1, label: string, unit: string, value: number, read: (layer: EditorLayerV1) => number, apply: (n: number) => CompositionSceneV1) {
     return (n: number) => {
-      setFieldError(null); const next = apply(n); if (sceneKey(next) === sceneKey(scene)) return; edit(next);
-      const changed = layersOf(next, zoneId).find(candidate => candidate.layerId === layer.layerId);
-      announce(changed ? `${label} set to ${n} ${unit}. Now x ${changed.xMm}, y ${changed.yMm}, width ${changed.widthMm}, height ${changed.heightMm} mm, rotation ${changed.rotationDeg}°.` : `${label} set to ${n} ${unit}.`);
+      const next = apply(n);
+      if (sceneKey(next) === sceneKey(scene)) { // refused (for example a width of 0): say so instead of snapping back silently
+        if (Math.abs(n - value) > 0.0005) setFieldError({ layerId: layer.layerId, label, text: `${label}: that value is not accepted.` }); else setFieldError(null);
+        return;
+      }
+      setFieldError(null); edit(next);
+      const changed = layersOf(next, zoneId).find(candidate => candidate.layerId === layer.layerId); // announce what was applied, which can differ from what was typed (clamping, aspect lock)
+      announce(changed ? `${label} set to ${read(changed)} ${unit}. Now x ${changed.xMm}, y ${changed.yMm}, width ${changed.widthMm}, height ${changed.heightMm} mm, rotation ${changed.rotationDeg}°.` : `${label} set to ${n} ${unit}.`);
     };
   }
-  const numeric = (layer: EditorLayerV1, label: string, value: number, apply: (n: number) => CompositionSceneV1, unit = "mm") => (
+  const numeric = (layer: EditorLayerV1, label: string, value: number, read: (layer: EditorLayerV1) => number, apply: (n: number) => CompositionSceneV1, unit = "mm") => (
     <NumericField key={`${layer.layerId}-${label}`} label={label} unit={unit} value={value} error={fieldError && fieldError.layerId === layer.layerId && fieldError.label === label ? fieldError.text : null}
-      onApply={applyNumber(layer, label, unit, apply)} onInvalid={text => setFieldError({ layerId: layer.layerId, label, text })} onEdit={() => setFieldError(null)} />);
+      onApply={applyNumber(layer, label, unit, value, read, apply)} onInvalid={text => setFieldError({ layerId: layer.layerId, label, text })} onEdit={() => setFieldError(null)} />);
 
   return (
     <section ref={rootRef} className="atelier ed" aria-label="Garment composition editor">
@@ -344,14 +352,14 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
             </ol>)}
           {current && (
             <fieldset className="ed-props"><legend>Selected layer</legend>
-              {numeric(current, "X", current.xMm, n => updateLayer(scene, zoneId, current.layerId, { xMm: n }))}{numeric(current, "Y", current.yMm, n => updateLayer(scene, zoneId, current.layerId, { yMm: n }))}
-              {numeric(current, "Width", current.widthMm, n => (current.kind === "image" && aspectLock ? resizeKeepingAspect(scene, zoneId, current.layerId, "widthMm", n) : updateLayer(scene, zoneId, current.layerId, { widthMm: n })))}
-              {numeric(current, "Height", current.heightMm, n => (current.kind === "image" && aspectLock ? resizeKeepingAspect(scene, zoneId, current.layerId, "heightMm", n) : updateLayer(scene, zoneId, current.layerId, { heightMm: n })))}
-              {numeric(current, "Rotation", current.rotationDeg, n => updateLayer(scene, zoneId, current.layerId, { rotationDeg: n }), "°")}
+              {numeric(current, "X", current.xMm, l => l.xMm, n => updateLayer(scene, zoneId, current.layerId, { xMm: n }))}{numeric(current, "Y", current.yMm, l => l.yMm, n => updateLayer(scene, zoneId, current.layerId, { yMm: n }))}
+              {numeric(current, "Width", current.widthMm, l => l.widthMm, n => (current.kind === "image" && aspectLock ? resizeKeepingAspect(scene, zoneId, current.layerId, "widthMm", n) : updateLayer(scene, zoneId, current.layerId, { widthMm: n })))}
+              {numeric(current, "Height", current.heightMm, l => l.heightMm, n => (current.kind === "image" && aspectLock ? resizeKeepingAspect(scene, zoneId, current.layerId, "heightMm", n) : updateLayer(scene, zoneId, current.layerId, { heightMm: n })))}
+              {numeric(current, "Rotation", current.rotationDeg, l => l.rotationDeg, n => updateLayer(scene, zoneId, current.layerId, { rotationDeg: n }), "°")}
               {current.kind === "image" && <label className="ed-check"><input type="checkbox" checked={aspectLock} onChange={e => setAspectLock(e.currentTarget.checked)} /> Lock aspect ratio</label>}
               {current.kind === "text" && (<>
                 <label className="ed-field"><span>Text</span><input value={current.text} maxLength={profile.limits.maxTextChars} onChange={e => patch(current, { text: e.currentTarget.value })} aria-label="Text content" /></label>
-                {numeric(current, "Size", current.fontSizePt, n => updateLayer(scene, zoneId, current.layerId, { fontSizePt: n }), "pt")}
+                {numeric(current, "Size", current.fontSizePt, l => (l.kind === "text" ? l.fontSizePt : 0), n => updateLayer(scene, zoneId, current.layerId, { fontSizePt: n }), "pt")}
                 <label className="ed-field"><span>Colour</span><input type="color" value={current.color} onChange={e => patch(current, { color: e.currentTarget.value })} aria-label="Text colour" /></label>
                 <p className="muted ed-caption">Font: {font.family} · licence {font.licenseVersion}</p></>)}
               <div className="ed-row">
@@ -362,7 +370,8 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
           <section aria-labelledby="ed-checks"><h2 className="ed-h" id="ed-checks">Preview checks</h2>
             <p className="muted">Status: <strong>{preflight.state === "blocked" ? "Blocked — fix the items below" : "Preview only — not approved for print"}</strong></p>
             {/* The summary is the only live text here: the list itself is not announced wholesale on every change. */}
-            <p className="muted ed-issue-summary" role="status" aria-live="polite">{issueSummary}</p>
+            <p className="muted ed-issue-summary">{summarizeIssues(issues)}</p>
+            <div className="ed-sr-only" id="ed-issue-live" role="status" aria-live="polite" aria-atomic="true">{issueSummary}</div>
             <ul className="ed-issues" aria-label={`Preview checks, ${zoneId} side`}>{issues.map((issue, index) => {
               const subject = issue.layerId ? layers.find(layer => layer.layerId === issue.layerId) : undefined;
               return <li key={index} data-severity={issue.severity}>{ISSUE_TEXT[issue.code] ?? issue.code}{subject ? ` (${layerName(subject)})` : ""}</li>;
