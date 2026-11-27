@@ -181,6 +181,7 @@ export function memoryHarness(): StoreHarness {
   return {
     store, async newUser() { return randomUUID(); }, async m1bClaim(draftId, userId) { drafts.get(draftId)!.ownerId = userId; },
     async expireGuest(draftId) { drafts.get(draftId)!.expiresAt = new Date(0); },
+    async bucketCount() { return buckets.size; },
     /** Test-only injection of the `clean -> quarantined` late-detection edge (no store primitive produces it in C3b). */
     async lateQuarantine(compositionId, assetId) {
       const a = assets.get(assetId)!;

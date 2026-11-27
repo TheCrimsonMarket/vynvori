@@ -51,3 +51,8 @@ export const SYNTHETIC_RATE_WINDOW_SECONDS = 60;
 export const SYNTHETIC_RATE_MAX = 3;
 /** Synthetic scanner evidence: never a real vendor, engine or signature set (founder ruling QC: no scanner is chosen). */
 export const SYNTHETIC_SCAN_EVIDENCE = Object.freeze({ scannerId: "synthetic-scanner", engineVersion: "synthetic-engine-0", definitionsVersion: "synthetic-defs-0", evidenceRef: "evidence://synthetic/clean" });
+
+/** SYNTHETIC C4 store-level quota and live-cap fixtures (ADR-0022). Test fixtures only; no founder value exists for any of them. */
+export const SYNTHETIC_LIVE_CAP = 3;
+export const SYNTHETIC_QUOTA_MAX_ASSETS = 3;
+export const SYNTHETIC_QUOTA_BYTES = 1000;
