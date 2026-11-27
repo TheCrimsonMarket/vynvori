@@ -97,7 +97,9 @@ test("ledger quotes: DDL + store behaviour in disposable PostgreSQL", { skip: le
       await issueQuote(pool, { userId: bundleUser, quoteView: bundleView(bundleId, bundleId + "-v1"), modelRef: "m", allocations: bundleAllocations, idempotencyKey: "immutable-issue-2" });
       await assert.rejects(client.query("UPDATE vynvori_ledger.ledger_quote_allocations SET hold_units = hold_units"), sqlCode("23000"));
       await assert.rejects(client.query("DELETE FROM vynvori_ledger.ledger_quote_allocations"), sqlCode("23000"));
-      await assert.rejects(client.query("TRUNCATE vynvori_ledger.ledger_quote_allocations"), sqlCode("23000"));
+      // Since S5 (0005) credit_reservations references the allocations, so (as above) CASCADE is needed to reach the guard.
+      await assert.rejects(client.query("TRUNCATE vynvori_ledger.ledger_quote_allocations"), sqlCode("0A000"), "FK-referenced: PostgreSQL refuses first");
+      await assert.rejects(client.query("TRUNCATE vynvori_ledger.ledger_quote_allocations CASCADE"), sqlCode("23000"));
 
       // TRUNCATE ... CASCADE on the identity table must still reach the live append-only triggers rather than succeed silently.
       await assert.rejects(client.query("TRUNCATE vynvori_identity.profiles CASCADE"), sqlCode("23000"));
