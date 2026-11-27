@@ -21,7 +21,7 @@ The remaining keys (download-grant TTL, scan timeout and lease, live-guest cap, 
 
 **D3 — Scan lifecycle (C3a to C5).** Append-only `asset_scan_events` (current status is the latest `seq`; no event means `pending`), enforced edges (`pending→clean|quarantined|unknown`, `unknown→pending`, `clean→quarantined`; `quarantined` is terminal and never auto-released), scan attempts as reservations (one open attempt per asset, committed before the port is called, expired leases closed only by explicit request, never an uncontrolled billable retry), per-asset advisory serialization, no result sharing across compositions. `ArtifactScanPort` is declared as **types only** in `packages/contracts/src/composition-port.ts` by C2: `ArtifactScanStatus`, `ArtifactScanRequest`, `ArtifactScanResult`, `ArtifactScanPort`. Every outcome other than a well-formed `clean` or `infected` verdict for the same bytes (error, timeout, throw, malformed, wrong hash) maps to `unknown`. The default wiring will be `unconfiguredScanPort` (always an error), so uploads stay disabled until a founder-chosen scanner is wired. **No scanner vendor, binary, SDK or service is chosen or vendored (ruling QC).**
 
-**D4 — Download access (C6).** Short-lived, principal-bound, single-use (founder default) application grants stored as token hashes; mint requires a `clean` asset; redeem validates, fetches and verifies bytes, consumes in one atomic statement repeating every condition, and only then sends; prefetch never redeems; attachment disposition, `nosniff`, sandbox CSP, `no-store`; unchanged original bytes; no wallet, entitlement or payment coupling. Details are appended by C6.
+**D4 — Download access (C6).** Short-lived, principal-bound, single-use (founder default) application grants stored as token hashes; mint requires a `clean` asset; redeem validates, fetches and verifies bytes, consumes in one atomic statement repeating every condition, and only then sends; prefetch never redeems; attachment disposition, `nosniff`, sandbox CSP, `no-store`; unchanged original bytes; no wallet, entitlement or payment coupling. Details: section "C6" below.
 
 **D5 — Fail-closed choke points (C3b to C6).** Inline `readAsset`, download mint and redeem, and `freeze` require `clean` (freeze checks inside its transaction, including the idempotent re-point branch). Draft saves may reference a `pending` asset; preflight reports `ASSET_NOT_SCANNED`. Browser pixels from bytes the user's device already holds (local preview) are allowed (ruling QB). **Downstream contract note for M4 and M5:** a frozen version that pins an asset later found `quarantined` must be refused for quote, proof and print by those milestones. M3 cannot enforce it.
 
@@ -354,3 +354,134 @@ No schema change: revert the PR. `recordLateDetection` is additive and has no ca
 - `apps/web/tests/editor-scan.test.ts` covers the editor helpers and the canvas binding.
 - The scan double (`syntheticScanPort`) and every number are `SYNTHETIC_*` fixtures in `tests/`.
 - No new database file: the D8 budget (40 connections, five files, pool caps 18 and 4) is unchanged.
+
+## C6 — Download grants (mint, redeem, editor control)
+
+Implements D4 and the C6 half of D5 on the C3b grant primitives. **No migration** (`asset_download_grants` exists since `0002`), no new dependency, no new environment variable (the grant TTL is row 8, `M3_LIMIT_DOWNLOAD_GRANT_TTL_SECONDS`, and the two `*_DOWNLOAD_GRANT` rate pairs already exist), no flag change; `assets.production_uploads` stays `false`. Grants are **single-use** (the founder's safe default recorded in the registry, 2026-11-03), and the app-issued grant stands in for ACC-07's "expired presigned URL" (Q9 default: "grant, not presigned"). Every number comes from the existing `M3_LIMIT_*` keys; this section supplies none.
+
+### Mint (`POST /api/v1/compositions/:id/assets/:assetId/download-grants`)
+
+- Order: ids and credentials (same origin; CSRF double submit for sessions), **access in SQL** (`authorize`), availability (`DOWNLOAD_UNAVAILABLE`, `503`, when the deployment has no storage), configuration (`LIMITS_NOT_CONFIGURED` when the TTL is unset), **charge `*_DOWNLOAD_GRANT`** (`admit("downloadGrant")`, the C4 bucket), then the body check, where any byte is `413` (no client-chosen expiry or anything else), then the mint. A caller without access gets the uniform `404`, creates no bucket row and learns nothing about configuration.
+- The store re-checks access and `clean` under the asset lock, binds the grant to the principal (SHA-256 of the verified user id, or the guest capability hash) and stores only `SHA-256(token)`. The token is 32 random bytes in base64url. A non-clean asset answers `409 COMPOSITION_ASSET_NOT_AVAILABLE`, reachable only after the ownership predicate, so it is no cross-tenant oracle. Download grants are never issued for `pending`, `unknown` or `quarantined` artwork.
+- The answer is `201 { downloadUrl, expiresAt }`. `downloadUrl` is the relative path `/api/v1/compositions/:id/assets/:assetId/download?grant=<token>`; the token appears there and nowhere else. A grant can be minted again (each mint is charged).
+
+### Redeem (`GET /api/v1/compositions/:id/assets/:assetId/download?grant=<token>`)
+
+1. Standard authentication. No credentials, a malformed cookie, an invalid session (never downgraded to guest) or a guest cookie for another draft id: `401 AUTH_REQUIRED`, before any lookup.
+2. Request context, before any lookup. `Sec-Fetch-Site` other than `same-origin`, `none` or absent is `403` (defence in depth; the grant is principal-bound in any case). A method other than `GET` (Next answers `HEAD` through the GET handler) and a speculative request (`Sec-Purpose`, `Purpose`, `X-Moz` or `X-Purpose` naming prefetch or prerender) are the uniform `404` and never spend a grant. So is a missing or repeated `grant` parameter.
+3. Access in SQL (`authorize`), then availability (`DOWNLOAD_UNAVAILABLE` without storage).
+4. Read-only validation of every condition (`validateDownloadGrant`: token hash, principal, composition, asset, unexpired, unredeemed, access predicate, latest scan status `clean`). Then the asset row, which must be `clean`.
+5. Fetch the object and verify its size and SHA-256 **before** anything is consumed. A storage failure or mismatched bytes answer `503 STORAGE_UNAVAILABLE` and the grant stays spendable.
+6. Consume with the one atomic C3b statement whose `WHERE` repeats every condition of step 4, under the asset lock. A different valid principal presenting a leaked token, a late quarantine between steps 4 and 6, and every concurrent loser get `null`, which is the uniform `404`. Only the winner gets the bytes.
+7. The unchanged original: `Content-Type` of the stored (sniffed) type, `Content-Length`, `Content-Disposition: attachment; filename="original-<sha12>.<png|jpg|webp>"` (server-generated, from a three-entry map; the user's filename is never stored or echoed), `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, `Cache-Control: private, no-store, max-age=0`, `Referrer-Policy: no-referrer`, `Cross-Origin-Resource-Policy: same-origin`. The response is built from the fetched bytes without a second copy.
+
+Every authenticated-but-not-entitled case (absent, foreign, expired, redeemed, wrong principal, claimed guest, expired guest, non-clean, unknown or malformed token, wrong asset, speculative, `HEAD`) has the identical `404` body apart from its correlation id, and no error body carries the token. There is no wallet, entitlement, ledger, payment or Medusa check on this path (doc 06: originals are never gated behind export payment); a static test asserts that none of the files on the path imports such a module, that only the service names the grant primitives, that the consume comes after the byte fetch, and that nothing on the path logs.
+
+### Editor (`apps/web/src/components/editor`)
+
+A selected image layer whose uploaded asset the server reports `clean` offers **Download original** (`canDownloadOriginal`). One press mints one grant. The plan's wording was "navigates programmatically"; the security review showed that a refused redeem (expired grant, late safety block, storage fault) would then replace the editor tab with a JSON error page and lose unsaved edits. So the editor **redeems the grant with its own same-origin `fetch`** (allowed in `editor.tsx` by the fetch policy, constraint 10), accepts the response only with the exact server filename shape (`downloadFileName`), and hands the bytes to the browser through a detached, never-rendered `<a download>` on a revoked-after-use object URL. The navigation target is accepted only as this composition's and asset's exact download path with one well-formed token (`downloadPathFrom`), so a malformed answer cannot send the browser elsewhere. There is no rendered link and no `<Link>`, so nothing can prefetch a grant. Outcomes are announced in the polite status line; no sentence names a token, a grant or an internal reason.
+
+### Security review (C6)
+
+The `security-reviewer` pass on the diff found no CRITICAL or HIGH issue. Dispositions:
+
+- **Fixed (MEDIUM): a failed redeem navigated the editor away.** Replaced by the editor's own fetch, above. Static test.
+- **Fixed (LOW): `HEAD` spent the grant.** Redeem now refuses every method but `GET` with the uniform `404`. Tested.
+- **Fixed (LOW, efficiency): the redeem response copied the original a second time.** The response body is the fetched bytes.
+- **Accepted (LOW): the token is in the query string.** Platform access logs, proxies and browser history may record it. Mitigations: single use, principal binding, the typed short TTL, `Referrer-Policy: no-referrer`, no application logging. Any log sink that keeps query strings should redact `grant=` (an operational note for B2/staging, not code in this step).
+- **Accepted (LOW): redeem has no bucket of its own.** One principal holding one valid grant can make N concurrent requests, each of which fetches and hashes the object before one wins. N is bounded by the principal's own requests and the object size by the upload limit; adding a redeem limiter would need new founder values (new `M3_LIMIT_*` keys), which this step may not invent.
+- **Accepted (INFO): grant rows accumulate.** Expired and redeemed rows are not deleted (D4: operator-run prune, none in W1). Growth is bounded by the mint bucket.
+- **Accepted (INFO): mint reveals `clean` to the principal** (`409`), which the editor already shows; redeem answers `404` for every non-clean asset.
+
+### Limits and open items
+
+- **C1b limitation (ruling QA).** No server-backed browser journey exists, so the download control, its announcements and the browser's handling of the object-URL download are not reachable with every flag off. They are covered by handler and PostgreSQL tests and by the editor helper and static tests; the axe sweep of the control belongs to C7b.
+- **Q9** stays as recorded: ACC-07's row note says "grant, not presigned". The acceptance matrix is not edited here.
+- The coordinator relayed, on the founder's delegation, that a timed-out scan should be treated as quarantined pending human reconciliation before any re-check. That changes the C5 scan path, not this step. C6 needs no change for it, because grants issue only for `clean`; the C5 change is left for a separate step.
+
+### Rollback
+
+No schema change: revert the PR. Grants already minted stay in `asset_download_grants` (append-only by trigger) and expire by their own TTL; with the PR reverted no route can redeem them. Downloads are closed in every deployment today in any case: no storage is wired unless uploads are enabled, and uploads need a scanner that does not exist.
+
+### Tests and connection budget
+
+- `composition-download-suite.ts` runs one scenario list on the in-memory port (`composition.test.ts`) and on PostgreSQL (`composition-pg.test.ts`, `db-integration`, the same single 4-client pool): owner and guest happy paths with byte and SHA-256 equality and every header; second redeem; expired; unknown, malformed, padded, repeated and missing tokens; wrong asset; a different valid session presenting the owner's token (grant left unspent, then redeemed by its owner); claimed and expired guests; pending and quarantined mints; late quarantine after mint; unauthenticated `401`; prefetch variants, cross-site and same-site, `HEAD`; storage failure and corrupted bytes leaving the grant spendable; four concurrent redeems with one winner; mint closed without TTL or storage, after access and without charging; mint rate limits and the closed policy for guest and owner; body refusal; origin and CSRF guards.
+- `composition-download.test.ts`: the TTL resolver and the static gates (no payment coupling, only the service names grant primitives, consume after fetch, no logging, route files).
+- `apps/web/tests/editor-download.test.ts` (helpers and static checks) and the C6 case in `composition-config.test.ts`.
+- Every number is a `SYNTHETIC_*` fixture in `tests/`. No new database file: the D8 budget (40 connections, five files, pool caps 18 and 4) is unchanged.
+
+## C6 follow-up — Download rate limit and link-code log stripping (founder decisions 2026-11-27)
+
+The founder answered the two C6 open questions on 2026-11-27: downloads should be rate limited, configurable so the limit can scale later ("at the beginning traffic would be small so we can be generous while making sure nobody can spam the system"), and logs should strip the link code. **No migration, no new environment variable, no contracts change, no flag change.**
+
+### Rate limit: every redeem attempt is charged to the existing `*_DOWNLOAD_GRANT` bucket
+
+- A separate redeem operation would need a new operation name. The `0002` CHECK on `rate_limit_buckets.bucket_key` lists the ten operations by name, so a new one needs migration `0003` (a registry allocation), two new `M3_LIMIT_*` keys in the `.env.example` shared lane, and an edit to `RateLimitOperation` in `packages/contracts`. All of that sits outside this step's lanes.
+- Instead, **redeem charges the same `GUEST_DOWNLOAD_GRANT` / `OWNER_DOWNLOAD_GRANT` bucket as mint**, through the C4 `admit("downloadGrant")` path. A download therefore costs two tokens, one for the mint and one for the redeem. The limit scales with the four existing keys (rows 20, 21, 28 and 29 of the values table) and needs no code change.
+- Order on redeem: ids and credentials (`401`), method, `Sec-Fetch-Site`, speculative request, no query string and a token header present (uniform `404`), **access in SQL**, availability, **charge**, then the grant lookup, the object fetch and the consume. A caller without access is never charged and creates no bucket row. Every redeem attempt by an entitled caller is charged, including one with a wrong token, so guessing is bounded too. A limited redeem answers `429` with `Retry-After` and does not touch the grant. An unset policy closes redeem (`503 LIMITS_NOT_CONFIGURED`), just as it closes mint.
+- Separate redeem keys remain possible later through a coordinator-owned PR (migration `0003` plus `.env.example`) if the founder wants mint and redeem to be tuned independently.
+
+### Values chosen under the founder's delegation (2026-11-27)
+
+The founder delegated the numbers ("Configure the values based on that"). These are the values to set in each deployment's environment. They are **not** code defaults: production code still has no default, and an unset key still closes downloads. `.env.example` keeps commented key names only.
+
+| Key | Value | Why |
+|---|---|---|
+| `M3_LIMIT_DOWNLOAD_GRANT_TTL_SECONDS` | `120` | The editor redeems in the same click, so two minutes covers a slow connection. A leaked grant dies quickly. |
+| `M3_LIMIT_RATE_GUEST_DOWNLOAD_GRANT_WINDOW_SECONDS` | `3600` | A one-hour window. |
+| `M3_LIMIT_RATE_GUEST_DOWNLOAD_GRANT_MAX` | `120` | 60 downloads per hour per guest draft (each download is a mint plus a redeem). |
+| `M3_LIMIT_RATE_OWNER_DOWNLOAD_GRANT_WINDOW_SECONDS` | `3600` | A one-hour window. |
+| `M3_LIMIT_RATE_OWNER_DOWNLOAD_GRANT_MAX` | `240` | 120 downloads per hour per signed-in account. |
+
+A person rarely downloads the same original more than a few times, so these values are generous. A script is held to 60 or 120 downloads an hour per subject. More guest subjects cost a guest creation each, which `GUEST_CREATE_GLOBAL` and the live-draft cap bound. Egress per subject is at most that count times the image size limit. To scale, raise the `_MAX` values or shorten the window in the environment; no code change is needed. The other 26 limit values are still unsupplied, so uploads, and with them downloads, stay closed.
+
+### The link code never appears in a URL
+
+- In-repository code logs nothing on this path (C6 static test). The remaining exposure was the platform's own request logs, proxies and browser history, which record query strings and which no thread may configure (cloud infrastructure).
+- So the token **no longer travels in a URL at all**. The mint answers `201 { downloadUrl, grantToken, expiresAt }`, where `downloadUrl` is the bare `/api/v1/compositions/:id/assets/:assetId/download`. The editor already redeems with its own same-origin `fetch` (C6), so it sends the token in the `x-vynvori-download-grant` request header.
+- Redeem **refuses any query string** with the uniform `404` and does not charge or spend anything, so the earlier `?grant=` form can never redeem. A repeated header arrives comma-joined and fails the token check.
+- Because the request needs a custom header, it can only come from a same-origin script. A cross-origin page cannot send it without a CORS preflight that the app never grants. `Sec-Fetch-Site: none` (address bar) is now refused as well, since such a request could not carry the header anyway.
+- `Referrer-Policy: no-referrer` and `no-store` are unchanged.
+
+### Security re-review (C6 follow-up)
+
+The `security-reviewer` pass on this change found no CRITICAL, HIGH or MEDIUM issue. Dispositions:
+
+- **Fixed (LOW): a malformed token was charged.** The token's shape (43 base64url characters) is now checked before the charge, using no stored data, so it is no oracle. A well-formed but wrong token is still charged, which bounds guessing. Tested.
+- **Accepted (LOW): one shared budget.** Failed redeems (wrong, expired or repeated tokens) use the same bucket as mints. For an owner the bucket covers all of their compositions; for a guest, the one draft. A client stuck in a retry loop can therefore lock itself out of minting for the window. Only the entitled principal can do this, so a third party cannot. The editor never retries automatically, and the values above leave room for many retries.
+- **Operational note (LOW):** standard access logs record neither headers nor bodies. If a platform, APM or error tool is ever set to capture them, add the `x-vynvori-download-grant` header and the `grantToken` field to its redaction list.
+- The C6 finding "N concurrent redeems each fetch the object" is now bounded by the per-redeem charge.
+
+### Rollback
+
+Revert the PR. The C6 behaviour returns: redeem is no longer charged, and the token travels in `?grant=`. No data changes.
+
+### Tests
+
+- `composition-download-suite.ts` (in-memory and PostgreSQL):
+  - every redeem goes through the header;
+  - a token in the query string, or any other query, is refused and leaves the grant spendable;
+  - guest and owner redeems charge `*_DOWNLOAD_GRANT`, including wrong tokens; mint and redeem share one budget;
+  - a limited redeem answers `429` and leaves the grant spendable;
+  - callers without access are never charged;
+  - an unset policy closes redeem;
+  - `Sec-Fetch-Site: none` is `403`.
+- `composition-download.test.ts`: static, no token is ever put in a URL.
+- `editor-download.test.ts`: `downloadTargetFrom` accepts only the bare route plus a well-formed token, and the editor sends the token in the header and never in a URL.
+- No new database file: the D8 budget is unchanged.
+
+## Founder decisions recorded 2026-11-28 (C4, C5, C6)
+
+Decision record only. The sections above keep their original wording; where they differ, this section governs. Registry entries: decisions log and hard-gates table in [ORCHESTRATION-REGISTRY.md](ORCHESTRATION-REGISTRY.md). No code, migration, dependency or flag changes with this record.
+
+| Step | Question | Decision | Decided by |
+|---|---|---|---|
+| C4 | Two charges beyond the plan's wording | Creating an owned composition (`POST /compositions` with a session) charges `OWNER_WRITE`. `claim` charges `OWNER_WRITE` to the verified user after the session check and before the M1b `claimGuest` call. The store and contracts edits these needed stay in scope of #50. | founder |
+| C5 | Late detection (`clean → quarantined`): trigger and who pays | Re-scan runs when the scanner engine or its signature policy changes, and before print QA. The platform pays; a user's credits are never charged. Build it when a scanner is chosen. | coordinator, delegated |
+| C5 | Recovery after a mid-scan claim costs two `*_RESCAN` tokens | Two "Check again" taps are acceptable for W1. | coordinator, delegated |
+| C5 | Hand-written result parser instead of Zod | Acceptable. Move to Zod later through the dependency lane (commerce has no zod dependency). | coordinator, delegated |
+| C5 | Timed-out scan | A `scan_timeout` is an unknown outcome: quarantine, and a human reconciles before any re-check (AGENTS rule 7). **Not implemented in #55**, where the next explicit rescan is a new call. It needs its own step before uploads are enabled, and the scanner-choice step inherits the point that a port ignoring the abort signal may still be running or billing. | coordinator, delegated |
+| C6 | Download redeem rate limit | The redeem route gets a rate limit that is **configurable**, so it can scale later. Early values are generous because traffic starts small, while still stopping anyone from spamming the system. **Done in [#59](https://github.com/smallhingelabs/vynvori/pull/59)** (merged at `b72b972`): every redeem charges the existing `GUEST_DOWNLOAD_GRANT` and `OWNER_DOWNLOAD_GRANT` buckets, shared with mint, so a download costs two tokens; values are in the "C6 follow-up" section above and live in each deployment's environment, not as code defaults. | founder; values chosen in the follow-up under that direction |
+| C6 | Log redaction of the link code | Logs must not carry the download link code. **Done in #59** by keeping the code out of the URL: the mint response returns `grantToken`, the editor sends it in the `x-vynvori-download-grant` header, and redeem refuses any query string with the uniform `404`. No platform log, proxy, browser history entry or Referer can hold the code. If an APM or error tool is ever set to capture headers or bodies, it must redact `x-vynvori-download-grant` and `grantToken`. | founder |
+
+The founder's C6 direction was given in the project chat on 2026-11-28 (Asia/Dhaka) in reply to the two open questions on [#56](https://github.com/smallhingelabs/vynvori/pull/56), which merged at 20:35Z (`f9daf00`) without either. Both were answered by [#59](https://github.com/smallhingelabs/vynvori/pull/59) (C6 follow-up, `b72b972`, 20:52Z).

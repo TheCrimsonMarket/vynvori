@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { compositionHttpHandlers, compositionService, compositionAssetStorage, isScanPortConfigured, parseCompositionLimits, type CompositionConfig, resolveApiLimits, resolveGuestCreateLimits, resolveLiveGuestDraftsMax, resolveRatePolicies, resolveScanLimits, resolveUploadLimits, unconfiguredScanPort } from "@vynvori/commerce/composition";
+import { compositionHttpHandlers, compositionService, compositionAssetStorage, isScanPortConfigured, parseCompositionLimits, type CompositionConfig, resolveApiLimits, resolveDownloadGrantTtlMs, resolveGuestCreateLimits, resolveLiveGuestDraftsMax, resolveRatePolicies, resolveScanLimits, resolveUploadLimits, unconfiguredScanPort } from "@vynvori/commerce/composition";
 import { compositionStore } from "@vynvori/db/composition";
 import { getIdentityRuntime } from "./auth-runtime";
 import { identitySettings } from "./identity-settings";
@@ -58,6 +58,7 @@ export function serviceConfigFor(env: Env, uploadsEnabled: boolean): Composition
     maxAssetsPerComposition: uploads?.maxAssetsPerComposition, maxBytesPerComposition: uploads?.maxBytesPerComposition,
     rate: resolveRatePolicies(parsed), liveGuestDraftsMax: resolveLiveGuestDraftsMax(parsed),
     scanPort: scanPortFor(env), scanTimeoutMs: scan?.timeoutMs, scanLeaseMs: scan?.leaseMs,
+    downloadGrantTtlMs: resolveDownloadGrantTtlMs(parsed),
   });
 }
 
