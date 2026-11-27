@@ -13,7 +13,7 @@ import {
 /**
  * M7 S7 refinement slots, bundle-package transitions and closure (ADR-0021 D9, S7 addendum). Library only: nothing under apps/
  * imports it (static test). Writes only vynvori_ledger.ledger_package_events and refinement_slot_events (the two insert-only event
- * tables; package and slot STATE is then written by the 0007 SECURITY DEFINER functions, never from TypeScript) and never touches
+ * tables; package and slot STATE is then written by the 0007 definer-rights functions, never from TypeScript) and never touches
  * Medusa, a wallet bucket or a ledger entry: refinements and package transitions create no ledger rows. No price, credit cost,
  * package size, hold duration, expiry or cut-off lives here; there is no clock anywhere in this module. Every function is a ledger
  * COMMAND through runLedgerCommand, so it takes the user's wallet row FOR UPDATE first (A4), then the package, then its slots.

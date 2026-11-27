@@ -9,6 +9,7 @@ import * as ledgerMigrations from "../src/ledger-migrations";
 import * as ledgerQuotes from "../src/ledger-quotes";
 import * as ledgerPromo from "../src/ledger-promo";
 import * as ledgerReservations from "../src/ledger-reservations";
+import * as ledgerEntitlements from "../src/ledger-entitlements";
 import { authorizeQuote, recordWorkflowRef, releaseReservation } from "../src/ledger-reservations";
 import { issueQuote, renewQuote } from "../src/ledger-quotes";
 import { dropLedger, freshLedger, ledgerTarget, registerSyntheticGrantSource, syntheticProfileWithWallet, grantSyntheticCredits } from "./ledger-fixture";
@@ -25,7 +26,7 @@ function walk(dir: string, out: string[] = []): string[] {
   }
   return out;
 }
-const ledgerSources = new Set(["packages/db/src/ledger-core.ts", "packages/db/src/ledger-migrations.ts", "packages/db/src/ledger-quotes.ts", "packages/db/src/ledger-promo.ts", "packages/db/src/ledger-reservations.ts"]);
+const ledgerSources = new Set(["packages/db/src/ledger-core.ts", "packages/db/src/ledger-migrations.ts", "packages/db/src/ledger-quotes.ts", "packages/db/src/ledger-promo.ts", "packages/db/src/ledger-reservations.ts", "packages/db/src/ledger-entitlements.ts"]);
 const files = ["apps", "packages", "services", "scripts"].flatMap(dir => { try { return walk(join(root, dir)); } catch { return []; } });
 
 test("no app or non-test module imports the ledger (D13)", () => {
@@ -40,7 +41,7 @@ test("no app or non-test module imports the ledger (D13)", () => {
 });
 
 test("packages/db/src exports no numeric constants and nothing that mints or registers credits", () => {
-  for (const [name, module] of Object.entries({ ledgerCore, ledgerMigrations, ledgerQuotes, ledgerPromo, ledgerReservations })) {
+  for (const [name, module] of Object.entries({ ledgerCore, ledgerMigrations, ledgerQuotes, ledgerPromo, ledgerReservations, ledgerEntitlements })) {
     for (const [key, value] of Object.entries(module)) {
       assert.ok(typeof value !== "number" && typeof value !== "bigint", `${name}.${key} must not be a numeric constant`);
       assert.doesNotMatch(key, /mint|synthetic|testing|register.*source|price|rate|package/i, `${name}.${key}`);
@@ -66,8 +67,13 @@ test("ledger-reservations exposes exactly the reviewed API (S5; no settle, hold,
   assert.deepEqual(Object.keys(ledgerReservations).sort(), ["authorizeQuote", "getReservation", "recordWorkflowRef", "releaseReservation"]);
 });
 
+test("ledger-entitlements exposes exactly the reviewed API (S7: slot and bundle-transition commands; no grant, settle, hold or credit-moving export)", () => {
+  assert.deepEqual(Object.keys(ledgerEntitlements).sort(), ["beginBundleClosure", "closeBundleWithForfeiture", "consumeRefinementSlot", "getBundleState", "markRefinementPending", "markRefinementUnknown", "openRefinements", "recordBundleDelivery", "reopenBundleAfterUnchargedFinal", "restoreRefinementSlot", "skipRefinementSlot"]);
+});
+
 // ADR-0021 S3 addendum A4: BINDING for every future step. All command kinds implemented anywhere under packages/db/src.
-const KNOWN_LEDGER_COMMAND_KINDS = ["grant_credits", "quote_issue", "quote_renew", "promo_claim", "promo_outcome", "reservation_authorize", "reservation_dispatch", "reservation_release"];
+const KNOWN_LEDGER_COMMAND_KINDS = ["grant_credits", "quote_issue", "quote_renew", "promo_claim", "promo_outcome", "reservation_authorize", "reservation_dispatch", "reservation_release",
+  "refinement_skip", "refinement_restore", "refinement_pending", "refinement_unknown", "refinement_consume", "bundle_record_delivery", "bundle_open_refinements", "bundle_begin_closure", "bundle_close", "bundle_reopen"];
 const dbSrcFiles = () => readdirSync(join(root, "packages/db/src")).filter(f => f.endsWith(".ts"));
 
 test("ledger-promo exposes exactly the reviewed API (S4; a new export must be added here deliberately)", () => {
@@ -108,7 +114,22 @@ test("A4(3) for S5: INSERT INTO the authorization, package and reservation table
   }
 });
 
-test("A4(1): every ledger command locks the wallet row FOR UPDATE before touching any other ledger table", { skip: ledgerTarget.skip }, async () => {
+test("A4(3) for S7: INSERT INTO the package-event and slot-event tables appears only in ledger-entitlements.ts, and no TypeScript anywhere updates a package or slot", () => {
+  const insert = /INSERT\s+INTO\s+\S*(?:ledger_package_events|refinement_slot_events|refinement_slots)\b/i, update = /UPDATE\s+\S*(?:ledger_packages|refinement_slots|ledger_package_events|refinement_slot_events)\b/i;
+  for (const file of dbSrcFiles()) {
+    const text = readFileSync(join(root, "packages/db/src", file), "utf8");
+    if (file === "ledger-entitlements.ts") {
+      assert.deepEqual([...text.matchAll(/INSERT\s+INTO\s+\S*?(ledger_package_events|refinement_slot_events|refinement_slots)\b/gi)].map(m => m[1]), ["refinement_slot_events", "ledger_package_events"], "only the two insert-only event tables are written; state and the slot rows are written by the 0007 definers");
+      continue;
+    }
+    assert.doesNotMatch(text, insert, file);
+  }
+  for (const file of dbSrcFiles()) assert.doesNotMatch(readFileSync(join(root, "packages/db/src", file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, ""), update, `${file} writes no package or slot state`);
+  const entitlements = readFileSync(join(root, "packages/db/src/ledger-entitlements.ts"), "utf8");
+  assert.doesNotMatch(entitlements, /(INSERT\s+INTO|UPDATE)\s+\S*(ledger_entries|wallets|credit_reservations)\b|appendGrantEntry/i, "refinements and package transitions write no ledger entry, no wallet bucket and no reservation");
+});
+
+test("A4(1): every ledger command locks the wallet row FOR UPDATE before touching any other ledger table",{ skip: ledgerTarget.skip }, async () => {
   assert.ok(ledgerTarget.url, "CI_REQUIRE_PG_TESTS=1 requires M7_TEST_POSTGRES_URL or M2_CREATIVE_DATABASE_URL");
   const client = await freshLedger("isolation");
   try {
