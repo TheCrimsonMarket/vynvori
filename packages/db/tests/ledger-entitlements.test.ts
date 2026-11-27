@@ -463,7 +463,7 @@ test("ledger entitlements: package transitions, refinement slots and closure in 
       await probe("begin closure with an unknown refinement", () => begin(p), /pending or unknown/);
       // the closing notice must be the disclosed one; a quote without a notice can never close
       const c = await opened(); await beginExplicit(c);
-      const close = async (b: B, notice: string, cause = "explicit_close", final?: string) => pkgEv({ user: b.user, packageId: b.packageId, command: await rawCommand(b.user, "bundle_close"), from: "closure_pending", to: "closed", cause, notice, final });
+      const close = async (b: B, notice: string) => pkgEv({ user: b.user, packageId: b.packageId, command: await rawCommand(b.user, "bundle_close"), from: "closure_pending", to: "closed", cause: "explicit_close", notice });
       await probe("close under a notice the customer was not shown", () => close(c, "rcn-other"), /closure notice/);
       const none = await opened(null); await beginExplicit(none);
       await probe("close a package whose quote disclosed no notice", () => close(none, NOTICE), /closure notice/);
