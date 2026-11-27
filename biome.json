@@ -1,0 +1,109 @@
+{
+	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+	"vcs": { "enabled": false },
+	"files": {
+		"ignoreUnknown": true,
+		"includes": [
+			"**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+			"!**/node_modules",
+			"!**/.next",
+			"!**/.medusa",
+			"!**/next-env.d.ts",
+			"!design",
+			"!packages/db/migrations"
+		]
+	},
+	"formatter": { "enabled": false },
+	"assist": { "enabled": false },
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "none",
+			"complexity": {
+				"noBannedTypes": "error",
+				"noUselessThisAlias": "error",
+				"noUselessTypeConstraint": "error"
+			},
+			"correctness": {
+				"noBeforeInteractiveScriptOutsideDocument": "warn",
+				"noNextAsyncClientComponent": "warn",
+				"noUnusedImports": "warn",
+				"noUnusedVariables": { "level": "warn", "options": { "ignoreRestSiblings": true } },
+				"useInlineScriptId": "error"
+			},
+			"nursery": {
+				"noTripleSlashReference": "error",
+				"useNextScriptForGoogleAnalytics": "warn"
+			},
+			"performance": {
+				"noImgElement": "warn",
+				"noSyncScripts": "error",
+				"noUnwantedPolyfillio": "warn",
+				"useGoogleFontPreconnect": "warn"
+			},
+			"style": {
+				"noCommonJs": "error",
+				"noHeadElement": "warn",
+				"noNamespace": "error",
+				"useArrayLiterals": "error",
+				"useAsConstAssertion": "error"
+			},
+			"suspicious": {
+				"noDocumentImportInPage": "error",
+				"noDuplicateEnumValues": "error",
+				"noEmptyInterface": "error",
+				"noExplicitAny": "error",
+				"noExtraNonNullAssertion": "error",
+				"noHeadImportInDocument": "error",
+				"noMisleadingInstantiator": "error",
+				"noNonNullAssertedOptionalChain": "error",
+				"noTsIgnore": "error",
+				"noUnsafeDeclarationMerging": "error",
+				"noUnusedExpressions": "warn",
+				"useGoogleFontDisplay": "warn",
+				"useNamespaceKeyword": "error"
+			}
+		}
+	},
+	"overrides": [
+		{
+			"includes": ["**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
+			"linter": {
+				"rules": {
+					"a11y": {
+						"noAriaUnsupportedElements": "warn",
+						"useAltText": "warn",
+						"useAriaPropsForRole": "warn",
+						"useAriaPropsSupportedByRole": "warn",
+						"useValidAriaProps": "warn",
+						"useValidAriaValues": "warn"
+					},
+					"correctness": {
+						"noChildrenProp": "error",
+						"noRenderReturnValue": "error",
+						"useExhaustiveDependencies": "warn",
+						"useHookAtTopLevel": "error",
+						"useJsxKeyInIterable": "error"
+					},
+					"nursery": { "noReactDirectStateMutation": "error" },
+					"security": { "noDangerouslySetInnerHtmlWithChildren": "error" },
+					"suspicious": {
+						"noCommentText": "error",
+						"noDuplicateJsxProps": "error",
+						"noReactStringRefs": "error"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["**/*.{ts,tsx,mts,cts}"],
+			"linter": {
+				"rules": {
+					"complexity": { "noArguments": "error" },
+					"style": { "useConst": "error", "useSpreadOverApply": "error" },
+					"suspicious": { "noVar": "error" }
+				}
+			}
+		}
+	]
+}

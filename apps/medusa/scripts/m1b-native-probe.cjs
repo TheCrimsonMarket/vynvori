@@ -1,5 +1,5 @@
 // Explicit synthetic test fixture; never registered as an application script/route.
-/* eslint-disable @typescript-eslint/no-require-imports -- This fixture deliberately loads the compiled CommonJS backend through Medusa exec. */
+/* This fixture deliberately loads the compiled CommonJS backend through Medusa exec (CommonJS .cjs file). */
 const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
 const { Modules } = require("@medusajs/framework/utils");

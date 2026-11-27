@@ -32,9 +32,11 @@ test("image inspection rejects empty, oversized, vector/other formats, animation
 const goodKey = (hash: string, id = "0b7f4a52-8d1f-4c8e-9e15-0a3f2f5b7c11") => `private/composition/v1/${id}/${hash}`;
 const env = { M2_ENV: "local", M2_R2_ACCOUNT_ID: "a".repeat(32), M2_R2_BUCKET: "vynvori-staging-test" } as never;
 function fakeS3() {
-  const calls: { name: string; input: any }[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: test double records arbitrary SDK commands
+  const calls: { name: string; input: any }[] = [];
   let existing: { Metadata?: Record<string, string>; ContentLength?: number; body?: Buffer } | null = null;
-  const sender = { async send(command: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: test double records arbitrary SDK commands
+  const sender = { async send(command: any) {
     const name = command.constructor.name; calls.push({ name, input: command.input });
     if (name === "PutObjectCommand") { if (existing) throw Object.assign(new Error("exists"), { $metadata: { httpStatusCode: 412 } }); existing = { Metadata: command.input.Metadata, ContentLength: command.input.ContentLength, body: Buffer.from(command.input.Body) }; return {}; }
     if (name === "HeadObjectCommand") return { Metadata: existing?.Metadata, ContentLength: existing?.ContentLength };
