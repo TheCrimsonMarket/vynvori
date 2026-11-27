@@ -25,27 +25,12 @@
 -- Internal names only (open_for_refinements); the customer projection name (refinements_open) is mapped at the projection boundary.
 -- No clock-based expiry exists anywhere in this file. approved_expiry is NOT an allowed closure cause (no approved terms exist).
 
--- ---- helpers --------------------------------------------------------------------------------------------------------------
-
--- Is this an applied command of this user, of this kind, written by THE CURRENT TRANSACTION? (Same xid8 widening as 0005.)
-CREATE FUNCTION vynvori_ledger.ledger_command_is_current(p_command_id uuid, p_user_id uuid, p_kind text) RETURNS boolean LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $fn$
-DECLARE
-  cmd record;
-  ref8 bigint;
-  full8 bigint;
-BEGIN
-  SELECT c.command_kind, c.xmin AS x INTO cmd FROM vynvori_ledger.ledger_commands c
-    WHERE c.command_id = p_command_id AND c.user_id = p_user_id AND c.outcome = 'applied';
-  IF NOT FOUND OR cmd.command_kind IS DISTINCT FROM p_kind THEN RETURN false; END IF;
-  ref8 := pg_catalog.pg_current_xact_id()::text::bigint;
-  full8 := ((ref8 >> 32) << 32) | cmd.x::text::bigint;
-  IF full8 > ref8 + 2147483648 THEN full8 := full8 - 4294967296; ELSIF full8 < ref8 - 2147483648 THEN full8 := full8 + 4294967296; END IF;
-  RETURN pg_catalog.pg_xact_status(full8::text::xid8) IS NOT DISTINCT FROM 'in progress';
-END
-$fn$;
+-- ---- pure edge functions ---------------------------------------------------------------------------------------------------
 
 -- The S7 package edge set. closure_pending -> open_for_refinements is listed because it exists, but ONLY the event binding trigger
 -- below can let it through (it demands the C-02 context). A test compares this function with the contracts guard for all 64 pairs.
+-- Both edge functions are PURE (no table access) and deliberately NOT revoked from PUBLIC (as 0004's promo edge function): CHECK
+-- constraints call them as the invoking role, which must therefore keep EXECUTE. They expose nothing.
 CREATE FUNCTION vynvori_ledger.ledger_package_edge_allowed(p_from text, p_to text) RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path = pg_catalog, pg_temp AS $fn$
   SELECT COALESCE((p_from, p_to) IN (
     ('authorized', 'partial'), ('authorized', 'delivered_3_of_3'), ('partial', 'delivered_3_of_3'), ('delivered_3_of_3', 'open_for_refinements'),
@@ -185,6 +170,9 @@ CREATE TRIGGER ledger_packages_update_guard BEFORE UPDATE ON vynvori_ledger.ledg
 CREATE FUNCTION vynvori_ledger.ledger_package_events_bind() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $fn$
 DECLARE
   expected_kind text;
+  cmd record;
+  ref8 bigint;
+  full8 bigint;
   p record;
   r record;
   quote_version text;
@@ -199,8 +187,17 @@ BEGIN
     WHEN NEW.to_state = 'closure_pending' THEN 'bundle_begin_closure'
     WHEN NEW.to_state = 'closed' THEN 'bundle_close'
     ELSE 'bundle_reopen' END;
-  IF NOT vynvori_ledger.ledger_command_is_current(NEW.command_id, NEW.user_id, expected_kind) THEN
-    RAISE EXCEPTION 'a package event must reference an applied % command written in the same transaction', expected_kind USING ERRCODE = 'integrity_constraint_violation';
+  -- The command is an applied command of this user, of the matching kind, written by THE CURRENT TRANSACTION (xid8 widening as in 0005).
+  SELECT c.command_kind, c.xmin AS x INTO cmd FROM vynvori_ledger.ledger_commands c
+    WHERE c.command_id = NEW.command_id AND c.user_id = NEW.user_id AND c.outcome = 'applied';
+  IF NOT FOUND OR cmd.command_kind IS DISTINCT FROM expected_kind THEN
+    RAISE EXCEPTION 'a package event must reference an applied % command', expected_kind USING ERRCODE = 'integrity_constraint_violation';
+  END IF;
+  ref8 := pg_catalog.pg_current_xact_id()::text::bigint;
+  full8 := ((ref8 >> 32) << 32) | cmd.x::text::bigint;
+  IF full8 > ref8 + 2147483648 THEN full8 := full8 - 4294967296; ELSIF full8 < ref8 - 2147483648 THEN full8 := full8 + 4294967296; END IF;
+  IF pg_catalog.pg_xact_status(full8::text::xid8) IS DISTINCT FROM 'in progress' THEN
+    RAISE EXCEPTION 'a package event must reference a command written in the same transaction' USING ERRCODE = 'integrity_constraint_violation';
   END IF;
   PERFORM 1 FROM vynvori_ledger.wallets w WHERE w.user_id = NEW.user_id FOR UPDATE;
   SELECT lp.state, lp.authorization_id INTO p FROM vynvori_ledger.ledger_packages lp WHERE lp.package_id = NEW.package_id AND lp.user_id = NEW.user_id FOR UPDATE;
@@ -366,6 +363,9 @@ CREATE TRIGGER refinement_slots_update_guard BEFORE UPDATE ON vynvori_ledger.ref
 CREATE FUNCTION vynvori_ledger.refinement_slot_events_bind() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $fn$
 DECLARE
   expected_kind text;
+  cmd record;
+  ref8 bigint;
+  full8 bigint;
   p record;
   s record;
 BEGIN
@@ -375,8 +375,16 @@ BEGIN
   expected_kind := CASE NEW.to_state
     WHEN 'skipped' THEN 'refinement_skip' WHEN 'available' THEN 'refinement_restore' WHEN 'pending' THEN 'refinement_pending'
     WHEN 'unknown' THEN 'refinement_unknown' WHEN 'used' THEN 'refinement_consume' ELSE 'bundle_close' END;
-  IF NOT vynvori_ledger.ledger_command_is_current(NEW.command_id, NEW.user_id, expected_kind) THEN
-    RAISE EXCEPTION 'a slot event must reference an applied % command written in the same transaction', expected_kind USING ERRCODE = 'integrity_constraint_violation';
+  SELECT c.command_kind, c.xmin AS x INTO cmd FROM vynvori_ledger.ledger_commands c
+    WHERE c.command_id = NEW.command_id AND c.user_id = NEW.user_id AND c.outcome = 'applied';
+  IF NOT FOUND OR cmd.command_kind IS DISTINCT FROM expected_kind THEN
+    RAISE EXCEPTION 'a slot event must reference an applied % command', expected_kind USING ERRCODE = 'integrity_constraint_violation';
+  END IF;
+  ref8 := pg_catalog.pg_current_xact_id()::text::bigint;
+  full8 := ((ref8 >> 32) << 32) | cmd.x::text::bigint;
+  IF full8 > ref8 + 2147483648 THEN full8 := full8 - 4294967296; ELSIF full8 < ref8 - 2147483648 THEN full8 := full8 + 4294967296; END IF;
+  IF pg_catalog.pg_xact_status(full8::text::xid8) IS DISTINCT FROM 'in progress' THEN
+    RAISE EXCEPTION 'a slot event must reference a command written in the same transaction' USING ERRCODE = 'integrity_constraint_violation';
   END IF;
   PERFORM 1 FROM vynvori_ledger.wallets w WHERE w.user_id = NEW.user_id FOR UPDATE;
   SELECT lp.state INTO p FROM vynvori_ledger.ledger_packages lp WHERE lp.package_id = NEW.package_id AND lp.user_id = NEW.user_id FOR UPDATE;
@@ -441,9 +449,6 @@ END
 $fn$;
 CREATE CONSTRAINT TRIGGER refinement_slot_events_check_complete AFTER INSERT ON vynvori_ledger.refinement_slot_events DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION vynvori_ledger.refinement_slot_events_check_complete();
 
-REVOKE ALL ON FUNCTION vynvori_ledger.ledger_command_is_current(uuid, uuid, text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION vynvori_ledger.ledger_package_edge_allowed(text, text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION vynvori_ledger.refinement_slot_edge_allowed(text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION vynvori_ledger.ledger_packages_update_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION vynvori_ledger.ledger_package_events_bind() FROM PUBLIC;
 REVOKE ALL ON FUNCTION vynvori_ledger.ledger_package_events_apply() FROM PUBLIC;

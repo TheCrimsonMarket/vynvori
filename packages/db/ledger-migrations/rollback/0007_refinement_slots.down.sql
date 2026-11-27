@@ -46,7 +46,6 @@ BEGIN
   DROP FUNCTION vynvori_ledger.ledger_packages_update_guard();
   DROP FUNCTION vynvori_ledger.refinement_slot_edge_allowed(text, text);
   DROP FUNCTION vynvori_ledger.ledger_package_edge_allowed(text, text);
-  DROP FUNCTION vynvori_ledger.ledger_command_is_current(uuid, uuid, text);
   DELETE FROM vynvori_ledger_migrations.applied WHERE file = '0007_refinement_slots.sql';
 END
 $rollback$;
