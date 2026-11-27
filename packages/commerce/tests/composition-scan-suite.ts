@@ -137,7 +137,7 @@ export function scanConformance(label: string, factory: () => Promise<StoreHarne
   t("pending, unknown and quarantined assets cannot be read, frozen or granted, and the HTTP read answers the uniform 404", async () => {
     const verdicts: SyntheticScanBehaviour[] = [r => syntheticScanAnswer("error", r), r => syntheticScanAnswer("infected", r)];
     for (const behaviour of [undefined, ...verdicts]) {
-      const ctx = await build({ behaviour }), g = await ctx.pendingAsset();
+      const ctx = await build(behaviour ? { behaviour } : {}), g = await ctx.pendingAsset();
       if (behaviour) await ctx.service.scanAsset(g.id, g.asset.id, g.access, g.bytes);
       const status = (await ctx.store.getAsset(g.id, g.asset.id, g.access, new Date()))!.scanStatus;
       assert.notEqual(status, "clean");
