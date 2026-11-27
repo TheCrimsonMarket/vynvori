@@ -4,6 +4,9 @@
 > grants anything. A future apply needs, in this order: the founder's separate remote-database approval, a native backup (the M2
 > procedure), a pinned target in `packages/db/ledger-migrations/plan.json`, and then the founder (or someone the founder names) running
 > the blocks below by hand. No thread runs them. No role password is in this document or anywhere in the repository.
+>
+> "Tested" below means exercised by the S9 suite. A local PostgreSQL 16 run is feedback only; the evidence is CI's `db-integration`
+> run on PostgreSQL 17.6, recorded in [M7-Evidence.md](M7-Evidence.md).
 
 Plan step: [M7-Plan.md](M7-Plan.md) §7 S9. Design record: [ADR-0021](ADR-0021-M7-Core-Ledger-Foundation.md) (privilege model B, and the
 grants each addendum S2 to S8 says it needs). Evidence: [M7-Evidence.md](M7-Evidence.md). The SQL here is **executed verbatim** by
@@ -17,7 +20,7 @@ granted the runtime, checker or reconciliation role (§4 step 7). The four defin
 
 | Role (psql variable) | Suggested name | Purpose | Privileges, exactly |
 |---|---|---|---|
-| `ledger_runtime` | `vynvori_ledger_runtime` | The library's customer-path and system-path commands (`runLedgerCommand` and everything built on it) | `USAGE` on `vynvori_ledger`; `SELECT, INSERT` on `wallets`, `ledger_commands`, `ledger_entries`, `ledger_quote_lineages`, `ledger_quotes`, `ledger_quote_allocations`, `promo_claims`, `promo_claim_events`, `ledger_authorizations`, `ledger_packages`, `credit_reservations`, `ledger_package_events`; `INSERT` only on `refinement_slot_events`; `SELECT` on `refinement_slots`; column `UPDATE` on `wallets (user_id)`, `promo_claims (state, event_seq)`, `credit_reservations (workflow_ref)`, `ledger_packages (package_id)`, `refinement_slots (slot_id)`; `USAGE` on `vynvori_identity` and column `SELECT (id, issuer, subject)` on `vynvori_identity.profiles`. Nothing on `ledger_grant_sources` or `vendor_cost_evidence`. No `DELETE`, `TRUNCATE`, `REFERENCES`, `TRIGGER`, no `EXECUTE` on any ledger function, no `TEMP`. |
+| `ledger_runtime` | `vynvori_ledger_runtime` | The library's customer-path and system-path commands (`runLedgerCommand` and everything built on it) | `USAGE` on `vynvori_ledger`; `SELECT, INSERT` on `wallets`, `ledger_commands`, `ledger_entries`, `ledger_quote_lineages`, `ledger_quotes`, `ledger_quote_allocations`, `promo_claims`, `promo_claim_events`, `ledger_authorizations`, `ledger_packages`, `credit_reservations`, `ledger_package_events`; `INSERT` only on `refinement_slot_events`; `SELECT` on `refinement_slots`; column `UPDATE` on `wallets (user_id)`, `promo_claims (state, event_seq)`, `credit_reservations (workflow_ref)`, `ledger_packages (package_id)`, `refinement_slots (slot_id)`; `USAGE` on `vynvori_identity` and column `SELECT (id, issuer, subject)` on `vynvori_identity.profiles`. Nothing on `ledger_grant_sources` or `vendor_cost_evidence`. No `DELETE`, `TRUNCATE`, `REFERENCES`, `TRIGGER`, no `EXECUTE` granted on any ledger function (it keeps PostgreSQL's default `PUBLIC` `EXECUTE` on the three pure `*_edge_allowed(text, text)` helpers, which step 6 expects; every trigger function has `EXECUTE` revoked from `PUBLIC`), no `TEMP`. |
 | `ledger_wallet_definer` | `vynvori_ledger_wallet_definer` | Owns `ledger_entries_apply_to_wallet()` (S2) | `USAGE` on `vynvori_ledger`; `SELECT, UPDATE` on `wallets` |
 | `ledger_reservation_definer` | `vynvori_ledger_reservation_definer` | Owns `ledger_entries_apply_to_reservation()` (S5, also S6's settle and hold) | `USAGE`; `SELECT` and `UPDATE (state)` on `credit_reservations` |
 | `ledger_package_definer` | `vynvori_ledger_package_definer` | Owns `ledger_package_events_apply()` (S7) | `USAGE`; `SELECT` and `UPDATE (state)` on `ledger_packages`; `INSERT` on `refinement_slots` |
@@ -83,7 +86,9 @@ psql "<connection string of the executor, from your secret manager>" -v ON_ERROR
 
 then paste the blocks in order. The two check blocks (steps 1 and 6) must print **zero rows**; any row is a reason to stop. The blocks
 contain no dollar-quoted text, so psql substitutes every `:"name"` (identifier) and `:'name'` (literal). The test performs the same
-substitution and refuses a block that contains `$$` or an unset variable.
+substitution and refuses a block that contains `$$` or an unset variable. Steps 2 to 5 are each one transaction (`BEGIN` ... `COMMIT`),
+so a failure part-way leaves nothing behind and the step can be re-run after the cause is fixed. Step 1 pins the journal by file
+**and** sha256, so a database whose applied migrations differ from `plan.json` in content is refused, not only one with other files.
 
 ## 4. Steps
 
@@ -97,9 +102,9 @@ SELECT check_name, detail FROM (
   UNION ALL SELECT 'schema vynvori_ledger is missing', '' WHERE to_regnamespace('vynvori_ledger') IS NULL
   UNION ALL SELECT 'executor does not own schema', n.nspname || ' owned by ' || pg_get_userbyid(n.nspowner)
     FROM pg_namespace n WHERE n.nspname IN ('vynvori_ledger', 'vynvori_ledger_migrations') AND pg_get_userbyid(n.nspowner) <> current_user
-  UNION ALL SELECT 'journal is not exactly migrations 0001 to 0007', coalesce(string_agg(a.file, ',' ORDER BY a.file), 'empty')
+  UNION ALL SELECT 'journal is not exactly migrations 0001 to 0007 (file and sha256)', coalesce(string_agg(a.file, ',' ORDER BY a.file), 'empty')
     FROM vynvori_ledger_migrations.applied a
-    HAVING coalesce(string_agg(a.file, ',' ORDER BY a.file), '') <> '0001_ledger_schema.sql,0002_wallet_ledger.sql,0003_quotes.sql,0004_promo_claims.sql,0005_reservations.sql,0006_vendor_cost_evidence.sql,0007_refinement_slots.sql'
+    HAVING coalesce(string_agg(a.file || ':' || a.sha256, ',' ORDER BY a.file), '') <> '0001_ledger_schema.sql:a8273f3fac59de2d0c2f1a661a852d22b9a360c9d9c83e672bd7f0d25d74ef4e,0002_wallet_ledger.sql:28a6d0e3727bf8c8cd20d98586d2f2564cb57df31412cd655c150e720ea2ea82,0003_quotes.sql:f32217a8a099728e5956a2166cf6ecc163cb2ea12af4511879fd0e282ba46159,0004_promo_claims.sql:0ceee68eb748af0ed0ddb86558bb652900c15f64fe6a8185a6de358e31dba397,0005_reservations.sql:07948d4f934cdee709da3b7cded3d36919185075991594f6f3e112f2eb8e1ddf,0006_vendor_cost_evidence.sql:2eb40569cc4a5cf3d226dca3a8bf63c393999b4ffd087e9411900cba59c8267a,0007_refinement_slots.sql:f0ca7b72f280b507e68accab25eaa3b712fe0bfca389ace965b01d1d9df06cfb'
   UNION ALL SELECT 'executor does not own relation', c.relname || ' owned by ' || pg_get_userbyid(c.relowner)
     FROM pg_class c WHERE c.relnamespace = 'vynvori_ledger'::regnamespace AND pg_get_userbyid(c.relowner) <> current_user
   UNION ALL SELECT 'executor does not own function', p.proname || ' owned by ' || pg_get_userbyid(p.proowner)
@@ -136,6 +141,7 @@ SELECT check_name, detail FROM (
 
 <!-- s9-sql:roles -->
 ```sql
+BEGIN;
 CREATE ROLE :"ledger_runtime" NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
 CREATE ROLE :"ledger_wallet_definer" NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
 CREATE ROLE :"ledger_reservation_definer" NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
@@ -144,6 +150,7 @@ CREATE ROLE :"ledger_slot_definer" NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE N
 CREATE ROLE :"ledger_checker" NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
 CREATE ROLE :"ledger_reconciliation" NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
 REVOKE TEMPORARY ON DATABASE :"ledger_database" FROM PUBLIC;
+COMMIT;
 ```
 
 `REVOKE TEMPORARY` is database-wide: revoking it from a role alone does nothing while `PUBLIC` holds it (tested in S2). It closes the
@@ -154,6 +161,7 @@ first step of every executed `TEMP`-table trigger exploit. If another component 
 
 <!-- s9-sql:runtime -->
 ```sql
+BEGIN;
 GRANT USAGE ON SCHEMA vynvori_ledger TO :"ledger_runtime";
 GRANT SELECT, INSERT ON vynvori_ledger.wallets, vynvori_ledger.ledger_commands, vynvori_ledger.ledger_entries TO :"ledger_runtime";
 GRANT UPDATE (user_id) ON vynvori_ledger.wallets TO :"ledger_runtime";
@@ -169,6 +177,7 @@ GRANT UPDATE (package_id) ON vynvori_ledger.ledger_packages TO :"ledger_runtime"
 GRANT UPDATE (slot_id) ON vynvori_ledger.refinement_slots TO :"ledger_runtime";
 GRANT USAGE ON SCHEMA vynvori_identity TO :"ledger_runtime";
 GRANT SELECT (id, issuer, subject) ON vynvori_identity.profiles TO :"ledger_runtime";
+COMMIT;
 ```
 
 Why each column `UPDATE` exists: `SELECT ... FOR UPDATE` needs an `UPDATE` privilege on at least one column. `wallets (user_id)`,
@@ -182,6 +191,7 @@ claim to the verified issuer and subject.
 
 <!-- s9-sql:privileges -->
 ```sql
+BEGIN;
 GRANT USAGE ON SCHEMA vynvori_ledger TO :"ledger_wallet_definer", :"ledger_reservation_definer", :"ledger_package_definer", :"ledger_slot_definer", :"ledger_checker", :"ledger_reconciliation";
 GRANT SELECT, UPDATE ON vynvori_ledger.wallets TO :"ledger_wallet_definer";
 GRANT SELECT ON vynvori_ledger.credit_reservations TO :"ledger_reservation_definer";
@@ -193,6 +203,7 @@ GRANT SELECT ON vynvori_ledger.refinement_slots TO :"ledger_slot_definer";
 GRANT UPDATE (state, source_version_id, operation_id, delivered_version_id, closure_cause, closure_notice_version) ON vynvori_ledger.refinement_slots TO :"ledger_slot_definer";
 GRANT SELECT ON vynvori_ledger.wallets, vynvori_ledger.ledger_commands, vynvori_ledger.ledger_entries, vynvori_ledger.credit_reservations, vynvori_ledger.ledger_quotes, vynvori_ledger.ledger_quote_allocations, vynvori_ledger.ledger_authorizations, vynvori_ledger.ledger_packages, vynvori_ledger.ledger_grant_sources, vynvori_ledger.promo_claims, vynvori_ledger.promo_claim_events TO :"ledger_checker";
 GRANT SELECT, INSERT ON vynvori_ledger.vendor_cost_evidence TO :"ledger_reconciliation";
+COMMIT;
 ```
 
 The wallet definer keeps table-level `UPDATE` on `wallets`, exactly as the S2 addendum wrote it. Column-level `UPDATE` on the five
@@ -278,22 +289,29 @@ expected(grantee, object, col, privilege) AS (VALUES
   ('PUBLIC', 'function vynvori_ledger.ledger_package_edge_allowed', '', 'EXECUTE'),
   ('PUBLIC', 'function vynvori_ledger.refinement_slot_edge_allowed', '', 'EXECUTE')
 ),
+ledger_logins(oid, rolname, ledger_role) AS (
+  -- every non-superuser role, other than the seven and the executor, that can act as the runtime, checker or reconciliation role,
+  -- directly or through any chain, with INHERIT or SET
+  SELECT m.oid, m.rolname::text, g.r FROM pg_roles m, (VALUES (:'ledger_runtime'), (:'ledger_checker'), (:'ledger_reconciliation')) g(r)
+  WHERE m.rolname NOT IN (SELECT r FROM ledger_roles) AND m.rolname <> current_user AND NOT m.rolsuper
+    AND (pg_has_role(m.oid, g.r, 'USAGE') OR pg_has_role(m.oid, g.r, 'SET'))
+),
 actual(grantee, object, col, privilege) AS (
-  SELECT CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END, 'schema ' || n.nspname, '', a.privilege_type
+  SELECT CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END, 'schema ' || n.nspname, '', a.privilege_type || CASE WHEN a.is_grantable THEN ' WITH GRANT OPTION' ELSE '' END
     FROM pg_namespace n, aclexplode(n.nspacl) a WHERE n.nspname IN ('vynvori_ledger', 'vynvori_ledger_migrations') AND a.grantee <> n.nspowner
-  UNION ALL SELECT CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END, 'table ' || n.nspname || '.' || c.relname, '', a.privilege_type
+  UNION ALL SELECT CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END, 'table ' || n.nspname || '.' || c.relname, '', a.privilege_type || CASE WHEN a.is_grantable THEN ' WITH GRANT OPTION' ELSE '' END
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace, aclexplode(c.relacl) a WHERE n.nspname IN ('vynvori_ledger', 'vynvori_ledger_migrations') AND a.grantee <> c.relowner
-  UNION ALL SELECT CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END, 'table ' || n.nspname || '.' || c.relname, t.attname::text, a.privilege_type
+  UNION ALL SELECT CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END, 'table ' || n.nspname || '.' || c.relname, t.attname::text, a.privilege_type || CASE WHEN a.is_grantable THEN ' WITH GRANT OPTION' ELSE '' END
     FROM pg_attribute t JOIN pg_class c ON c.oid = t.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace, aclexplode(t.attacl) a
     WHERE n.nspname IN ('vynvori_ledger', 'vynvori_ledger_migrations') AND a.grantee <> c.relowner
-  UNION ALL SELECT CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END, 'function vynvori_ledger.' || p.proname, '', a.privilege_type
+  UNION ALL SELECT CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END, 'function vynvori_ledger.' || p.proname, '', a.privilege_type || CASE WHEN a.is_grantable THEN ' WITH GRANT OPTION' ELSE '' END
     FROM pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a WHERE p.pronamespace = 'vynvori_ledger'::regnamespace AND a.grantee <> p.proowner
-  UNION ALL SELECT pg_get_userbyid(a.grantee)::text, 'schema vynvori_identity', '', a.privilege_type
-    FROM pg_namespace n, aclexplode(n.nspacl) a WHERE n.nspname = 'vynvori_identity' AND pg_get_userbyid(a.grantee) IN (SELECT r FROM ledger_roles)
-  UNION ALL SELECT pg_get_userbyid(a.grantee)::text, 'table vynvori_identity.' || c.relname, '', a.privilege_type
-    FROM pg_class c, aclexplode(c.relacl) a WHERE c.relnamespace = 'vynvori_identity'::regnamespace AND pg_get_userbyid(a.grantee) IN (SELECT r FROM ledger_roles)
-  UNION ALL SELECT pg_get_userbyid(a.grantee)::text, 'table vynvori_identity.' || c.relname, t.attname::text, a.privilege_type
-    FROM pg_attribute t JOIN pg_class c ON c.oid = t.attrelid, aclexplode(t.attacl) a WHERE c.relnamespace = 'vynvori_identity'::regnamespace AND pg_get_userbyid(a.grantee) IN (SELECT r FROM ledger_roles)
+  UNION ALL SELECT pg_get_userbyid(a.grantee)::text, 'schema vynvori_identity', '', a.privilege_type || CASE WHEN a.is_grantable THEN ' WITH GRANT OPTION' ELSE '' END
+    FROM pg_namespace n, aclexplode(n.nspacl) a WHERE n.nspname = 'vynvori_identity' AND (pg_get_userbyid(a.grantee) IN (SELECT r FROM ledger_roles) OR a.grantee IN (SELECT oid FROM ledger_logins))
+  UNION ALL SELECT pg_get_userbyid(a.grantee)::text, 'table vynvori_identity.' || c.relname, '', a.privilege_type || CASE WHEN a.is_grantable THEN ' WITH GRANT OPTION' ELSE '' END
+    FROM pg_class c, aclexplode(c.relacl) a WHERE c.relnamespace = 'vynvori_identity'::regnamespace AND (pg_get_userbyid(a.grantee) IN (SELECT r FROM ledger_roles) OR a.grantee IN (SELECT oid FROM ledger_logins))
+  UNION ALL SELECT pg_get_userbyid(a.grantee)::text, 'table vynvori_identity.' || c.relname, t.attname::text, a.privilege_type || CASE WHEN a.is_grantable THEN ' WITH GRANT OPTION' ELSE '' END
+    FROM pg_attribute t JOIN pg_class c ON c.oid = t.attrelid, aclexplode(t.attacl) a WHERE c.relnamespace = 'vynvori_identity'::regnamespace AND (pg_get_userbyid(a.grantee) IN (SELECT r FROM ledger_roles) OR a.grantee IN (SELECT oid FROM ledger_logins))
 )
 SELECT check_name, detail FROM (
   SELECT 'unexpected privilege' AS check_name, x.grantee || ' ' || x.privilege || ' on ' || x.object || CASE WHEN x.col <> '' THEN ' (' || x.col || ')' ELSE '' END AS detail
@@ -325,20 +343,31 @@ SELECT check_name, detail FROM (
   UNION ALL SELECT 'a ledger relation is not owned by the executor', c.relname
     FROM pg_class c WHERE c.relnamespace IN ('vynvori_ledger'::regnamespace, 'vynvori_ledger_migrations'::regnamespace) AND pg_get_userbyid(c.relowner) <> current_user
   UNION ALL SELECT 'a definer role holds CREATE on the ledger schema', d.r FROM definer_roles d WHERE has_schema_privilege(d.r, 'vynvori_ledger', 'CREATE')
-  UNION ALL SELECT 'a login holding a ledger role is too powerful', m.rolname || ' in ' || g.rolname
-    FROM pg_auth_members a JOIN pg_roles m ON m.oid = a.member JOIN pg_roles g ON g.oid = a.roleid
-    WHERE g.rolname IN (:'ledger_runtime', :'ledger_checker', :'ledger_reconciliation') AND (a.inherit_option OR a.set_option)
-      AND (m.rolsuper OR m.rolcreaterole OR m.rolcreatedb OR m.rolreplication OR m.rolbypassrls OR m.rolname = current_user
-        OR pg_has_role(m.oid, current_user, 'USAGE') OR pg_has_role(m.oid, current_user, 'SET')
-        OR pg_has_role(m.oid, 'pg_write_all_data', 'USAGE') OR pg_has_role(m.oid, 'pg_read_all_data', 'USAGE'))
-  UNION ALL SELECT 'a login holds two ledger roles', m.rolname
-    FROM pg_auth_members a JOIN pg_roles m ON m.oid = a.member JOIN pg_roles g ON g.oid = a.roleid
-    WHERE g.rolname IN (:'ledger_runtime', :'ledger_checker', :'ledger_reconciliation') AND (a.inherit_option OR a.set_option)
-    GROUP BY m.rolname HAVING count(DISTINCT g.rolname) > 1
+  UNION ALL SELECT 'a login holding a ledger role is too powerful', l.rolname || ' in ' || l.ledger_role
+    FROM ledger_logins l JOIN pg_roles m ON m.oid = l.oid
+    WHERE m.rolcreaterole OR m.rolcreatedb OR m.rolreplication OR m.rolbypassrls
+       OR EXISTS (SELECT 1 FROM pg_roles x WHERE x.oid <> l.oid AND x.rolname <> l.ledger_role AND (pg_has_role(l.oid, x.oid, 'USAGE') OR pg_has_role(l.oid, x.oid, 'SET')))
+  UNION ALL SELECT 'a login holds two ledger roles', l.rolname FROM ledger_logins l GROUP BY l.rolname HAVING count(*) > 1
+  UNION ALL SELECT 'a superuser is a member of a ledger role', m.rolname || ' in ' || g.rolname
+    FROM pg_auth_members a JOIN pg_roles m ON m.oid = a.member JOIN pg_roles g ON g.oid = a.roleid WHERE g.rolname IN (SELECT r FROM ledger_roles) AND m.rolsuper
+  UNION ALL SELECT 'a role other than the executor holds ADMIN on a ledger role', m.rolname || ' on ' || g.rolname
+    FROM pg_auth_members a JOIN pg_roles m ON m.oid = a.member JOIN pg_roles g ON g.oid = a.roleid WHERE g.rolname IN (SELECT r FROM ledger_roles) AND a.admin_option AND m.rolname <> current_user
+  UNION ALL SELECT 'the executor can act as a ledger role', l.r FROM ledger_roles l WHERE pg_has_role(current_user, l.r, 'USAGE') OR pg_has_role(current_user, l.r, 'SET')
   UNION ALL SELECT 'a ledger role or its login can create temporary tables', r.rolname
-    FROM pg_roles r WHERE (r.rolname IN (SELECT r FROM ledger_roles)
-        OR r.oid IN (SELECT a.member FROM pg_auth_members a JOIN pg_roles g ON g.oid = a.roleid WHERE g.rolname IN (SELECT r FROM ledger_roles) AND (a.inherit_option OR a.set_option)))
+    FROM pg_roles r WHERE (r.rolname IN (SELECT r FROM ledger_roles) OR r.oid IN (SELECT oid FROM ledger_logins))
       AND NOT r.rolsuper AND has_database_privilege(r.oid, current_database(), 'TEMPORARY')
+  UNION ALL SELECT 'a parameter privilege could bypass the ledger guards', p.parname || ': ' || CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END || ' ' || a.privilege_type
+    FROM pg_parameter_acl p, aclexplode(p.paracl) a
+    WHERE p.parname IN ('session_replication_role', 'row_security') OR pg_get_userbyid(a.grantee) IN (SELECT r FROM ledger_roles) OR a.grantee IN (SELECT oid FROM ledger_logins)
+  UNION ALL SELECT 'a login or database setting touches the ledger', CASE WHEN s.setrole = 0 THEN 'every role' ELSE pg_get_userbyid(s.setrole)::text END || ': ' || array_to_string(s.setconfig, ', ')
+    FROM pg_db_role_setting s
+    WHERE s.setrole IN (SELECT oid FROM ledger_logins)
+       OR (s.setrole = 0 AND s.setdatabase IN (0, (SELECT oid FROM pg_database WHERE datname = current_database())) AND array_to_string(s.setconfig, ',') ~ '(session_replication_role|row_security)=')
+  UNION ALL SELECT 'a ledger trigger is not enabled in origin mode', c.relname || '.' || g.tgname || ' = ' || g.tgenabled::text
+    FROM pg_trigger g JOIN pg_class c ON c.oid = g.tgrelid WHERE c.relnamespace = 'vynvori_ledger'::regnamespace AND NOT g.tgisinternal AND g.tgenabled <> 'O'
+  UNION ALL SELECT 'a rule, policy or row security exists on a ledger table', c.relname || coalesce(': rule ' || r.rulename, '') || coalesce(': policy ' || po.polname, '')
+    FROM pg_class c LEFT JOIN pg_rewrite r ON r.ev_class = c.oid LEFT JOIN pg_policy po ON po.polrelid = c.oid
+    WHERE c.relnamespace = 'vynvori_ledger'::regnamespace AND c.relkind = 'r' AND (r.oid IS NOT NULL OR po.oid IS NOT NULL OR c.relrowsecurity)
   UNION ALL SELECT 'HARD GATE: a grant source is registered', count(*)::text FROM vynvori_ledger.ledger_grant_sources HAVING count(*) > 0
 ) violations ORDER BY 1, 2;
 ```
@@ -393,9 +422,11 @@ GRANT TEMPORARY ON DATABASE :"ledger_database" TO PUBLIC;
 COMMIT;
 ```
 
-Revoke each login's membership first (`REVOKE <ledger role> FROM <login>`), or `DROP ROLE` refuses. `REVOKE` at table level also
-removes the column privileges. Restoring `TEMPORARY` to `PUBLIC` is only right if nothing else in the database was relying on its
-absence; skip that line if in doubt.
+Revoke each login's membership first (`REVOKE <ledger role> FROM <login>`). `DROP ROLE` would not refuse: it silently removes the
+memberships, so a login would lose its role without an error; revoking first makes that an explicit, reviewed step. `DROP ROLE` refuses
+only while the role still owns an object or holds a privilege, which the `REVOKE ALL` lines remove. `REVOKE` at table level also removes
+the column privileges. The last line restores `TEMPORARY` to `PUBLIC`, which is the pre-proposal state only if `PUBLIC` held it before
+step 2 (PostgreSQL's default). If it did not, or if anything in the database now relies on its absence, delete that line.
 
 **Migration rollback after the re-own** (corrected by test). The `rollback/000N_*.down.sql` scripts run as the executor. What they
 need differs by statement:
@@ -423,8 +454,11 @@ the re-own back; step 6 then reports the missing function.
 
 There is no code bypass and none is added. After step 5:
 
-- A **superuser that is not the function owner** is blocked by the guards like everyone else: it cannot `UPDATE` a wallet bucket, a
-  reservation state, a package state or a slot state, directly or from a trigger (tested).
+- A **superuser that is not the function owner** is blocked by the guards: it cannot `UPDATE` a wallet bucket, a reservation state,
+  a package state or a slot state, directly or from a trigger (tested). A superuser can still bypass every trigger at once with
+  `SET session_replication_role = replica`, which leaves no catalog trace. That is a superuser power, not a ledger path: keep superuser
+  credentials out of every application and operator login, and run the S8 check afterwards. Step 6 reports a `SET ON PARAMETER`
+  grant of `session_replication_role` or `row_security` to anyone, and a database-wide setting of either.
 - **Re-owning a function back does not by itself permit a correcting `UPDATE`.** Each guard also requires `pg_trigger_depth() > 1`,
   so even the function owner cannot update the row directly.
 - The audited options are (a) **restore from backup**, or (b) the **table owner** (the executor) or a superuser runs
@@ -461,11 +495,16 @@ There is no code bypass and none is added. After step 5:
 2. **The executor keeps `ADMIN OPTION` on the seven roles** (PostgreSQL 16 gives it to the creating role, with `INHERIT FALSE` and
    `SET FALSE`). It is not usable membership, but the executor could grant itself a definer role again. That is the same trust as the
    table owner's `DISABLE TRIGGER` (§6), so the executor is the break-glass identity, not an application login. Step 6 allows exactly
-   this one administrative row per definer and nothing else.
+   this one administrative row on each of the seven roles and nothing else: it reports any other `ADMIN` holder, any membership the
+   executor can use (`INHERIT` or `SET`), and every login whose full membership closure (direct or chained, `INHERIT` or `SET`) reaches
+   any role other than its one ledger role, including every predefined `pg_*` role. If the provider sets `createrole_self_grant`, the
+   executor gets usable membership in the roles it creates; step 6 then reports "the executor can act as a ledger role". Stop there and
+   ask; do not continue.
 3. **`pg_has_role` and the end-state query see one database's grants.** Roles are cluster-wide; a grant of a ledger role in another
    database on the same cluster is invisible here. Run step 6 in the ledger database and keep the ledger roles out of other databases.
 4. **Logins are outside this proposal.** Step 6 checks their attributes and memberships when they hold a ledger role. It cannot check how
-   their passwords are stored or rotated, or `pg_hba`/network rules.
+   their passwords are stored or rotated, or `pg_hba`/network rules. Direct privileges of a login are checked on the ledger and identity
+   schemas only.
 5. **The proposal is tied to migrations 0001 to 0007.** Step 1 refuses any other journal, and the test fails if `plan.json` changes
    without this document. A migration that adds a table, a column the runtime writes, a trigger that reads another table, or a definer
    function must update this proposal and its test in the same PR (the S8 maintenance rule, extended).
@@ -475,6 +514,9 @@ There is no code bypass and none is added. After step 5:
    procedure is faithfully exercised; `SET ROLE` checks the *session* user, so the "a login cannot `SET ROLE` to a definer" assertion
    is made with a real `LOGIN` role (random password generated in the test process, never stored, dropped at the end) connecting on
    its own. Only CI's `db-integration` job on PostgreSQL 17.6 counts as evidence; local PostgreSQL 16 runs are feedback only.
+8. **Step 1 does not compare every catalog object.** It pins the journal by sha256 and checks owners, privileges and `SECURITY DEFINER`
+   functions. Step 6 adds disabled triggers, rules, policies and row security. A changed trigger body, a dropped `CHECK` or an extra
+   trigger is the S8 check's job: run `checkWalletInvariants` as the checker before step 2 and after step 6.
 
 ## 9. How this document is tested
 

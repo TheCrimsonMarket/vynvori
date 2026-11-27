@@ -621,4 +621,19 @@ Status: **proposed; the grants are a proposal, not applied.** Plan step: `M7-Pla
 
 **Files outside the S9 row.** `packages/db/tests/ledger-fixture.ts`: one name (`acceptance`) appended to `LEDGER_TEST_NAMES`, as every earlier step did. This addendum.
 
+**Review dispositions (`security-reviewer` agent and the `security-review` skill checklist, S9 diff).** No CRITICAL or HIGH finding.
+
+| Finding | Disposition |
+|---|---|
+| MEDIUM-1: step 6 ignored `WITH GRANT OPTION` and `ADMIN`-only memberships on the runtime, checker and reconciliation roles | Fixed: the compared privilege includes the grant option; any `ADMIN` holder other than the executor is reported; tests in `S9-G5`. |
+| MEDIUM-2: the login check saw only direct members with `INHERIT` (missed `SET`-only, chained memberships and other predefined roles) | Fixed: a login's full membership closure (`USAGE` or `SET`, any chain) must reach only its one ledger role; superuser members and an executor that can act as a ledger role are reported; tests in `S9-G5`. |
+| MEDIUM-3: step 6 did not cover trigger-bypass settings | Fixed: `SET ON PARAMETER` grants of `session_replication_role`/`row_security` (to anyone) and any parameter grant to a ledger role or login; login and database-wide settings; triggers not in origin mode; rules, policies and row security; tests in `S9-G5`. |
+| LOW-1: step 1 pinned the journal by file name only | Fixed: file and sha256 (unit test checks against `plan.json`). Other catalog drift is the S8 check (proposal limit 8). |
+| LOW-2: blocks were one implicit transaction in the test but autocommit in psql | Fixed: steps 2 to 4 wrapped in `BEGIN`/`COMMIT`, as step 5 was. |
+| LOW-3: prose overstated (superuser and `session_replication_role`, `DROP ROLE` and memberships, `PUBLIC` `EXECUTE` on the edge helpers, `TEMPORARY` restore, "tested") | Fixed wording in the proposal (§1, §3, §5, §6, §8). |
+| LOW-4: "pass (NOT_RUN)" read as contradictory | Fixed: `feedback: pass`, CI column stays `PENDING_CI` until the CI run. |
+| INFO: the runtime role reads every user's ledger rows and profile identity columns; ownership is enforced by the library | Accepted; consequence of the design (no row-level security), unchanged by S9. |
+| INFO: `ledgerPoolAs` sessions could `RESET ROLE` (superuser session) | Accepted; only the real `LOGIN` client is used for the `SET ROLE` assertions. |
+| Checklist: random test password never logged or committed (it may appear in a throwaway CI server's statement log); identifiers quoted; `renderBlock` refuses `$` and unset variables; disposable-target guard; leaked roles reported | Checked, no change. |
+
 **Proposed ACC rows** (to the coordinator; not edited here): ACC-11, ACC-15 and ACC-23 → `IN_PROGRESS` with the scope limits in `M7-Plan.md` §9. None `PASSED`.

@@ -26,52 +26,52 @@ The CI log line for a row is the `node:test` line `ok N - <row id>: ...` (or `no
 
 ## Rows
 
-Columns: **W1** = in scope for wave 1. **Local** = local PostgreSQL 16 feedback, never evidence. **CI** = the `db-integration` result
+Columns: **W1** = in scope for wave 1. **Local** = local PostgreSQL 16 feedback (`feedback: pass` means it ran locally and passed; it is still `NOT_RUN` as evidence). **CI** = the `db-integration` result
 and log line once the PR's CI has run; until then `PENDING_CI`.
 
 ### Doc 15 acceptance targets
 
 | ID | Check | W1 | Tests | Local (feedback only) | CI `db-integration` |
 |---|---|---|---|---|---|
-| D15-T1 | 100-way concurrent balance operations | yes | `ledger-concurrency.test.ts` (100 grants, S5 100 authorizations, S6 100 mixed commands); `D15-T1` here, small scale under the proposed roles | pass (NOT_RUN) | PENDING_CI |
-| D15-T2 | Duplicate and out-of-order events | yes | `ledger-concurrency.test.ts` (100 identical grants, 100 identical settles); `D15-T2` | pass (NOT_RUN) | PENDING_CI |
-| D15-T3 | Isolation of unknown provider cost | yes | `ledger-settlement.test.ts` vendor-cost isolation; `S9-G4 / D15-T3` as the reconciliation role | pass (NOT_RUN) | PENDING_CI |
-| D15-T4 | Stale-quote renewal | yes | `ledger-concurrency.test.ts` A3(a), S5 renew/authorize race; `D15-T4` | pass (NOT_RUN) | PENDING_CI |
-| D15-T5 | No negative balance, double charge or double grant | yes | `ledger-concurrency.test.ts` same-source_ref grants, S6 mixed on one reservation; `D15-T5` | pass (NOT_RUN) | PENDING_CI |
+| D15-T1 | 100-way concurrent balance operations | yes | `ledger-concurrency.test.ts` (100 grants, S5 100 authorizations, S6 100 mixed commands); `D15-T1` here, small scale under the proposed roles | feedback: pass | PENDING_CI |
+| D15-T2 | Duplicate and out-of-order events | yes | `ledger-concurrency.test.ts` (100 identical grants, 100 identical settles); `D15-T2` | feedback: pass | PENDING_CI |
+| D15-T3 | Isolation of unknown provider cost | yes | `ledger-settlement.test.ts` vendor-cost isolation; `S9-G4 / D15-T3` as the reconciliation role | feedback: pass | PENDING_CI |
+| D15-T4 | Stale-quote renewal | yes | `ledger-concurrency.test.ts` A3(a), S5 renew/authorize race; `D15-T4` | feedback: pass | PENDING_CI |
+| D15-T5 | No negative balance, double charge or double grant | yes | `ledger-concurrency.test.ts` same-source_ref grants, S6 mixed on one reservation; `D15-T5` | feedback: pass | PENDING_CI |
 
 ### Doc 06 test-matrix rows
 
 | ID | Check | W1 | Tests | Local (feedback only) | CI `db-integration` |
 |---|---|---|---|---|---|
-| D06-R01 | Simultaneous requests against a wallet that covers exactly one | yes | `D06-R01` | pass (NOT_RUN) | PENDING_CI |
-| D06-R02 | Duplicated payment capture | **no** (M4) | `D06-R02` checks only that no runtime path can register a capture source; the capture flow is **NOT_IN_W1** | pass (NOT_RUN) | PENDING_CI (structural part only) |
-| D06-R03 | Provider timeout after billing | yes (ledger side) | `ledger-settlement.test.ts` hold; `D06-R03` | pass (NOT_RUN) | PENDING_CI |
-| D06-R04 | Provider returns artifact but DB write fails | yes (ledger side) | `D06-R04` (`persistence_failed_under_review` hold, unverified settle refused) | pass (NOT_RUN) | PENDING_CI |
-| D06-R05 | Webhook replay / out-of-order | yes (ledger commands; no webhook or inbox in W1) | `ledger-settlement.test.ts` out of order; `D06-R05` | pass (NOT_RUN) | PENDING_CI |
+| D06-R01 | Simultaneous requests against a wallet that covers exactly one | yes | `D06-R01` | feedback: pass | PENDING_CI |
+| D06-R02 | Duplicated payment capture | **no** (M4) | `D06-R02` checks only that no runtime path can register a capture source; the capture flow is **NOT_IN_W1** | feedback: pass | PENDING_CI (structural part only) |
+| D06-R03 | Provider timeout after billing | yes (ledger side) | `ledger-settlement.test.ts` hold; `D06-R03` | feedback: pass | PENDING_CI |
+| D06-R04 | Provider returns artifact but DB write fails | yes (ledger side) | `D06-R04` (`persistence_failed_under_review` hold, unverified settle refused) | feedback: pass | PENDING_CI |
+| D06-R05 | Webhook replay / out-of-order | yes (ledger commands; no webhook or inbox in W1) | `ledger-settlement.test.ts` out of order; `D06-R05` | feedback: pass | PENDING_CI |
 | D06-R06 | Refund after partial credit consumption | **no** | none; typed `RefundReversalPort` only | NOT_RUN | **NOT_IN_W1** |
-| D06-R07 | Unauthorized redemption; ownership on every ID | partly (ownership only) | `D06-R07` | pass (NOT_RUN) | PENDING_CI |
+| D06-R07 | Unauthorized redemption; ownership on every ID | partly (ownership only) | `D06-R07` | feedback: pass | PENDING_CI |
 | D06-R08 | Concurrent carts reuse entitlement | **no** | none; redemption out of scope | NOT_RUN | **NOT_IN_W1** |
 | D06-R09 | Digital export paid then failed render | **no** | none; typed port only | NOT_RUN | **NOT_IN_W1** |
-| D06-R10 | Guest attempts credit purchase | yes (structurally) | `D06-R10` | pass (NOT_RUN) | PENDING_CI |
-| D06-R11 | Rounding of fractional USD costs | partly | `D06-R11` (units, allocations and USD micros must be whole; USD to credit conversion needs a rate card and is out) | pass (NOT_RUN) | PENDING_CI |
-| D06-R12 | Package fee scenario | partly (synthetic allocations) | `D06-R12` | pass (NOT_RUN) | PENDING_CI |
+| D06-R10 | Guest attempts credit purchase | yes (structurally) | `D06-R10` | feedback: pass | PENDING_CI |
+| D06-R11 | Rounding of fractional USD costs | partly | `D06-R11` (units, allocations and USD micros must be whole; USD to credit conversion needs a rate card and is out) | feedback: pass | PENDING_CI |
+| D06-R12 | Package fee scenario | partly (synthetic allocations) | `D06-R12` | feedback: pass | PENDING_CI |
 
 ### Binding S9 content (ADR-0021 S2 review) and the grants proposal
 
 | ID | Check | W1 | Tests | Local (feedback only) | CI `db-integration` |
 |---|---|---|---|---|---|
-| S9-B1 | No definer has members; no role can `SET ROLE` to one, checked in the catalog and with a real `LOGIN`, also while it holds `pg_write_all_data` | yes | `S9-B1` | pass (NOT_RUN) | PENDING_CI |
-| S9-B2 | The owner change runs as a non-superuser executor; the transient membership and `CREATE` are gone; the end state is exact | yes | `S9-B2` | pass (NOT_RUN) | PENDING_CI |
-| S9-B3 | Rollback after the re-own: up, re-own, down (DROP succeeds as schema owner; `0006.down` is refused and fails closed), up, steps 3 to 6, re-own back, full down, up, whole proposal, undo | yes | `S9-B3` (separate top-level test, fresh database) | pass (NOT_RUN) | PENDING_CI |
-| S9-B4 | Every ledger trigger function refuses a wrong table or schema, `TG_OP`, `TG_WHEN` and `TG_LEVEL`, each alone (29 functions, 116 probes) | yes | `S9-B4` | pass (NOT_RUN) | PENDING_CI |
-| S9-B5 | Break-glass: no superuser or definer owner can update a bucket or state directly; the table owner can only by disabling the named guard | yes | `S9-B5` | pass (NOT_RUN) | PENDING_CI |
-| S9-B6 | HARD GATE on grant sources: steps 1 and 6 refuse a registered source; the runtime role has no privilege on the registry | yes | `S9-B6` | pass (NOT_RUN) | PENDING_CI |
-| S9-G1 | The proposal's end state is exact (step 6 returns zero rows) | yes | `S9-G1`, `S9-B2` | pass (NOT_RUN) | PENDING_CI |
-| S9-G2 | Every runtime and definer privilege is necessary: each unit revoked alone makes the real path fail with `42501` | yes | `S9-G2` | pass (NOT_RUN) | PENDING_CI |
-| S9-G3 | The checker role runs the S8 checks clean, each of its privileges is necessary, and it cannot write | yes | `S9-G3` | pass (NOT_RUN) | PENDING_CI |
-| S9-G4 | The reconciliation role records vendor cost, each of its privileges is necessary; the runtime has no vendor-cost access | yes | `S9-G4 / D15-T3` | pass (NOT_RUN) | PENDING_CI |
-| S9-G5 | Step 6 reports each kind of deviation | yes | `S9-G5` | pass (NOT_RUN) | PENDING_CI |
-| S9-G6 | Undo returns every privilege and owner to the pre-proposal snapshot | yes | `S9-G6` | pass (NOT_RUN) | PENDING_CI |
+| S9-B1 | No definer has members; no role can `SET ROLE` to one, checked in the catalog and with a real `LOGIN`, also while it holds `pg_write_all_data` | yes | `S9-B1` | feedback: pass | PENDING_CI |
+| S9-B2 | The owner change runs as a non-superuser executor; the transient membership and `CREATE` are gone; the end state is exact | yes | `S9-B2` | feedback: pass | PENDING_CI |
+| S9-B3 | Rollback after the re-own: up, re-own, down (DROP succeeds as schema owner; `0006.down` is refused and fails closed), up, steps 3 to 6, re-own back, full down, up, whole proposal, undo | yes | `S9-B3` (separate top-level test, fresh database) | feedback: pass | PENDING_CI |
+| S9-B4 | Every ledger trigger function refuses a wrong table or schema, `TG_OP`, `TG_WHEN` and `TG_LEVEL`, each alone (29 functions, 116 probes) | yes | `S9-B4` | feedback: pass | PENDING_CI |
+| S9-B5 | Break-glass: no superuser or definer owner can update a bucket or state directly; the table owner can only by disabling the named guard | yes | `S9-B5` | feedback: pass | PENDING_CI |
+| S9-B6 | HARD GATE on grant sources: steps 1 and 6 refuse a registered source; the runtime role has no privilege on the registry | yes | `S9-B6` | feedback: pass | PENDING_CI |
+| S9-G1 | The proposal's end state is exact (step 6 returns zero rows) | yes | `S9-G1`, `S9-B2` | feedback: pass | PENDING_CI |
+| S9-G2 | Every runtime and definer privilege is necessary: each unit revoked alone makes the real path fail with `42501` | yes | `S9-G2` | feedback: pass | PENDING_CI |
+| S9-G3 | The checker role runs the S8 checks clean, each of its privileges is necessary, and it cannot write | yes | `S9-G3` | feedback: pass | PENDING_CI |
+| S9-G4 | The reconciliation role records vendor cost, each of its privileges is necessary; the runtime has no vendor-cost access | yes | `S9-G4 / D15-T3` | feedback: pass | PENDING_CI |
+| S9-G5 | Step 6 reports each kind of deviation | yes | `S9-G5` | feedback: pass | PENDING_CI |
+| S9-G6 | Undo returns every privilege and owner to the pre-proposal snapshot | yes | `S9-G6` | feedback: pass | PENDING_CI |
 
 ### Unit tests (no database)
 

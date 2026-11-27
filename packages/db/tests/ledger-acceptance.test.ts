@@ -130,8 +130,8 @@ test("S9-DOC: the grants proposal is complete, parses, renders like psql, and na
     if (name !== "end_state" && name !== "preconditions") assert.doesNotMatch(sql, /pg_write_all_data|pg_read_all_data|session_replication_role/, `${name}: no predefined bypass role is granted (only the checks name them)`);
   }
   const migrations = ledgerMigrationPlan().migrations;
-  const journal = /HAVING coalesce\(string_agg\(a\.file, ',' ORDER BY a\.file\), ''\) <> '([^']+)'/.exec(blocks.get("preconditions")!)?.[1];
-  assert.equal(journal, migrations.map(m => m.file).join(","), "step 1 pins exactly the migrations in plan.json: a new migration must update the proposal");
+  const journal = /HAVING coalesce\(string_agg\(a\.file \|\| ':' \|\| a\.sha256, ',' ORDER BY a\.file\), ''\) <> '([^']+)'/.exec(blocks.get("preconditions")!)?.[1];
+  assert.equal(journal, migrations.map(m => m.file + ":" + m.sha256).join(","), "step 1 pins exactly the migrations (file and sha256) in plan.json: a changed or new migration must update the proposal");
   const definers = [...new Set(migrations.flatMap(m => [...m.sql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION vynvori_ledger\.([a-z_]+)\(\)[^;]*?SECURITY DEFINER/g)].map(x => x[1]!)))].sort();
   assert.deepEqual(definers, ["ledger_entries_apply_to_reservation", "ledger_entries_apply_to_wallet", "ledger_package_events_apply", "refinement_slot_events_apply"]);
   for (const fn of definers) {
@@ -435,7 +435,7 @@ test("S9 grants proposal: applied verbatim by a non-superuser executor; exact en
     // ---- S9-G2: each runtime and definer privilege is necessary ---------------------------------------------------------------
     type Unit = { privilege: string; column: string | null; schema: boolean; object: string; grantee: keyof Vars };
     /** Splits the proposal's GRANT statements into single privilege units (one privilege, one column, one object, one grantee). */
-    const grantUnits = (sql: string): Unit[] => sql.split("\n").filter(line => line.trim() !== "").flatMap(line => {
+    const grantUnits = (sql: string): Unit[] => sql.split("\n").filter(line => !["", "BEGIN;", "COMMIT;"].includes(line.trim())).flatMap(line => {
       const m = /^GRANT (.+?) ON (SCHEMA )?(.+?) TO (.+);$/.exec(line.trim());
       if (!m) throw new Error("not a single GRANT statement: " + line);
       const priv = /^([A-Z]+) \(([^)]+)\)$/.exec(m[1]!);
@@ -736,7 +736,7 @@ test("S9 grants proposal: applied verbatim by a non-superuser executor; exact en
     });
 
     // ---- S9-G5: the end-state check detects deviations -----------------------------------------------------------------------------
-    await t.test("S9-G5: step 6 reports each deviation: a definer granted to the runtime, an extra privilege, a missing privilege, EXECUTE on a definer, CREATE for a definer, PUBLIC TEMPORARY, an extra identity column, and a dangerous login attribute", async () => {
+    await t.test("S9-G5: step 6 reports each deviation: definer membership, extra, missing and grant-option privileges, EXECUTE on a definer, CREATE for a definer, PUBLIC TEMPORARY, an extra identity column, ADMIN-only, SET-only and chained memberships, parameter privileges, role and database settings, a disabled trigger, row security, and a dangerous login attribute", async () => {
       const cases: [string, string, string][] = [
         ["definer membership", `GRANT ${q(vars.ledger_wallet_definer)} TO ${q(vars.ledger_runtime)}`, `REVOKE ${q(vars.ledger_wallet_definer)} FROM ${q(vars.ledger_runtime)}`],
         ["extra privilege", `GRANT INSERT ON vynvori_ledger.vendor_cost_evidence TO ${q(vars.ledger_runtime)}`, `REVOKE INSERT ON vynvori_ledger.vendor_cost_evidence FROM ${q(vars.ledger_runtime)}`],
@@ -755,6 +755,30 @@ test("S9 grants proposal: applied verbatim by a non-superuser executor; exact en
       await admin.query(`GRANT SELECT (created_at) ON vynvori_identity.profiles TO ${q(vars.ledger_runtime)}`);
       try { assert.ok((await endState()).some(x => x.includes("created_at")), "an identity column beyond id, issuer, subject is reported"); }
       finally { await admin.query(`REVOKE SELECT (created_at) ON vynvori_identity.profiles FROM ${q(vars.ledger_runtime)}`); }
+      // security review MEDIUM-1..3: grant option, ADMIN-only membership, non-inherited and chained memberships, parameter ACLs,
+      // role and database settings, disabled triggers and row security are each reported
+      const x = "m7s9_x_" + env!.suffix, chained = "m7s9_chain_" + env!.suffix;
+      env!.rolesCreated.push(x, chained);
+      await admin.query(`CREATE ROLE ${q(x)} NOLOGIN`); await admin.query(`CREATE ROLE ${q(chained)} NOLOGIN`);
+      const guard = (await admin.query("SELECT tgname::text AS n FROM pg_trigger WHERE tgrelid = 'vynvori_ledger.wallets'::regclass AND tgname LIKE '%update_guard'")).rows[0].n as string;
+      const more: [string, "exec" | "admin", string, string, string][] = [
+        ["grant option", "exec", `GRANT SELECT ON vynvori_ledger.wallets TO ${q(vars.ledger_runtime)} WITH GRANT OPTION`, `REVOKE GRANT OPTION FOR SELECT ON vynvori_ledger.wallets FROM ${q(vars.ledger_runtime)}`, "SELECT WITH GRANT OPTION on table vynvori_ledger.wallets"],
+        ["ADMIN-only membership", "exec", `GRANT ${q(vars.ledger_runtime)} TO ${q(x)} WITH ADMIN TRUE, INHERIT FALSE, SET FALSE`, `REVOKE ${q(vars.ledger_runtime)} FROM ${q(x)}`, `${x} on ${vars.ledger_runtime}`],
+        ["SET-only predefined role", "admin", `GRANT pg_write_all_data TO ${q(vars.ledger_checker_login)} WITH INHERIT FALSE, SET TRUE`, `REVOKE pg_write_all_data FROM ${q(vars.ledger_checker_login)}`, `too powerful: ${vars.ledger_checker_login} in ${vars.ledger_checker}`],
+        ["chained membership", "admin", `GRANT ${q(vars.ledger_runtime)} TO ${q(x)}; GRANT ${q(x)} TO ${q(chained)}`, `REVOKE ${q(x)} FROM ${q(chained)}; REVOKE ${q(vars.ledger_runtime)} FROM ${q(x)}`, `too powerful: ${chained} in ${vars.ledger_runtime}`],
+        ["parameter privilege", "admin", `GRANT SET ON PARAMETER session_replication_role TO ${q(vars.ledger_runtime_login)}`, `REVOKE SET ON PARAMETER session_replication_role FROM ${q(vars.ledger_runtime_login)}`, "session_replication_role"],
+        ["login setting", "admin", `ALTER ROLE ${q(vars.ledger_checker_login)} SET search_path = public`, `ALTER ROLE ${q(vars.ledger_checker_login)} RESET search_path`, `setting touches the ledger: ${vars.ledger_checker_login}`],
+        ["database setting", "admin", `ALTER DATABASE ${q(env!.database)} SET row_security = off`, `ALTER DATABASE ${q(env!.database)} RESET row_security`, "every role: row_security=off"],
+        ["disabled trigger", "exec", `ALTER TABLE vynvori_ledger.wallets DISABLE TRIGGER ${q(guard)}`, `ALTER TABLE vynvori_ledger.wallets ENABLE TRIGGER ${q(guard)}`, `wallets.${guard} = D`],
+        ["row security", "exec", "ALTER TABLE vynvori_ledger.wallets ENABLE ROW LEVEL SECURITY", "ALTER TABLE vynvori_ledger.wallets DISABLE ROW LEVEL SECURITY", "row security exists on a ledger table: wallets"],
+      ];
+      for (const [name, as, change, undo, expected] of more) {
+        const run = (sql: string) => as === "exec" ? env!.asExec(sql) : admin.query(sql);
+        await run(change);
+        try { const found = await endState(); assert.ok(found.some(f => f.includes(expected)), `${name} is reported (${expected}): ${JSON.stringify(found)}`); }
+        finally { await run(undo); }
+      }
+      await admin.query(`DROP ROLE ${q(x)}, ${q(chained)}`);
       await admin.query(`ALTER ROLE ${q(vars.ledger_checker_login)} BYPASSRLS`);
       try { assert.ok((await endState()).some(x => x.includes(vars.ledger_checker_login)), "a login holding a ledger role with BYPASSRLS is reported"); }
       finally { await admin.query(`ALTER ROLE ${q(vars.ledger_checker_login)} NOBYPASSRLS`); }
