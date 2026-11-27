@@ -9,6 +9,9 @@ import * as ledgerMigrations from "../src/ledger-migrations";
 import * as ledgerQuotes from "../src/ledger-quotes";
 import * as ledgerPromo from "../src/ledger-promo";
 import * as ledgerReservations from "../src/ledger-reservations";
+import * as ledgerSettlement from "../src/ledger-settlement";
+import * as ledgerEvidence from "../src/ledger-evidence";
+import { holdReservation, settleReservation } from "../src/ledger-settlement";
 import { authorizeQuote, recordWorkflowRef, releaseReservation } from "../src/ledger-reservations";
 import { issueQuote, renewQuote } from "../src/ledger-quotes";
 import { dropLedger, freshLedger, ledgerTarget, registerSyntheticGrantSource, syntheticProfileWithWallet, grantSyntheticCredits } from "./ledger-fixture";
@@ -25,7 +28,7 @@ function walk(dir: string, out: string[] = []): string[] {
   }
   return out;
 }
-const ledgerSources = new Set(["packages/db/src/ledger-core.ts", "packages/db/src/ledger-migrations.ts", "packages/db/src/ledger-quotes.ts", "packages/db/src/ledger-promo.ts", "packages/db/src/ledger-reservations.ts"]);
+const ledgerSources = new Set(["packages/db/src/ledger-core.ts", "packages/db/src/ledger-migrations.ts", "packages/db/src/ledger-quotes.ts", "packages/db/src/ledger-promo.ts", "packages/db/src/ledger-reservations.ts", "packages/db/src/ledger-settlement.ts", "packages/db/src/ledger-evidence.ts"]);
 const files = ["apps", "packages", "services", "scripts"].flatMap(dir => { try { return walk(join(root, dir)); } catch { return []; } });
 
 test("no app or non-test module imports the ledger (D13)", () => {
@@ -40,7 +43,7 @@ test("no app or non-test module imports the ledger (D13)", () => {
 });
 
 test("packages/db/src exports no numeric constants and nothing that mints or registers credits", () => {
-  for (const [name, module] of Object.entries({ ledgerCore, ledgerMigrations, ledgerQuotes, ledgerPromo, ledgerReservations })) {
+  for (const [name, module] of Object.entries({ ledgerCore, ledgerMigrations, ledgerQuotes, ledgerPromo, ledgerReservations, ledgerSettlement, ledgerEvidence })) {
     for (const [key, value] of Object.entries(module)) {
       assert.ok(typeof value !== "number" && typeof value !== "bigint", `${name}.${key} must not be a numeric constant`);
       assert.doesNotMatch(key, /mint|synthetic|testing|register.*source|price|rate|package/i, `${name}.${key}`);
@@ -66,8 +69,36 @@ test("ledger-reservations exposes exactly the reviewed API (S5; no settle, hold,
   assert.deepEqual(Object.keys(ledgerReservations).sort(), ["authorizeQuote", "getReservation", "recordWorkflowRef", "releaseReservation"]);
 });
 
+test("ledger-settlement and ledger-evidence expose exactly the reviewed API (S6; nothing resolves a hold, grants, or reads vendor cost)", () => {
+  assert.deepEqual(Object.keys(ledgerSettlement).sort(), ["holdReservation", "settleReservation"]);
+  assert.deepEqual(Object.keys(ledgerEvidence).sort(), ["recordVendorCostEvidence"]);
+});
+
+const stripComments = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+test("S6 vendor-cost isolation (static): only ledger-evidence.ts writes or reads vendor_cost_evidence, and it touches no other ledger table", () => {
+  for (const file of dbSrcFiles()) {
+    const code = stripComments(readFileSync(join(root, "packages/db/src", file), "utf8"));
+    if (file === "ledger-evidence.ts") {
+      assert.match(code, /INSERT\s+INTO\s+\$\{S\}\.vendor_cost_evidence\b/, "ledger-evidence.ts itself inserts the evidence");
+      assert.doesNotMatch(code, /\b(wallets|ledger_entries|credit_reservations|ledger_commands|ledger_authorizations|ledger_packages|ledger_quotes|promo_claims)\b/, "evidence code never names another ledger table");
+      assert.doesNotMatch(code, /runLedgerCommand|FOR\s+UPDATE|\bBEGIN\b|UPDATE\s|DELETE\s/i, "evidence code takes no wallet lock, opens no command and never updates or deletes");
+      continue;
+    }
+    assert.doesNotMatch(code, /vendor_cost/i, `${file} never touches vendor-cost evidence`);
+  }
+});
+
+test("S6: settle and hold entries are written only by ledger-settlement.ts, and no TypeScript names reconciliation_hold as a source state", () => {
+  for (const file of dbSrcFiles()) {
+    const code = stripComments(readFileSync(join(root, "packages/db/src", file), "utf8"));
+    if (file !== "ledger-settlement.ts") assert.doesNotMatch(code, /'(settle|hold)'\s*,/, `${file} writes no settle or hold entry`);
+    assert.doesNotMatch(code, /reconciliation_hold/, `${file}: no code path reads or leaves reconciliation_hold (W1 has no remedy; the database guard has no edge out)`);
+  }
+  for (const key of Object.keys(ledgerSettlement)) assert.doesNotMatch(key, /resolve|unhold|remedy|refund|release/i, key);
+});
+
 // ADR-0021 S3 addendum A4: BINDING for every future step. All command kinds implemented anywhere under packages/db/src.
-const KNOWN_LEDGER_COMMAND_KINDS = ["grant_credits", "quote_issue", "quote_renew", "promo_claim", "promo_outcome", "reservation_authorize", "reservation_dispatch", "reservation_release"];
+const KNOWN_LEDGER_COMMAND_KINDS = ["grant_credits", "quote_issue", "quote_renew", "promo_claim", "promo_outcome", "reservation_authorize", "reservation_dispatch", "reservation_release", "reservation_settle", "reservation_hold"];
 const dbSrcFiles = () => readdirSync(join(root, "packages/db/src")).filter(f => f.endsWith(".ts"));
 
 test("ledger-promo exposes exactly the reviewed API (S4; a new export must be added here deliberately)", () => {
@@ -156,6 +187,7 @@ test("A4(1): every ledger command locks the wallet row FOR UPDATE before touchin
     // S5 commands: authorize (customer), dispatch and release (system) all take the wallet lock first.
     await grantSyntheticCredits(spyDb, { userId: user, grantSourceId: source, sourceRef: "lock-order-funds", units: 100 });
     const quoteVersionId = await issueTestQuote(spyDb, user, "final", "lock-order-final");
+    let bundleReservations: Awaited<ReturnType<typeof authorizeQuote>>["reservations"] = [];
     const originalPackageId = await bundlePackage();
     log.length = 0;
     const authorized = await authorizeQuote(spyDb, { userId: user, quoteVersionId, idempotencyKey: "lock-order-authorize-0001", consent: consent(), originalPackageId, now: new Date(), pricePolicy: currentPricePolicy, eligibility: eligibilityPort() });
@@ -168,9 +200,21 @@ test("A4(1): every ledger command locks the wallet row FOR UPDATE before touchin
     await releaseReservation(spyDb, { userId: user, component: "lock-order", reservationId: reservation.reservationId, evidence: releaseEvidence(reservation.operationId), idempotencyKey: "lock-order-release-0001" });
     assert.match(firstLedgerStatement() ?? "", WALLET_LOCK, "reservation_release");
 
+    // S6 commands: settle and hold (system) take the wallet lock first, on two dispatched bundle reservations.
+    const [toSettle, toHold] = bundleReservations;
+    for (const [i, r] of [toSettle!, toHold!].entries()) await recordWorkflowRef(spyDb, { userId: user, component: "lock-order", reservationId: r.reservationId, workflowRef: `wf/lock-order-s6-${i}`, idempotencyKey: `lock-order-s6-dispatch-${i}` });
+    log.length = 0;
+    await settleReservation(spyDb, { userId: user, component: "lock-order", reservationId: toSettle!.reservationId, evidence: { transition: "settle", operationId: toSettle!.operationId, evidenceKind: "persisted_delivered", evidenceRef: "lock-order-settle", hasVerifiedManifestHash: true, ownerAndRightsVerified: true }, idempotencyKey: "lock-order-settle-0001" });
+    assert.match(firstLedgerStatement() ?? "", WALLET_LOCK, "reservation_settle");
+    log.length = 0;
+    await holdReservation(spyDb, { userId: user, component: "lock-order", reservationId: toHold!.reservationId, evidence: { transition: "hold", operationId: toHold!.operationId, evidenceKind: "outcome_unknown", evidenceRef: "lock-order-hold", reason: "outcome_unknown" }, idempotencyKey: "lock-order-hold-0001" });
+    assert.match(firstLedgerStatement() ?? "", WALLET_LOCK, "reservation_hold");
+
     async function bundlePackage() {
       const bundle = await issueTestQuote(spyDb, user, "bundle", "lock-order-bundle");
-      return (await authorizeQuote(spyDb, { userId: user, quoteVersionId: bundle, idempotencyKey: "lock-order-bundle-auth-01", consent: consent(), now: new Date(), pricePolicy: currentPricePolicy, eligibility: eligibilityPort() })).packageId!;
+      const authorizedBundle = await authorizeQuote(spyDb, { userId: user, quoteVersionId: bundle, idempotencyKey: "lock-order-bundle-auth-01", consent: consent(), now: new Date(), pricePolicy: currentPricePolicy, eligibility: eligibilityPort() });
+      bundleReservations = authorizedBundle.reservations;
+      return authorizedBundle.packageId!;
     }
   } finally { await client.end().catch(() => undefined); await dropLedger("isolation"); }
 });
