@@ -19,7 +19,7 @@ Firefox and WebKit are not involved in M7.
 |---|---|---|
 | CI `db-integration` job | `npm run test:m2` (runs `packages/db/tests/*.test.ts` with `CI_REQUIRE_PG_TESTS=1`, so Postgres tests cannot skip) | **yes**, from the job log |
 | CI `unit` job | `npm test` (Postgres-backed tests skip there; `S9-DOC` and `S9-TRACE` run) | yes, for the two unit tests |
-| Local sandbox, PostgreSQL 16 | `M7_TEST_POSTGRES_URL=postgres://synthetic@127.0.0.1:5432/postgres node --conditions=react-server --import tsx --test packages/db/tests/ledger-acceptance.test.ts` | **no** (feedback only, `NOT_RUN`) |
+| Local sandbox, PostgreSQL 16 (all `ledger-*.test.ts`: 278 pass, 0 fail, feedback only) | `M7_TEST_POSTGRES_URL=postgres://synthetic@127.0.0.1:5432/postgres node --conditions=react-server --import tsx --test packages/db/tests/ledger-acceptance.test.ts` | **no** (feedback only, `NOT_RUN`) |
 
 The CI log line for a row is the `node:test` line `ok N - <row id>: ...` (or `not ok`) printed under the top-level test
 `S9 grants proposal: applied verbatim by a non-superuser executor; ...` or `S9-B3: migration rollback after the re-own: ...`.
@@ -108,8 +108,8 @@ Filled from the commands run on the final commit (see the PR body for the summar
 
 | Command | Local result | CI job |
 |---|---|---|
-| `npm ci` | PENDING | all jobs |
-| `npm run lint` | PENDING | `lint-typecheck` |
-| `npm run typecheck` | PENDING | `lint-typecheck` |
-| `npm test` | PENDING | `unit` |
-| `npm run security:audit` | PENDING | `security` |
+| `npm ci` | exit 0 | all jobs |
+| `npm run lint` | exit 0, `Checked 267 files`, no warnings | `lint-typecheck` |
+| `npm run typecheck` | exit 0, 0 `error TS` | `lint-typecheck` |
+| `npm test` | exit 0, 0 failures (Postgres-backed tests skip without a database) | `unit` |
+| `npm run security:audit` | exit 0, `npm audit exit=0; findings=0; effective security gate=ACCEPTED_WITH_DATED_WAIVER` (the existing dev-only waiver, unchanged) | `security` |

@@ -19,7 +19,7 @@ import { checkWalletInvariants, findOrphanedReservations } from "../src/ledger-i
 import { assertDisposableTarget, databaseFor, dropLedger, freshEmptyDatabase, grantSyntheticCredits, ledgerPoolAs, ledgerTarget, registerSyntheticGrantSource } from "./ledger-fixture";
 import {
   SYNTHETIC_BUNDLE_CHARGE, SYNTHETIC_BUNDLE_HOLD, SYNTHETIC_CHARGES, SYNTHETIC_FINAL_HOLD, SYNTHETIC_HOLDS, bundleAllocations, bundleView, consent,
-  currentPricePolicy, eligibilityPort, finalView, issueTestQuote, releaseEvidence, stalePricePolicy,
+  currentPricePolicy, eligibilityPort, issueTestQuote, releaseEvidence, stalePricePolicy,
 } from "./ledger-reservation-fixture";
 
 /**
