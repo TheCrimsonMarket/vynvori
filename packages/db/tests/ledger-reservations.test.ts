@@ -150,6 +150,13 @@ test("ledger reservations: authorize, reserve, dispatch and release in disposabl
       const port = eligibilityPort();
       await authorize(user, quoteVersionId, { eligibility: port });
       assert.equal(port.calls, 1);
+      // An ineligible bundle (no permitted downstream use, unqualified Standard, non-distinct directions) cannot even be issued:
+      // QuoteViewV3Schema refuses it, so authorization never sees one; the contract guard in authorizeQuote is defence in depth.
+      const quotesBefore = (await client.query("SELECT count(*)::int n FROM vynvori_ledger.ledger_quotes WHERE user_id = $1", [user])).rows[0].n;
+      const noUse = { downstreamEligibility: { ...bundleView("x", "x-v1").downstreamEligibility, quotedEligibleUses: [] } };
+      for (const [label, overrides] of [["no downstream use", noUse], ["unqualified Standard", { standardFinalQualified: false }], ["non-distinct directions", { directionIds: ["d1", "d1", "d2"] }]] as const)
+        await assert.rejects(issueTestQuote(pool, user, "bundle", qid("ineligible"), overrides as Record<string, unknown>), code("INVALID_INPUT"), label);
+      assert.equal((await client.query("SELECT count(*)::int n FROM vynvori_ledger.ledger_quotes WHERE user_id = $1", [user])).rows[0].n, quotesBefore);
     });
 
     await t.test("consent: not accepted, or accepted for a different consent text version, is TERMS_NOT_APPROVED", async () => {
