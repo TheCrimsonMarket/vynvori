@@ -5,7 +5,13 @@ import {
 } from "@vynvori/contracts";
 
 /** Pure editor state transitions. No React, no DOM: the same scene shape the server validates and hashes. */
-export type EditorAsset = Readonly<{ assetId: string; sha256: string; widthPx: number; heightPx: number; name: string; url: string; persisted: boolean }>;
+/** Server scan lifecycle (ADR-0022 D3/C5). Absent on an asset the browser added and has not uploaded yet. */
+export type ScanStatus = "pending" | "clean" | "quarantined" | "unknown";
+/**
+ * `url` is either a `data:` URL of bytes this browser already holds (a local preview, founder ruling QB) or the server asset
+ * route. A server URL is drawn only once the asset is `clean`; see `previewHref`.
+ */
+export type EditorAsset = Readonly<{ assetId: string; sha256: string; widthPx: number; heightPx: number; name: string; url: string; persisted: boolean; scanStatus?: ScanStatus }>;
 export const PT_TO_MM = 25.4 / 72;
 export const profile = SYNTHETIC_PREVIEW_PROFILE;
 export const font = LICENSED_FONTS[0]!;
@@ -190,3 +196,37 @@ export function summarizeIssues(issues: readonly { severity: string }[]): string
   return `Preview checks: ${[problems ? plural(problems, "problem") : "", warnings ? plural(warnings, "warning") : ""].filter(Boolean).join(" and ")}.`;
 }
 export const describeMove = (xMm: number, yMm: number) => `Moved to x ${xMm} mm, y ${yMm} mm.`;
+
+// --- artwork safety check (ADR-0022 C5). The server is authoritative; these only decide what the editor draws and says.
+const SCAN_STATUSES: readonly ScanStatus[] = ["pending", "clean", "quarantined", "unknown"];
+/** An unrecognised or missing status from the server is treated as `pending`: never as clean. */
+export const parseScanStatus = (value: unknown): ScanStatus => (SCAN_STATUSES as readonly unknown[]).includes(value) ? (value as ScanStatus) : "pending";
+const isLocalPreview = (url: string) => url.startsWith("data:");
+/**
+ * What the canvas may draw for an asset: bytes the browser already holds (ruling QB: unchanged local preview), or server pixels
+ * only when the server says `clean`. Anything else is a placeholder, so pending, unknown and quarantined pixels never load.
+ */
+export function previewHref(asset: Pick<EditorAsset, "url" | "scanStatus">): string | null {
+  if (isLocalPreview(asset.url)) return asset.url;
+  return asset.scanStatus === "clean" ? asset.url : null;
+}
+/** Short state added to a layer's name, or null when nothing needs saying (clean, or not uploaded yet). */
+export function scanLabel(status: ScanStatus | undefined): string | null {
+  switch (status) {
+    case "pending": return "safety check pending";
+    case "unknown": return "safety check did not finish";
+    case "quarantined": return "blocked by the safety check";
+    default: return null;
+  }
+}
+/** Whether the person can ask for another check: only for an uploaded asset whose check is pending or did not finish. */
+export const canRequestScan = (asset: Pick<EditorAsset, "persisted" | "scanStatus"> | undefined) => !!asset?.persisted && (asset.scanStatus === "pending" || asset.scanStatus === "unknown");
+/** The sentence announced after an upload or a check. Never names a scanner, a reason code or evidence. */
+export function describeScanOutcome(name: string, status: ScanStatus): string {
+  switch (status) {
+    case "clean": return `${name}: safety check passed.`;
+    case "pending": return `${name}: safety check in progress. Choose Check again in a moment.`;
+    case "unknown": return `${name}: the safety check could not finish. Choose Check again to try once more.`;
+    case "quarantined": return `${name}: this artwork did not pass the safety check and cannot be used. Remove it from the design.`;
+  }
+}
