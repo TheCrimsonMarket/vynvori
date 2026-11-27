@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { connectionString, freshCompositionDatabase, compositionPool, POOL_CAPS } from "./composition-fixture";
-import { compositionStore, lockAsset, lockComposition, type CompositionTx } from "../src/composition-store";
+import { EMPTY_SYNTHETIC_SCENE, SYNTHETIC_PREVIEW_PROFILE } from "@vynvori/contracts";
+import { compositionStore, lockAsset, lockComposition, withCompositionTransaction, type CompositionTx } from "../src/composition-store";
 
 // CI sets CI_REQUIRE_PG_TESTS=1 so a missing database fails the run instead of silently skipping.
 const requirePg = process.env.CI_REQUIRE_PG_TESTS === "1";
@@ -197,22 +198,51 @@ test("M3 0002 concurrency: scan-event, attempt, grant and rate-bucket races; loc
       assert.deepEqual(seqs.rows.map(r => r.seq), [1]);
     });
 
+    /** Runs `take` inside a composition transaction and keeps it open until `release()`; `held` resolves once `take` has its locks. */
+    function hold(take: (tx: CompositionTx) => Promise<unknown>) {
+      let release!: () => void, held!: () => void;
+      const gate = new Promise<void>(resolve => { release = resolve; }), acquired = new Promise<void>(resolve => { held = resolve; });
+      const done = withCompositionTransaction(pool, async tx => { await take(tx); held(); await gate; return tx; });
+      return { acquired, release, done };
+    }
+
     await t.test("C3b store: the per-asset lock serialises store scan events (a held asset lock blocks the store until it is released)", async () => {
       const a = await makeAsset("store-lock-serial");
       const opened = await store.openScanAttempt(a.compositionId, a.assetId, a.access, new Date(), lease());
       if (opened.status !== "opened") return assert.fail(opened.status);
-      const holder = await pool.connect();
+      const holder = hold(tx => lockAsset(tx, a.compositionId, a.assetId));
       try {
-        await holder.query("BEGIN");
-        await lockAsset(holder as CompositionTx, a.compositionId, a.assetId);
+        await holder.acquired;
         const pending = store.completeScanAttempt(a.compositionId, a.assetId, a.access, new Date(), { attemptId: opened.attempt.attemptId, result: { toStatus: "unknown", reasonCode: "scanner_error" } });
         assert.equal(await Promise.race([pending.then(() => "done" as const), later(300)]), "pending", "the store must wait for the asset lock");
         const waiting = await q("SELECT count(*) AS n FROM pg_locks WHERE locktype='advisory' AND NOT granted AND database=(SELECT oid FROM pg_database WHERE datname=current_database())");
         assert.ok(Number(waiting.rows[0].n) >= 1, "the store's session is queued on an advisory lock");
         assert.deepEqual((await q("SELECT count(*)::int AS n FROM vynvori_composition.asset_scan_events WHERE asset_id=$1", [a.assetId])).rows[0].n, 0);
-        await holder.query("COMMIT");
+        holder.release(); await holder.done;
         assert.equal((await pending).status, "recorded");
-      } finally { await holder.query("ROLLBACK").catch(() => undefined); holder.release(); }
+      } finally { holder.release(); await holder.done.catch(() => undefined); }
+    });
+
+    await t.test("C3b store: freeze takes the composition advisory lock before the row lock, so an asset insert under that lock cannot deadlock it", async () => {
+      // A C4-style writer holds lockComposition and then inserts an asset (FK KEY SHARE on the compositions row) while a freeze waits.
+      const id = randomUUID(), capabilityHash = hashOf("freeze-order:cap"), access = { kind: "guest" as const, capabilityHash };
+      const profile = SYNTHETIC_PREVIEW_PROFILE, profileSha = createHash("sha256").update(JSON.stringify(profile)).digest("hex");
+      await store.ensurePrintProfile(profile, profileSha);
+      const scene = EMPTY_SYNTHETIC_SCENE(), sceneSha = hashOf("freeze-order:scene");
+      await store.createGuest({ id, capabilityHash, guestExpiresAt: new Date(Date.now() + 3_600_000), scene, sceneSha256: sceneSha, state: "guest_draft" });
+      const writer = hold(tx => lockComposition(tx, id));
+      try {
+        await writer.acquired;
+        const freezing = store.freeze(id, access, new Date(), { expectedRevision: 0, state: "frozen_version", sourceAssetSha256: [], sourceFontSha256: [],
+          version: { id: randomUUID(), scene, sceneSha256: sceneSha, printProfileId: profile.profileId, printProfileVersion: profile.version, preflightState: "preview_only", preflightIssues: [] } });
+        assert.equal(await Promise.race([freezing.then(() => "done" as const), later(300)]), "pending", "freeze queues on the composition advisory lock");
+        const hash = hashOf("freeze-order:bytes"), assetInsert = q(`INSERT INTO vynvori_composition.assets(id,composition_id,kind,object_key,sha256,mime,byte_size,width_px,height_px)
+          VALUES($1,$2,'customer_original',$3,$4,'image/png',10,1,1)`, [randomUUID(), id, `private/composition/v1/${id}/${hash}`, hash]);
+        // The insert runs on another session here; what matters is that freeze holds no row lock yet, so the FK check is not blocked.
+        assert.equal(await Promise.race([assetInsert.then(() => "inserted" as const), later(3000)]), "inserted", "the FK check is not blocked by freeze");
+        writer.release(); await writer.done;
+        assert.equal((await freezing).status, "frozen", "freeze completes after the writer commits, with no deadlock (40P01)");
+      } finally { writer.release(); await writer.done.catch(() => undefined); }
     });
 
     await t.test("C3b store: consumeRateToken admits exactly SYNTHETIC_LIMIT of SYNTHETIC_CONCURRENCY concurrent callers", async () => {
@@ -223,35 +253,33 @@ test("M3 0002 concurrency: scan-event, attempt, grant and rate-bucket races; loc
       assert.deepEqual(results.filter(r => r.admitted).map(r => (r as { count: number }).count).sort((x, y) => x - y), [1, 2, 3, 4, 5]);
     });
 
-    await t.test("C3b lock helpers: class-4 high word survives a negative hashtext; xact-scoped; opposite helper orders never deadlock", async () => {
+    await t.test("C3b lock helpers: refused outside a composition transaction; class-4 high word survives a negative hashtext; xact-scoped; opposite orders never deadlock", async () => {
+      const outside = await pool.connect();
+      try {
+        await assert.rejects(lockComposition(outside as CompositionTx, randomUUID()), /open composition transaction/);
+        await assert.rejects(lockAsset(outside as CompositionTx, randomUUID(), randomUUID()), /open composition transaction/);
+      } finally { outside.release(); }
       let negative = "";
       for (let i = 0; i < 200 && !negative; i += 1) { const id = randomUUID(); if ((await q("SELECT hashtext($1::uuid::text) < 0 AS neg", [id])).rows[0].neg) negative = id; }
       assert.ok(negative, "found a subject whose hashtext is negative");
-      const holder = await pool.connect();
-      try {
-        await holder.query("BEGIN");
-        await lockComposition(holder as CompositionTx, negative);
-        const mine = await holder.query("SELECT classid::bigint AS hi, objid::bigint AS lo, objsubid FROM pg_locks WHERE locktype='advisory' AND pid=pg_backend_pid()");
+      const tx = await withCompositionTransaction(pool, async tx => {
+        await lockComposition(tx, negative);
+        const mine = await tx.query("SELECT classid::bigint AS hi, objid::bigint AS lo, objsubid FROM pg_locks WHERE locktype='advisory' AND pid=pg_backend_pid()");
         assert.equal(mine.rows.length, 1); assert.equal(Number(mine.rows[0].hi), 4, "high word is the class constant 4"); assert.equal(mine.rows[0].objsubid, 1, "single-bigint lock form");
-        const expected = await holder.query("SELECT (hashtext($1::uuid::text)::bigint & 4294967295) AS lo", [negative]);
+        const expected = await tx.query("SELECT (hashtext($1::uuid::text)::bigint & 4294967295) AS lo", [negative]);
         assert.equal(String(mine.rows[0].lo), String(expected.rows[0].lo), "low word is the masked hashtext");
-        await holder.query("COMMIT");
-        const after = await holder.query("SELECT count(*)::int AS n FROM pg_locks WHERE locktype='advisory' AND pid=pg_backend_pid()");
-        assert.equal(after.rows[0].n, 0, "transaction-scoped: released at commit");
-      } finally { await holder.query("ROLLBACK").catch(() => undefined); holder.release(); }
+        return tx;
+      });
+      await assert.rejects(lockComposition(tx, negative), /open composition transaction/, "the client is no longer inside a transaction after commit");
+      const left = await q("SELECT count(*)::int AS n FROM pg_locks WHERE locktype='advisory' AND granted AND database=(SELECT oid FROM pg_database WHERE datname=current_database())");
+      assert.equal(left.rows[0].n, 0, "transaction-scoped: released at commit");
       const { compositionId, assetId } = await makeAsset("store-lock-order");
       for (let round = 0; round < 5; round += 1) {
-        const one = await pool.connect(), two = await pool.connect();
-        try {
-          await one.query("BEGIN"); await two.query("BEGIN");
-          // Caller one asks composition-then-asset explicitly; caller two asks for the asset first. lockAsset takes the composition lock
-          // first by construction, so both queue on the composition lock and serialise instead of forming a cycle.
-          const first = (async () => { await lockComposition(one as CompositionTx, compositionId); await lockAsset(one as CompositionTx, compositionId, assetId); await one.query("COMMIT"); })();
-          const second = (async () => { await lockAsset(two as CompositionTx, compositionId, assetId); await lockComposition(two as CompositionTx, compositionId); await two.query("COMMIT"); })();
-          assert.equal(await Promise.race([Promise.all([first, second]).then(() => "done" as const), later(5000)]), "done", "no deadlock and no hang");
-        } finally {
-          await one.query("ROLLBACK").catch(() => undefined); await two.query("ROLLBACK").catch(() => undefined); one.release(); two.release();
-        }
+        // Caller one asks composition-then-asset explicitly; caller two asks for the asset first. lockAsset takes the composition lock
+        // first by construction, so both queue on the composition lock and serialise instead of forming a cycle.
+        const first = withCompositionTransaction(pool, async tx => { await lockComposition(tx, compositionId); await later(20); await lockAsset(tx, compositionId, assetId); });
+        const second = withCompositionTransaction(pool, async tx => { await lockAsset(tx, compositionId, assetId); await later(20); await lockComposition(tx, compositionId); });
+        assert.equal(await Promise.race([Promise.all([first, second]).then(() => "done" as const), later(5000)]), "done", "no deadlock and no hang");
       }
     });
 

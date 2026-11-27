@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
-import { CompositionSceneV1Schema, type PreflightIssue, type PrintProfileV1 } from "@vynvori/contracts";
+import { CompositionSceneV1Schema, sceneSourceHashes, type PreflightIssue, type PrintProfileV1 } from "@vynvori/contracts";
 import type {
   ArtifactScanStatus, AssetRecord, CompositionAccess, CompositionRecord, CompositionStore, DownloadGrantRecord, RateLimitOperation,
   ScanAttemptRecord, ScanEventRecord, ScanResultEvent, ScanTransitionOutcome, VersionRecord,
@@ -39,15 +39,21 @@ const RATE_OPERATIONS: readonly RateLimitOperation[] = ["GUEST_CREATE_GLOBAL", "
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/, hex64 = /^[a-f0-9]{64}$/, reasonCodePattern = /^[a-z][a-z0-9_]*$/;
 const isId = (value: unknown): value is string => typeof value === "string" && uuid.test(value);
 const isDate = (value: unknown): value is Date => value instanceof Date && Number.isFinite(value.getTime());
-const isText = (value: unknown): value is string => typeof value === "string" && value.trim() !== "" && value === value.trim();
-const isPositiveInteger = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+/**
+ * Structural ceilings (engineering constants, not policy; ADR-0022 C3b): the PostgreSQL `integer` range that the rate statement casts
+ * to, and a length cap on scanner-reported text so append-only tables cannot be filled with arbitrarily large strings.
+ */
+const PG_INTEGER_MAX = 2147483647, SCAN_TEXT_MAX = 512;
+const isText = (value: unknown): value is string => typeof value === "string" && value.trim() !== "" && value === value.trim() && value.length <= SCAN_TEXT_MAX;
+const isPositiveInteger = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value > 0 && value <= PG_INTEGER_MAX;
+const isReason = (value: unknown): value is string => typeof value === "string" && value.length <= SCAN_TEXT_MAX && reasonCodePattern.test(value);
 /** Programming errors (malformed ids, unset or non-positive policy, a lease or expiry not after `now`) throw. Nothing defaults. */
 function invalid(what: string): never { throw new RangeError(`composition store: invalid ${what}`); }
 function assertScanResult(result: ScanResultEvent): void {
   if (result?.toStatus === "clean" || result?.toStatus === "quarantined") {
     if (![result.scannerId, result.engineVersion, result.definitionsVersion, result.evidenceRef].every(isText)) invalid("scan evidence");
   } else if (result?.toStatus === "unknown") {
-    if (typeof result.reasonCode !== "string" || !reasonCodePattern.test(result.reasonCode) || (result.scannerId !== undefined && !isText(result.scannerId))) invalid("scan reason");
+    if (!isReason(result.reasonCode) || (result.scannerId !== undefined && !isText(result.scannerId))) invalid("scan reason");
   } else invalid("scan result");
 }
 /** The principal a grant is bound to: SHA-256 of the verified user id, or the guest capability hash (ADR-0022 D4). */
@@ -91,16 +97,28 @@ const COMPOSITION = `SELECT c.*, v.scene_sha256 AS current_version_scene_sha256,
  * (`pg_advisory_xact_lock`): they accept only a client inside this store's `transaction()`; there is no session-level variant.
  */
 export type CompositionTx = PoolClient & { readonly __compositionTransaction: true };
-export async function lockComposition(tx: CompositionTx, compositionId: string): Promise<void> { await tx.query(`SELECT ${S}.m3_lock_composition($1::uuid)`, [compositionId]); }
-export async function lockAsset(tx: CompositionTx, compositionId: string, assetId: string): Promise<void> { await tx.query(`SELECT ${S}.m3_lock_asset($1::uuid, $2::uuid)`, [compositionId, assetId]); }
+/** Clients currently inside `withCompositionTransaction`. Outside a transaction block an xact lock would be released at once. */
+const openTransactions = new WeakSet<PoolClient>();
+function assertInTransaction(tx: PoolClient): void { if (!openTransactions.has(tx)) throw new Error("composition lock helpers need an open composition transaction"); }
+export async function lockComposition(tx: CompositionTx, compositionId: string): Promise<void> { assertInTransaction(tx); await tx.query(`SELECT ${S}.m3_lock_composition($1::uuid)`, [compositionId]); }
+export async function lockAsset(tx: CompositionTx, compositionId: string, assetId: string): Promise<void> { assertInTransaction(tx); await tx.query(`SELECT ${S}.m3_lock_asset($1::uuid, $2::uuid)`, [compositionId, assetId]); }
+/** The only way to obtain a `CompositionTx`: BEGIN, run `work`, COMMIT (ROLLBACK on error), and release the client. */
+export async function withCompositionTransaction<T>(pool: Pool, work: (tx: CompositionTx) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN"); openTransactions.add(client);
+    const result = await work(client as CompositionTx);
+    openTransactions.delete(client); await client.query("COMMIT"); return result;
+  } catch (error) { openTransactions.delete(client); await client.query("ROLLBACK").catch(() => {}); throw error; }
+  finally { client.release(); }
+}
+/** A unique-key collision on a caller-chosen id surfaces as a RangeError, never as a raw driver error echoing key values. */
+async function insertOnce<T>(work: () => Promise<T>): Promise<T> {
+  try { return await work(); } catch (error) { if ((error as { code?: string })?.code === "23505") invalid("duplicate id"); throw error; }
+}
 
 export function compositionStore(pool: Pool): CompositionStore {
-  async function transaction<T>(work: (client: CompositionTx) => Promise<T>): Promise<T> {
-    const client = await pool.connect();
-    try { await client.query("BEGIN"); const result = await work(client as CompositionTx); await client.query("COMMIT"); return result; }
-    catch (error) { await client.query("ROLLBACK").catch(() => {}); throw error; }
-    finally { client.release(); }
-  }
+  const transaction = <T>(work: (client: CompositionTx) => Promise<T>) => withCompositionTransaction(pool, work);
   async function read(runner: Pick<Pool, "query">, id: string, access: CompositionAccess, now: Date, lock = ""): Promise<CompositionRecord | null> {
     const params: unknown[] = [id], predicate = allowed(access, "c", params, now);
     const result = await runner.query(`${COMPOSITION} WHERE c.id = $1 AND ${predicate}${lock}`, params);
@@ -226,14 +244,21 @@ export function compositionStore(pool: Pool): CompositionStore {
     },
     async freeze(compositionId, access, now, input) {
       return transaction(async client => {
-        const current = await read(client, compositionId, access, now, " FOR UPDATE OF c");
+        // Lock order (ADR-0022 C3b): advisory composition lock, then the compositions row, then advisory asset locks. The access
+        // check runs first without a lock, so a caller without access never takes one. FOR NO KEY UPDATE (not FOR UPDATE) leaves
+        // FK KEY SHARE checks (an asset insert under the composition lock) unblocked.
+        if (!(await read(client, compositionId, access, now))) return { status: "not_found" as const };
+        await lockComposition(client, compositionId);
+        const current = await read(client, compositionId, access, now, " FOR NO KEY UPDATE OF c");
         if (!current) return { status: "not_found" as const };
         if (current.draftRevision !== input.expectedRevision) return { status: "conflict" as const, currentRevision: current.draftRevision };
         const existing = await client.query(`SELECT * FROM ${S}.composition_versions WHERE composition_id=$1 AND scene_sha256=$2`, [compositionId, input.version.sceneSha256]);
         let row: Row | undefined = existing.rows[0];
         // D5: every pinned image must be clean, read under the per-asset lock, on BOTH branches. The idempotent re-point branch
         // checks the pins of the version it re-points to, where no insert trigger fires.
-        const notClean = await uncleanPins(client, compositionId, row ? (row.source_asset_sha256 as string[]) : input.sourceAssetSha256);
+        // On the insert branch the pins are the caller's list PLUS every image the scene itself references, so a dropped pin cannot skip the check.
+        const pins = row ? (row.source_asset_sha256 as string[]) : [...input.sourceAssetSha256, ...sceneSourceHashes(input.version.scene).assets];
+        const notClean = await uncleanPins(client, compositionId, pins);
         if (notClean.length) return { status: "asset_not_clean" as const, assetSha256: notClean };
         if (!row) {
           const next = (await client.query(`SELECT COALESCE(MAX(version_no),0)+1 AS n FROM ${S}.composition_versions WHERE composition_id=$1`, [compositionId])).rows[0].n;
@@ -268,8 +293,8 @@ export function compositionStore(pool: Pool): CompositionStore {
         const open = await openAttempt(tx, compositionId, assetId);
         if (open) return { status: "busy" as const, attempt: scanAttempt(open) };
         if (row.scan_status !== "pending") return { status: "not_scannable" as const, scanStatus: row.scan_status as ArtifactScanStatus };
-        const inserted = await tx.query(`INSERT INTO ${S}.asset_scan_attempts(attempt_id,asset_id,composition_id,started_at,lease_expires_at) VALUES($1,$2,$3,$4,$5) RETURNING *`,
-          [input.attemptId, assetId, compositionId, now, input.leaseExpiresAt]);
+        const inserted = await insertOnce(() => tx.query(`INSERT INTO ${S}.asset_scan_attempts(attempt_id,asset_id,composition_id,started_at,lease_expires_at) VALUES($1,$2,$3,$4,$5) RETURNING *`,
+          [input.attemptId, assetId, compositionId, now, input.leaseExpiresAt]));
         return { status: "opened" as const, attempt: scanAttempt(inserted.rows[0]) };
       });
     },
@@ -294,14 +319,17 @@ export function compositionStore(pool: Pool): CompositionStore {
       return underAssetLock(compositionId, assetId, access, now, async (tx, row) => {
         const open = await openAttempt(tx, compositionId, assetId, input.attemptId);
         if (!open) return rejected("attempt_not_open", row);
-        if (now < open.lease_expires_at) return rejected("lease_active", row); // never auto-closed, and never before the lease has passed
+        // Never auto-closed, and never before the lease has passed on BOTH the caller's clock and the database clock, so a skewed or
+        // request-influenced `now` cannot end a running scan early and trigger a second billable call (AGENTS rule 7).
+        const dbPassed = (await tx.query("SELECT now() >= $1::timestamptz AS passed", [open.lease_expires_at])).rows[0].passed === true;
+        if (now < open.lease_expires_at || !dbPassed) return rejected("lease_active", row);
         if (!SCAN_EDGES[row.scan_status as ArtifactScanStatus].includes("unknown")) return rejected("illegal_transition", row);
         await tx.query(`UPDATE ${S}.asset_scan_attempts SET finished_at=$2, outcome='lease_expired' WHERE attempt_id=$1 AND finished_at IS NULL`, [input.attemptId, now]);
         return { status: "recorded" as const, event: await appendEvent(tx, row, now, { toStatus: "unknown", attemptId: input.attemptId, reasonCode: "lease_expired" }) };
       });
     },
     async requestRescan(compositionId, assetId, access, now, input) {
-      if (typeof input?.reasonCode !== "string" || !reasonCodePattern.test(input.reasonCode)) invalid("rescan reason");
+      if (!isReason(input?.reasonCode)) invalid("rescan reason");
       if (!isDate(now)) invalid("time");
       return underAssetLock(compositionId, assetId, access, now, async (tx, row) => {
         if (row.scan_status !== "unknown") return rejected("illegal_transition", row);
@@ -316,8 +344,8 @@ export function compositionStore(pool: Pool): CompositionStore {
       return underAssetLock(compositionId, assetId, access, now, async (tx, row) => {
         if (row.scan_status !== "clean") return { status: "asset_not_clean" as const, scanStatus: row.scan_status as ArtifactScanStatus };
         const principal = grantPrincipal(access);
-        const inserted = await tx.query(`INSERT INTO ${S}.asset_download_grants(grant_id,token_hash,asset_id,composition_id,principal_kind,principal_hash,issued_at,expires_at)
-          VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`, [input.grantId, input.tokenHash, assetId, compositionId, principal.kind, principal.hash, now, input.expiresAt]);
+        const inserted = await insertOnce(() => tx.query(`INSERT INTO ${S}.asset_download_grants(grant_id,token_hash,asset_id,composition_id,principal_kind,principal_hash,issued_at,expires_at)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`, [input.grantId, input.tokenHash, assetId, compositionId, principal.kind, principal.hash, now, input.expiresAt]));
         return { status: "created" as const, grant: grant(inserted.rows[0]) };
       });
     },
@@ -357,7 +385,9 @@ export function compositionStore(pool: Pool): CompositionStore {
       return result.rows[0].n as number;
     },
     async pruneRateBuckets(input) {
-      if (!isDate(input?.olderThan) || !isDate(input.now) || input.olderThan > input.now) invalid("prune cut-off");
+      // A window that started before the cut-off must also have ENDED by `now`, so no active window (and no live limit) is ever reset.
+      if (!isDate(input?.olderThan) || !isDate(input.now) || !isPositiveInteger(input.longestWindowSeconds)) invalid("prune cut-off");
+      if (input.olderThan.getTime() > input.now.getTime() - input.longestWindowSeconds * 1000) invalid("prune cut-off");
       return (await pool.query(`DELETE FROM ${S}.rate_limit_buckets WHERE window_start < $1`, [input.olderThan])).rowCount ?? 0;
     },
   };

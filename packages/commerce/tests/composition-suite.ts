@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { canonicalSceneJson } from "@vynvori/contracts";
+import { canonicalSceneJson, sceneSourceHashes } from "@vynvori/contracts";
 import type {
   ArtifactScanStatus, AssetRecord, CompositionAccess, CompositionRecord, CompositionStore, DownloadGrantRecord, RateLimitOperation, ScanAttemptRecord,
   ScanEventRecord, ScanResultEvent, ScanTransitionOutcome, VersionRecord,
@@ -82,7 +82,7 @@ export function memoryHarness(): StoreHarness {
       if (c.draftRevision !== i.expectedRevision) return { status: "conflict", currentRevision: c.draftRevision };
       const list = versions.get(id) ?? []; let v = list.find(x => x.sceneSha256 === i.version.sceneSha256);
       // D5 on both branches: the re-point branch checks the pins of the version it re-points to.
-      const pins = [...new Set(v ? pinsOf.get(v.id)! : i.sourceAssetSha256)].sort();
+      const pins = [...new Set(v ? pinsOf.get(v.id)! : [...i.sourceAssetSha256, ...sceneSourceHashes(i.version.scene).assets])].sort();
       const notClean = pins.filter(hash => { const a = [...assets.values()].find(x => x.compositionId === id && x.sha256 === hash); return !a || statusOf(a.id) !== "clean"; });
       if (notClean.length) return { status: "asset_not_clean", assetSha256: notClean };
       if (!v) { v = { ...i.version, compositionId: id, versionNo: list.length + 1, frozenAt: now }; pinsOf.set(v.id, [...i.sourceAssetSha256]); list.push(Object.freeze(v)); versions.set(id, list); }
@@ -97,6 +97,7 @@ export function memoryHarness(): StoreHarness {
       const a = accessible(compositionId, assetId, access, now); if (!a) return { status: "not_found" };
       const open = openAttemptOf(a.id); if (open) return { status: "busy", attempt: open };
       if (statusOf(a.id) !== "pending") return { status: "not_scannable", scanStatus: statusOf(a.id) };
+      if (attempts.has(input.attemptId)) memInvalid(); // the SQL primary key refuses a reused id the same way
       const attempt: ScanAttemptRecord = Object.freeze({ attemptId: input.attemptId, assetId, compositionId, startedAt: now, leaseExpiresAt: input.leaseExpiresAt, finishedAt: null, outcome: null });
       attempts.set(attempt.attemptId, attempt); return { status: "opened", attempt };
     },
@@ -118,13 +119,13 @@ export function memoryHarness(): StoreHarness {
       const a = accessible(compositionId, assetId, access, now); if (!a) return { status: "not_found" };
       const attempt = attempts.get(input.attemptId);
       if (!attempt || attempt.assetId !== a.id || attempt.compositionId !== compositionId || attempt.finishedAt !== null) return rejected("attempt_not_open", a);
-      if (now < attempt.leaseExpiresAt) return rejected("lease_active", a);
+      if (now < attempt.leaseExpiresAt || Date.now() < attempt.leaseExpiresAt.getTime()) return rejected("lease_active", a); // caller clock AND the store clock
       if (!MEM_EDGES[statusOf(a.id)].includes("unknown")) return rejected("illegal_transition", a);
       close(attempt, now, "lease_expired");
       return { status: "recorded", event: append(a, now, { toStatus: "unknown", attemptId: attempt.attemptId, reasonCode: "lease_expired" }) };
     },
     async requestRescan(compositionId, assetId, access, now, input) {
-      if (typeof input?.reasonCode !== "string" || !MEM_REASON.test(input.reasonCode) || !isMemDate(now)) memInvalid();
+      if (!memReason(input?.reasonCode) || !isMemDate(now)) memInvalid();
       const a = accessible(compositionId, assetId, access, now); if (!a) return { status: "not_found" };
       if (statusOf(a.id) !== "unknown") return rejected("illegal_transition", a);
       return { status: "recorded", event: append(a, now, { toStatus: "pending", reasonCode: input.reasonCode }) };
@@ -135,7 +136,7 @@ export function memoryHarness(): StoreHarness {
       if (!isMemDate(now) || !isMemDate(input.expiresAt) || input.expiresAt <= now) memInvalid();
       const a = accessible(compositionId, assetId, access, now); if (!a) return { status: "not_found" };
       if (statusOf(a.id) !== "clean") return { status: "asset_not_clean", scanStatus: statusOf(a.id) };
-      if (grants.has(input.tokenHash)) throw new Error("duplicate token hash"); // the SQL UNIQUE constraint throws the same way
+      if (grants.has(input.tokenHash) || [...grants.values()].some(x => x.grantId === input.grantId)) memInvalid(); // the SQL unique keys refuse the same way
       const p = principal(access);
       const g: Grant = { grantId: input.grantId, assetId, compositionId, principalKind: p.kind, issuedAt: now, expiresAt: input.expiresAt, redeemedAt: null, tokenHash: input.tokenHash, principalHash: p.hash };
       grants.set(input.tokenHash, g); return { status: "created", grant: publicGrant(g) };
@@ -149,7 +150,7 @@ export function memoryHarness(): StoreHarness {
     async consumeRateToken(input) {
       if (!MEM_OPERATIONS.includes(input?.operation)) memInvalid();
       if (input.operation.endsWith("_GLOBAL") ? input.subject !== "global" : !MEM_ID.test(input.subject ?? "")) memInvalid();
-      if (![input.windowSeconds, input.max].every(n => typeof n === "number" && Number.isSafeInteger(n) && n > 0)) memInvalid();
+      if (![input.windowSeconds, input.max].every(memPositive)) memInvalid();
       if (input.at !== undefined && !isMemDate(input.at)) memInvalid();
       const stride = input.windowSeconds * 1000, at = (input.at ?? new Date()).getTime();
       const windowStart = new Date(Math.floor(at / stride) * stride), resetAt = new Date(windowStart.getTime() + stride);
@@ -162,7 +163,8 @@ export function memoryHarness(): StoreHarness {
       return [...comps.values()].filter(c => c.ownerUserId === null && c.guestDraftId && drafts.get(c.guestDraftId)!.expiresAt > now && drafts.get(c.guestDraftId)!.ownerId === null).length;
     },
     async pruneRateBuckets(input) {
-      if (!isMemDate(input?.olderThan) || !isMemDate(input.now) || input.olderThan > input.now) memInvalid();
+      if (!isMemDate(input?.olderThan) || !isMemDate(input.now) || !memPositive(input.longestWindowSeconds)) memInvalid();
+      if (input.olderThan.getTime() > input.now.getTime() - input.longestWindowSeconds * 1000) memInvalid();
       let removed = 0;
       for (const key of [...buckets.keys()]) if (new Date(key.slice(key.indexOf("|") + 1)) < input.olderThan) { buckets.delete(key); removed += 1; }
       return removed;
@@ -185,11 +187,15 @@ const MEM_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
 const MEM_EDGES: Readonly<Record<ArtifactScanStatus, readonly ArtifactScanStatus[]>> = { pending: ["clean", "quarantined", "unknown"], unknown: ["pending"], clean: ["quarantined"], quarantined: [] };
 const MEM_OPERATIONS: readonly RateLimitOperation[] = ["GUEST_CREATE_GLOBAL", "ASSET_UPLOAD_GLOBAL", "GUEST_WRITE", "GUEST_ASSET_UPLOAD", "GUEST_DOWNLOAD_GRANT", "GUEST_RESCAN", "OWNER_WRITE", "OWNER_ASSET_UPLOAD", "OWNER_DOWNLOAD_GRANT", "OWNER_RESCAN"];
 const isMemDate = (value: unknown): value is Date => value instanceof Date && Number.isFinite(value.getTime());
-const memText = (value: unknown) => typeof value === "string" && value.trim() !== "" && value === value.trim();
+/** Same structural ceilings as the SQL store (PostgreSQL integer range; scanner text length). Not policy. */
+const MEM_INTEGER_MAX = 2147483647, MEM_TEXT_MAX = 512;
+const memPositive = (n: unknown) => typeof n === "number" && Number.isSafeInteger(n) && n > 0 && n <= MEM_INTEGER_MAX;
+const memText = (value: unknown) => typeof value === "string" && value.trim() !== "" && value === value.trim() && value.length <= MEM_TEXT_MAX;
+const memReason = (value: unknown): value is string => typeof value === "string" && value.length <= MEM_TEXT_MAX && MEM_REASON.test(value);
 function memInvalid(): never { throw new RangeError("composition store: invalid input"); }
 function memScanResult(r: ScanResultEvent) {
   if (r?.toStatus === "clean" || r?.toStatus === "quarantined") { if (![r.scannerId, r.engineVersion, r.definitionsVersion, r.evidenceRef].every(memText)) memInvalid(); }
-  else if (r?.toStatus === "unknown") { if (typeof r.reasonCode !== "string" || !MEM_REASON.test(r.reasonCode) || (r.scannerId !== undefined && !memText(r.scannerId))) memInvalid(); }
+  else if (r?.toStatus === "unknown") { if (!memReason(r.reasonCode) || (r.scannerId !== undefined && !memText(r.scannerId))) memInvalid(); }
   else memInvalid();
 }
 

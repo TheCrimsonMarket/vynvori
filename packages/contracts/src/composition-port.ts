@@ -76,8 +76,11 @@ export interface CompositionStore {
   consumeRateToken(input: { operation: RateLimitOperation; subject: string; windowSeconds: number; max: number; at?: Date }): Promise<RateTokenOutcome>;
   /** Unexpired, unclaimed, unowned guest compositions at `now` (D2 live-guest cap input). */
   countLiveGuestDrafts(now: Date): Promise<number>;
-  /** Operator-run only (the runtime role holds no DELETE). Required cut-off, no default; a cut-off after `now` is refused. */
-  pruneRateBuckets(input: { olderThan: Date; now: Date }): Promise<number>;
+  /**
+   * Operator-run only (the runtime role holds no DELETE). Required cut-off and longest configured window, no defaults; refused unless
+   * `olderThan <= now - longestWindowSeconds`, so no window that is still active can be deleted.
+   */
+  pruneRateBuckets(input: { olderThan: Date; now: Date; longestWindowSeconds: number }): Promise<number>;
 }
 
 /** The ten rate-limited operations (ADR-0022 D1 table). The two `_GLOBAL` operations take the subject "global"; the rest a UUID. */

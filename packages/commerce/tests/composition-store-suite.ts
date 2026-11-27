@@ -15,6 +15,8 @@ import {
 } from "./composition-synthetic";
 
 const seconds = (date: Date, n: number) => new Date(date.getTime() + n * 1000);
+/** SYNTHETIC: a lease short enough to pass on the real (database) clock inside a test. */
+const SYNTHETIC_SHORT_LEASE_MS = 1000;
 const tokenHash = () => createHash("sha256").update(randomBytes(32)).digest("hex");
 
 /** Drives a `pending` asset to `clean` through the reservation path (open attempt, then complete). Used by both suites. */
@@ -91,11 +93,14 @@ export function storeConformance(label: string, factory: () => Promise<StoreHarn
   });
 
   t("lease: never expired early or automatically; an explicit expiry after the lease records unknown(lease_expired)", async () => {
-    const { store, withAsset } = await setup(); const g = await withAsset(), now = new Date(), until = seconds(now, SYNTHETIC_SCAN_LEASE_SECONDS);
+    const { store, withAsset } = await setup(); const g = await withAsset(), now = new Date(), until = new Date(now.getTime() + SYNTHETIC_SHORT_LEASE_MS);
     const opened = await store.openScanAttempt(g.id, g.asset.id, g.access, now, { attemptId: randomUUID(), leaseExpiresAt: until });
     if (opened.status !== "opened") return assert.fail(opened.status);
     const attemptId = opened.attempt.attemptId;
     assert.deepEqual(await store.expireScanAttempt(g.id, g.asset.id, g.access, seconds(until, -1), { attemptId }), { status: "rejected", reason: "lease_active", scanStatus: "pending" });
+    // A caller clock that claims the lease has passed is not enough: the store's own clock must agree (no early expiry by a skewed `now`).
+    assert.deepEqual(await store.expireScanAttempt(g.id, g.asset.id, g.access, seconds(until, 3600), { attemptId }), { status: "rejected", reason: "lease_active", scanStatus: "pending" });
+    await new Promise(resolve => setTimeout(resolve, SYNTHETIC_SHORT_LEASE_MS + 250));
     assert.equal((await store.getAsset(g.id, g.asset.id, g.access, seconds(until, 1)))!.scanStatus, "pending"); // reading past the lease changes nothing
     assert.equal((await store.openScanAttempt(g.id, g.asset.id, g.access, seconds(until, 1), lease(seconds(until, 1)))).status, "busy");
     const expired = await store.expireScanAttempt(g.id, g.asset.id, g.access, until, { attemptId });
@@ -149,10 +154,23 @@ export function storeConformance(label: string, factory: () => Promise<StoreHarn
     for (const result of [{ toStatus: "clean", ...SYNTHETIC_SCAN_EVIDENCE, evidenceRef: "" }, { toStatus: "quarantined", scannerId: "s" }, { toStatus: "unknown", reasonCode: "" }, { toStatus: "unknown", reasonCode: "Bad Reason" }, { toStatus: "pending", reasonCode: "x" }, { toStatus: "clean", ...SYNTHETIC_SCAN_EVIDENCE, scannerId: " padded " }])
       await rejects(store.completeScanAttempt(g.id, g.asset.id, g.access, now, { attemptId: randomUUID(), result: result as never }));
     await rejects(store.requestRescan(g.id, g.asset.id, g.access, now, { reasonCode: "" }));
+    await rejects(store.requestRescan(g.id, g.asset.id, g.access, now, { reasonCode: "a".repeat(513) }));
+    await rejects(store.completeScanAttempt(g.id, g.asset.id, g.access, now, { attemptId: randomUUID(), result: { toStatus: "clean", ...SYNTHETIC_SCAN_EVIDENCE, evidenceRef: "x".repeat(513) } }));
     await rejects(store.createDownloadGrant(g.id, g.asset.id, g.access, now, { grantId: randomUUID(), tokenHash: "not-a-hash", expiresAt: seconds(now, 1) }));
     await rejects(store.createDownloadGrant(g.id, g.asset.id, g.access, now, { grantId: randomUUID(), tokenHash: tokenHash(), expiresAt: now }));
     assert.equal((await store.getAsset(g.id, g.asset.id, g.access, now))!.scanStatus, "pending");
     assert.deepEqual(await store.listScanEvents(g.id, g.asset.id, g.access, now), []);
+    // A reused attempt id or grant id is refused as invalid input on both stores (never a raw driver error echoing key values).
+    const reused = randomUUID(), opened = await store.openScanAttempt(g.id, g.asset.id, g.access, now, { attemptId: reused, leaseExpiresAt: seconds(now, SYNTHETIC_SCAN_LEASE_SECONDS) });
+    if (opened.status !== "opened") return assert.fail(opened.status);
+    await store.completeScanAttempt(g.id, g.asset.id, g.access, now, { attemptId: reused, result: { toStatus: "unknown", reasonCode: "scanner_error" } });
+    await store.requestRescan(g.id, g.asset.id, g.access, now, { reasonCode: "owner_requested" });
+    await rejects(store.openScanAttempt(g.id, g.asset.id, g.access, now, { attemptId: reused, leaseExpiresAt: seconds(now, SYNTHETIC_SCAN_LEASE_SECONDS) }));
+    await markClean(store, g.id, g.asset.id, g.access, now);
+    const grantId = randomUUID(), token = tokenHash();
+    assert.equal((await store.createDownloadGrant(g.id, g.asset.id, g.access, now, { grantId, tokenHash: token, expiresAt: seconds(now, SYNTHETIC_GRANT_TTL_SECONDS) })).status, "created");
+    await rejects(store.createDownloadGrant(g.id, g.asset.id, g.access, now, { grantId, tokenHash: tokenHash(), expiresAt: seconds(now, SYNTHETIC_GRANT_TTL_SECONDS) }));
+    await rejects(store.createDownloadGrant(g.id, g.asset.id, g.access, now, { grantId: randomUUID(), tokenHash: token, expiresAt: seconds(now, SYNTHETIC_GRANT_TTL_SECONDS) }));
   });
 
   t("download grant: mint needs clean; only the minting principal can validate or consume; single use; hashes never returned", async () => {
@@ -206,6 +224,9 @@ export function storeConformance(label: string, factory: () => Promise<StoreHarn
   t("freeze refuses a non-clean pinned asset on the insert branch AND the idempotent re-point branch, writing nothing", async () => {
     const { h, store, service, withAsset } = await setup(); const g = await withAsset();
     const s1 = await service.saveDraft(g.id, g.access, 0, sceneWith([imageLayer("l1", g.asset.id, g.asset.sha256)]));
+    const s1Version = { id: randomUUID(), scene: s1.scene, sceneSha256: s1.sceneSha256, printProfileId: s1.printProfileId, printProfileVersion: s1.printProfileVersion, preflightState: "preview_only" as const, preflightIssues: [] };
+    assert.deepEqual(await store.freeze(g.id, g.access, new Date(), { expectedRevision: s1.draftRevision, state: "frozen_version", sourceAssetSha256: [], sourceFontSha256: [], version: s1Version }),
+      { status: "asset_not_clean", assetSha256: [g.asset.sha256] }); // a caller that drops the pin cannot skip the check: the store reads the scene's images too
     await assert.rejects(service.freeze(g.id, g.access, s1.draftRevision), (e: unknown) => e instanceof CompositionError && e.code === "ASSET_NOT_CLEAN"); // pending
     assert.deepEqual(await service.listVersions(g.id, g.access), []);
     assert.equal((await service.get(g.id, g.access)).lifecycleState, "editable_scene");
@@ -238,7 +259,7 @@ export function storeConformance(label: string, factory: () => Promise<StoreHarn
     assert.equal((await take(1, { subject: randomUUID() })).admitted, true); // subjects are independent
     assert.equal((await take(1, { operation: "OWNER_WRITE" })).admitted, true); // operations are independent
     assert.equal((await store.consumeRateToken({ operation: "GUEST_CREATE_GLOBAL", subject: "global", windowSeconds: SYNTHETIC_RATE_WINDOW_SECONDS, max: SYNTHETIC_RATE_MAX })).admitted, true); // database clock
-    for (const over of [{ max: 0 }, { max: -1 }, { max: 1.5 }, { max: undefined }, { max: Number.NaN }, { windowSeconds: 0 }, { windowSeconds: undefined }, { subject: "global" }, { subject: "../x" }, { operation: "NOT_AN_OP" }, { at: new Date(Number.NaN) }])
+    for (const over of [{ max: 0 }, { max: -1 }, { max: 1.5 }, { max: undefined }, { max: Number.NaN }, { max: 2147483648 }, { windowSeconds: 0 }, { windowSeconds: 2147483648 }, { windowSeconds: undefined }, { subject: "global" }, { subject: "../x" }, { operation: "NOT_AN_OP" }, { at: new Date(Number.NaN) }])
       await assert.rejects(take(0, over), RangeError);
     await assert.rejects(store.consumeRateToken({ operation: "ASSET_UPLOAD_GLOBAL", subject: randomUUID(), windowSeconds: SYNTHETIC_RATE_WINDOW_SECONDS, max: SYNTHETIC_RATE_MAX }), RangeError);
   });
@@ -247,10 +268,14 @@ export function storeConformance(label: string, factory: () => Promise<StoreHarn
     const { store } = await setup(); const subject = randomUUID(), base = new Date(Date.UTC(2026, 0, 1, 0, 0, 0));
     const take = (s: number) => store.consumeRateToken({ operation: "OWNER_RESCAN", subject, windowSeconds: SYNTHETIC_RATE_WINDOW_SECONDS, max: SYNTHETIC_RATE_MAX, at: seconds(base, s) });
     await take(0); await take(SYNTHETIC_RATE_WINDOW_SECONDS);
-    await assert.rejects(store.pruneRateBuckets({ olderThan: seconds(base, 10), now: base }), RangeError);
-    await assert.rejects(store.pruneRateBuckets({ olderThan: undefined as never, now: base }), RangeError);
-    assert.equal(await store.pruneRateBuckets({ olderThan: seconds(base, 1), now: seconds(base, 1) }), 1);
-    assert.equal(await store.pruneRateBuckets({ olderThan: seconds(base, 1), now: seconds(base, 1) }), 0);
+    const W = SYNTHETIC_RATE_WINDOW_SECONDS, prune = (olderThan: Date, now: Date, longestWindowSeconds: unknown = W) => store.pruneRateBuckets({ olderThan, now, longestWindowSeconds } as never);
+    await assert.rejects(prune(seconds(base, 10), base), RangeError); // after now
+    await assert.rejects(prune(seconds(base, 1), seconds(base, 1)), RangeError); // would delete the window that is still active at `now`
+    await assert.rejects(prune(undefined as never, base), RangeError);
+    await assert.rejects(store.pruneRateBuckets({ olderThan: base, now: seconds(base, 2 * W) } as never), RangeError); // longest window is required
+    await assert.rejects(prune(base, seconds(base, 2 * W), 0), RangeError);
+    assert.equal(await prune(seconds(base, 1), seconds(base, W + 1)), 1); // only the first window, which ended at base + W
+    assert.equal(await prune(seconds(base, 1), seconds(base, W + 1)), 0);
     const after = await take(SYNTHETIC_RATE_WINDOW_SECONDS); // the newer window survived the prune
     assert.equal(after.admitted && after.count, 2);
   });
