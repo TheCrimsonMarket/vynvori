@@ -4,10 +4,20 @@ import { digest, sha256 } from "./audit-policy.mjs";
 
 // Founder-approved 2026-11-02 (ADR-0020). Updated only by an explicitly reviewed policy change, never by the runner/tests.
 export const WAIVER_POLICY_PATH = "security/dependency-waiver-policy.json";
-export const WAIVER_POLICY_SHA256 = "3e73828a9945b85a0f60442de6ee6ffaa5c8d524291f793279866a2a682111cc";
-// Hard ceiling in code: editing the JSON cannot extend the window even if the anchor were also changed carelessly.
+export const WAIVER_POLICY_SHA256 = "21eefe2ff7a8ba112b44e946f4441616aa568011bd223aa6be19b82f091212ab";
+// Global hard ceiling in code: editing the JSON cannot extend the window even if the anchor were also changed carelessly.
+// The only entries that may outlive it are the code-listed WAIVER_EXTENSIONS below (ADR-0024).
 export const WAIVER_CEILING = "2026-12-17T23:59:59Z";
 const WAIVER_FLOOR = "2026-11-02T00:00:00Z";
+// Per-entry extensions past WAIVER_CEILING (ADR-0024, decided 2026-11-27 under the founder's delegation). The global
+// ceiling above does not move. Only an advisory listed here, at exactly the listed development-only nodes, may carry its
+// own expiry, and that expiry must equal the value below: editing the JSON cannot add an entry or move a date.
+const WAIVER_EXTENSIONS = Object.freeze({
+  "GHSA-67mh-4wv8-2f99": Object.freeze({
+    expiresAt: "2027-02-28T23:59:59Z", retriageBy: "2027-02-15",
+    nodes: Object.freeze(["node_modules/@esbuild-kit/core-utils/node_modules/esbuild"]),
+  }),
+});
 const levels = ["info", "low", "moderate", "high", "critical"];
 // High and critical advisories are never waivable by this policy.
 const WAIVABLE = new Set(["low", "moderate"]);
@@ -23,20 +33,43 @@ const nameAt = location => location.slice(location.lastIndexOf("node_modules/") 
 
 export function validateWaiverPolicy(policy) {
   check(digest(policy) === WAIVER_POLICY_SHA256, "WAIVER_POLICY_FINGERPRINT_MISMATCH");
+  checkWaiverShape(policy);
+}
+
+/** Shape and extension rules, applied after the anchor. Exported so tests can reach rules the anchor would otherwise hide. */
+export function checkWaiverShape(policy) {
   check(policy.schemaVersion === 1 && policy.id === "dependency-advisory-waiver-v1" && policy.authority === "VYNVORI founder" &&
     policy.approvedOn === "2026-11-02" && policy.notBefore === WAIVER_FLOOR && policy.expiresAt === WAIVER_CEILING &&
     policy.scope === "ci-and-local-audit-gate-only" && policy.deploymentAuthorized === false, "WAIVER_METADATA_MISMATCH");
   check(Array.isArray(policy.waivers) && policy.waivers.length > 0, "WAIVER_SCOPE_INVALID");
   const seen = new Set();
   for (const waiver of policy.waivers) {
-    check(GHSA.test(waiver.ghsa) && !seen.has(waiver.ghsa), "WAIVER_SCOPE_INVALID");
+    check(typeof waiver.ghsa === "string" && GHSA.test(waiver.ghsa) && !seen.has(waiver.ghsa), "WAIVER_SCOPE_INVALID");
     seen.add(waiver.ghsa);
     check(typeof waiver.package === "string" && WAIVABLE.has(waiver.severity) && typeof waiver.range === "string" &&
       typeof waiver.owner === "string" && typeof waiver.rationale === "string" && typeof waiver.recheck === "string", "WAIVER_SCOPE_INVALID");
     check(Array.isArray(waiver.nodes) && waiver.nodes.length > 0 && waiver.nodes.every(node => safePath(node.path) &&
       nameAt(node.path) === waiver.package && typeof node.version === "string" && CONTEXTS.has(node.context) &&
       /^https:\/\/registry\.npmjs\.org\//.test(node.resolved) && /^sha512-[A-Za-z0-9+/]+=*$/.test(node.integrity)), "WAIVER_SCOPE_INVALID");
+    if (Object.hasOwn(waiver, "expiresAt") || Object.hasOwn(waiver, "retriageBy")) {
+      const extension = Object.hasOwn(WAIVER_EXTENSIONS, waiver.ghsa) ? WAIVER_EXTENSIONS[waiver.ghsa] : null;
+      const paths = new Set(waiver.nodes.map(node => node.path));
+      check(extension && waiver.expiresAt === extension.expiresAt && waiver.retriageBy === extension.retriageBy &&
+        paths.size === waiver.nodes.length && paths.size === extension.nodes.length && extension.nodes.every(node => paths.has(node)) &&
+        waiver.nodes.every(node => node.context === "development"), "WAIVER_EXTENSION_INVALID");
+    }
   }
+}
+
+/** The instant a waiver stops counting: its code-listed extension when the policy carries it, otherwise the global ceiling. */
+export function waiverExpiry(waiver) {
+  return typeof waiver.ghsa === "string" && Object.hasOwn(WAIVER_EXTENSIONS, waiver.ghsa) && waiver.expiresAt === WAIVER_EXTENSIONS[waiver.ghsa].expiresAt
+    ? WAIVER_EXTENSIONS[waiver.ghsa].expiresAt : WAIVER_CEILING;
+}
+
+/** The waivers still in their window at `now`. An expired waiver stays in the policy for review but covers nothing. */
+export function activeWaivers(waivers, now) {
+  return waivers.filter(waiver => now < new Date(waiverExpiry(waiver)));
 }
 
 /** Validates the reviewed policy before touching any path it names, then inspects the waived nodes. */
@@ -90,7 +123,7 @@ function checkEnvironment(env) {
 }
 
 /** Every record must be a waived origin or propagate only from waived origins; nothing is filtered by severity or count. */
-function auditGraph(run, policy, state, contexts) {
+function auditGraph(run, policy, state, contexts, active) {
   check(!run.executionError && !run.signal && [0, 1].includes(run.exitCode), "AUDIT_EXECUTION_FAILURE");
   let audit;
   try { audit = JSON.parse(run.stdout); } catch { fail("AUDIT_JSON_INVALID"); }
@@ -118,8 +151,10 @@ function auditGraph(run, policy, state, contexts) {
       check(item && typeof item.url === "string" && /^https:\/\/github\.com\/advisories\/GHSA-[a-z0-9-]+$/.test(item.url) &&
         typeof item.title === "string" && item.title.length > 0, "UNMAPPABLE_ADVISORY_ORIGIN");
       const ghsa = item.url.split("/").at(-1);
-      const waiver = policy.waivers.find(entry => entry.ghsa === ghsa);
-      check(waiver, "UNWAIVED_ADVISORY");
+      const waiver = active.find(entry => entry.ghsa === ghsa);
+      // A finding whose waiver has expired is reported as expired, never as covered. With the one-entry ADR-0024 policy
+      // this cannot be reached (no entry active means the gate already rejected); it guards any future multi-entry policy.
+      if (!waiver) fail(policy.waivers.some(entry => entry.ghsa === ghsa) ? "WAIVER_EXPIRED_OR_INVALID_TIME" : "UNWAIVED_ADVISORY");
       check(name === waiver.package && item.name === name && item.dependency === name && item.severity === waiver.severity &&
         item.range === waiver.range, "ADVISORY_ORIGIN_MISMATCH");
       // A waived package may only be vulnerable at the exact reviewed paths/versions for this audit's contexts.
@@ -136,7 +171,7 @@ function auditGraph(run, policy, state, contexts) {
   for (const level of [...levels, "total"]) check(audit.metadata.vulnerabilities[level] === counts[level], "AUDIT_COUNTS_INCOMPLETE");
   // Each waived node is installed at a reviewed version inside its advisory range, so a complete audit of its
   // context must report it. Absence means a narrowed/truncated audit (or a withdrawn advisory): fail closed.
-  for (const waiver of policy.waivers) for (const node of waiver.nodes) {
+  for (const waiver of active) for (const node of waiver.nodes) {
     if (contexts.includes(node.context)) check(audit.vulnerabilities[waiver.package]?.nodes.includes(node.path), "AUDIT_GRAPH_INCOMPLETE");
   }
   check(Number.isInteger(audit.metadata.dependencies.total) && audit.metadata.dependencies.total > 0, "AUDIT_DEPENDENCIES_INCOMPLETE");
@@ -155,18 +190,30 @@ function auditGraph(run, policy, state, contexts) {
 export function evaluateWaivers({ policy, state, production, all, now = new Date(), env = {} }) {
   try {
     validateWaiverPolicy(policy);
-    check(Number.isFinite(now.getTime()) && now >= new Date(policy.notBefore) && now < new Date(policy.expiresAt) && now < new Date(WAIVER_CEILING), "WAIVER_EXPIRED_OR_INVALID_TIME");
+    // Before the global ceiling this is the original whole-policy window. After it, only code-listed per-entry
+    // extensions can still be active, and with none active the gate rejects exactly as before.
+    check(Number.isFinite(now.getTime()) && now >= new Date(policy.notBefore), "WAIVER_EXPIRED_OR_INVALID_TIME");
+    const active = activeWaivers(policy.waivers, now);
+    check(active.length > 0, "WAIVER_EXPIRED_OR_INVALID_TIME");
     checkEnvironment(env);
-    const prod = auditGraph(production, policy, state, ["production"]);
-    const full = auditGraph(all, policy, state, ["production", "development"]);
+    const prod = auditGraph(production, policy, state, ["production"], active);
+    const full = auditGraph(all, policy, state, ["production", "development"], active);
     // The full audit must contain every production finding at the same or more nodes; a narrowed run cannot pass.
     for (const [name, record] of Object.entries(prod.records)) {
       check(full.records[name] && record.nodes.every(node => full.records[name].nodes.includes(node)), "FULL_AUDIT_NARROWED");
     }
     const clean = prod.counts.total === 0 && full.counts.total === 0;
+    const waiversUsed = [...new Set([...prod.waiversUsed, ...full.waiversUsed])].sort();
+    const waiverExpiries = Object.fromEntries(waiversUsed.map(ghsa => [ghsa, waiverExpiry(policy.waivers.find(entry => entry.ghsa === ghsa))]));
+    // The reported expiry is the earliest one in use, never later than what actually covers a finding.
+    const expiresAt = waiversUsed.length ? Object.values(waiverExpiries).sort()[0] : policy.expiresAt;
+    // Informational only: an extended waiver past its re-triage date is still within its window but is flagged.
+    const retriageDue = waiversUsed.filter(ghsa => Object.hasOwn(WAIVER_EXTENSIONS, ghsa) &&
+      waiverExpiry(policy.waivers.find(entry => entry.ghsa === ghsa)) !== WAIVER_CEILING &&
+      now >= new Date(`${WAIVER_EXTENSIONS[ghsa].retriageBy}T00:00:00Z`));
     return { accepted: true, status: clean ? "CLEAN" : "ACCEPTED_WITH_DATED_WAIVER", originalAuditExitCode: production.exitCode,
       allDependencyAuditExitCode: all.exitCode, counts: prod.counts, allDependencyCounts: full.counts,
-      waiversUsed: [...new Set([...prod.waiversUsed, ...full.waiversUsed])].sort(), expiresAt: policy.expiresAt,
+      waiversUsed, waiverExpiries, expiresAt, retriageDue,
       environmentAssurance: "EXTERNAL_NETWORK_EXPOSURE_NOT_PROVEN_BY_CI" };
   } catch (error) {
     return { accepted: false, status: "REJECTED", code: error.message, originalAuditExitCode: production?.exitCode ?? null };

@@ -9,32 +9,9 @@
   "deploymentAuthorized": false,
   "decisionRecord": "docs/implementation/ADR-0020-Dated-Dependency-Advisory-Waiver.md",
   "amendedOn": "2026-11-27",
-  "amendmentRecord": "docs/implementation/ADR-0023-Waiver-Policy-Refresh-and-Next-16-4-6.md",
+  "amendmentRecord": "docs/implementation/ADR-0024-Medusa-2-23-1-and-Waiver-Reduction.md",
+  "previousAmendmentRecord": "docs/implementation/ADR-0023-Waiver-Policy-Refresh-and-Next-16-4-6.md",
   "waivers": [
-    {
-      "ghsa": "GHSA-3g3m-2fjr-6pw4",
-      "package": "glob",
-      "severity": "moderate",
-      "range": ">=9.0.0 <=14.0.1",
-      "nodes": [
-        { "path": "node_modules/glob", "version": "13.0.6", "context": "production", "resolved": "https://registry.npmjs.org/glob/-/glob-13.0.6.tgz", "integrity": "sha512-Wjlyrolmm8uDpm/ogGyXZXb1Z+Ca2B8NbJwqBVg0axK9GbBeoS7yGV6vjXnYdGm6X53iehEuxxbyiKp8QmN4Vw==" }
-      ],
-      "owner": "VYNVORI founder",
-      "rationale": "Pinned exactly by @medusajs/framework, @medusajs/admin-bundler and @medusajs/cli 2.21.2 (and still in 2.22.2). Only a major upgrade fixes it; patterns are Medusa-internal, not user input.",
-      "recheck": "Every Medusa release and before waiver expiry; remove when Medusa ships glob >=14.0.2."
-    },
-    {
-      "ghsa": "GHSA-g3hv-75wg-m249",
-      "package": "minimatch",
-      "severity": "moderate",
-      "range": ">=7.0.0 <11.0.1",
-      "nodes": [
-        { "path": "node_modules/minimatch", "version": "10.2.6", "context": "production", "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-10.2.6.tgz", "integrity": "sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==" }
-      ],
-      "owner": "VYNVORI founder",
-      "rationale": "Production copy is required by glob 13 (above). The four ESLint development copies (3.1.5) are outside the advisory's current range (>=7.0.0) and are no longer reported or waived. Only a major upgrade fixes it; patterns are repository-controlled.",
-      "recheck": "With the glob waiver; remove when no affected node remains."
-    },
     {
       "ghsa": "GHSA-67mh-4wv8-2f99",
       "package": "esbuild",
@@ -44,20 +21,10 @@
         { "path": "node_modules/@esbuild-kit/core-utils/node_modules/esbuild", "version": "0.18.20", "context": "development", "resolved": "https://registry.npmjs.org/esbuild/-/esbuild-0.18.20.tgz", "integrity": "sha512-ceqxoedUrcayh7Y7ZX6NdbbDzGROiyVBgC4PriJThBKSVPWnnFHZAkfI1lJT8QFkOwH4qOS2SJkS4wvpGl8BpA==" }
       ],
       "owner": "VYNVORI founder",
-      "rationale": "Development-only, via drizzle-kit's @esbuild-kit loader. The advisory affects esbuild's dev server, which this repository never starts or exposes.",
-      "recheck": "On drizzle-kit upgrades and before waiver expiry."
-    },
-    {
-      "ghsa": "GHSA-6jcc-5g8w-32mx",
-      "package": "i18next",
-      "severity": "moderate",
-      "range": "<26.3.4",
-      "nodes": [
-        { "path": "node_modules/i18next", "version": "23.7.11", "context": "production", "resolved": "https://registry.npmjs.org/i18next/-/i18next-23.7.11.tgz", "integrity": "sha512-A/vOkw8vY99YHU9A1Td3I1dcTiYaPnwBWzrpVzfXUXSYgogK3cmBcmop/0cnXPc6QpUWIyqaugKNxRUEZVk9Nw==" }
-      ],
-      "owner": "VYNVORI founder",
-      "rationale": "Reached only through @medusajs/dashboard 2.21.2 (the Medusa admin UI), which pins i18next 23.7.11 exactly. apps/medusa sets admin.disable: true, so the dashboard is never built or served, and no repository code imports i18next. The fix is a major bump (>=26.3.4).",
-      "recheck": "On every Medusa upgrade and before waiver expiry. Remove when Medusa ships i18next >=26.3.4. Enabling the Medusa admin requires a new review first."
+      "rationale": "Development-only, via drizzle-kit's @esbuild-kit loader, used only by drizzle-kit generate and check. The advisory affects esbuild's dev server, which this repository never starts or exposes. No stable drizzle-kit release drops @esbuild-kit yet.",
+      "expiresAt": "2027-02-28T23:59:59Z",
+      "retriageBy": "2027-02-15",
+      "recheck": "On drizzle-kit upgrades, and re-triage by 2027-02-15 before the 2027-02-28 per-entry expiry (ADR-0024)."
     }
   ]
 }

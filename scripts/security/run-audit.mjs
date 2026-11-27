@@ -154,7 +154,9 @@ async function main() {
       signal: allAudit.signal, stdoutSha256: sha256(allAudit.stdout), summary: clean ? summarizeAudit(allAudit.stdout, localState ? { installed: localState.installed } : state) : null },
     localApproval: localPolicy ? { policySha256: digest(localPolicy), implementationCommit: PR5_IMPLEMENTATION_COMMIT,
       sourceCommit: localState?.commit, sourceTree: localState?.tree, imageId: image?.imageId, archiveSha256: image?.archiveSha256 } : null,
-    waiverApproval: waiverPolicy ? { policySha256: digest(waiverPolicy), expiresAt: waiverPolicy.expiresAt, lockSha256: waiverState?.lockSha256 ?? null, result: waiverResult } : null,
+    // policyExpiresAt is the global ceiling; expiresAt is the earliest per-entry expiry the accepted gate relied on (ADR-0024).
+    waiverApproval: waiverPolicy ? { policySha256: digest(waiverPolicy), policyExpiresAt: waiverPolicy.expiresAt,
+      expiresAt: waiverResult?.accepted ? waiverResult.expiresAt : waiverPolicy.expiresAt, lockSha256: waiverState?.lockSha256 ?? null, result: waiverResult } : null,
     m1bApproval: m1bPolicy ? { policySha256: digest(m1bPolicy), implementationCommit: M1B_IMPLEMENTATION_COMMIT, sourceCommit: m1bState?.commit, imageId: image?.imageId } : null,
   };
   await fs.writeFile(path.join(evidence, "evaluation.json"), JSON.stringify(report, null, 2) + "\n");
