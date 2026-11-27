@@ -139,6 +139,18 @@ export function memoryHarness(): StoreHarness {
       return { status: "recorded", event: append(a, now, { toStatus: "pending", reasonCode: input.reasonCode }) };
     },
 
+    async recordLateDetection(compositionId, assetId, access, now, input) {
+      if (!MEM_ID.test(input?.attemptId ?? "") || !isMemDate(now) || !isMemDate(input.startedAt) || !isMemDate(input.leaseExpiresAt) || input.leaseExpiresAt <= input.startedAt || input.startedAt > now) memInvalid();
+      if (input.result?.toStatus !== "quarantined") memInvalid();
+      memScanResult(input.result);
+      const a = accessible(compositionId, assetId, access, now); if (!a) return { status: "not_found" };
+      if (statusOf(a.id) !== "clean" || openAttemptOf(a.id)) return rejected("illegal_transition", a);
+      if (attempts.has(input.attemptId)) memInvalid();
+      attempts.set(input.attemptId, Object.freeze({ attemptId: input.attemptId, assetId, compositionId, startedAt: input.startedAt, leaseExpiresAt: input.leaseExpiresAt, finishedAt: now, outcome: "completed" }));
+      const r = input.result;
+      return { status: "recorded", event: append(a, now, { toStatus: "quarantined", attemptId: input.attemptId, scannerId: r.scannerId, engineVersion: r.engineVersion, definitionsVersion: r.definitionsVersion, evidenceRef: r.evidenceRef }) };
+    },
+
     async createDownloadGrant(compositionId, assetId, access, now, input) {
       if (!MEM_ID.test(input?.grantId ?? "") || typeof input.tokenHash !== "string" || !MEM_HEX64.test(input.tokenHash)) memInvalid();
       if (!isMemDate(now) || !isMemDate(input.expiresAt) || input.expiresAt <= now) memInvalid();
@@ -279,6 +291,8 @@ export function compositionConformance(label: string, factory: () => Promise<Har
   t("assets are scoped to their composition: no cross-owner read, upload or layer reference", async () => {
     const { service } = await setup(); const a = await guest(service), b = await guest(service);
     const asset = await service.uploadAsset(a.id, a.access, png(2000, 2000), "image/png");
+    await code(service.readAsset(a.id, asset.id, a.access), "NOT_FOUND"); // D5 (C5): a pending asset is never served
+    assert.equal(await service.scanAsset(a.id, asset.id, a.access, png(2000, 2000)), "clean"); // the SYNTHETIC double answers clean
     await code(service.readAsset(a.id, asset.id, b.access), "NOT_FOUND");
     await code(service.readAsset(b.id, asset.id, b.access), "NOT_FOUND"); // right owner, wrong composition id
     assert.equal((await service.readAsset(a.id, asset.id, a.access)).bytes.byteLength > 0, true);

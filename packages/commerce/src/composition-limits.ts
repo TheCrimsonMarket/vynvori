@@ -68,6 +68,8 @@ export const CAPABILITY_LIMIT_NAMES = Object.freeze({
   api: ["JSON_MAX_BYTES"],
   guestCreate: ["JSON_MAX_BYTES", "GUEST_TTL_SECONDS"],
   uploads: ["JSON_MAX_BYTES", "IMAGE_MAX_BYTES", "IMAGE_MAX_PIXELS", "IMAGE_MAX_SIDE_PX", "MAX_ASSETS_PER_COMPOSITION", "MAX_BYTES_PER_COMPOSITION"],
+  /** ADR-0022 C5: one scanner call's timeout and the scan-attempt lease. Uploads and rescans need both (with a wired scanner). */
+  scan: ["SCAN_TIMEOUT_SECONDS", "SCAN_LEASE_SECONDS"],
 } as const satisfies Record<string, readonly SingleLimitName[]>);
 
 const need = (parsed: ParsedCompositionLimits, names: readonly SingleLimitName[]): Record<string, number> | null => {
@@ -111,3 +113,22 @@ export function resolveRatePolicies(parsed: ParsedCompositionLimits): RatePolici
 }
 /** The global cap of unexpired, unclaimed guest drafts, or `undefined` while unset or invalid (guest creation is then closed). */
 export function resolveLiveGuestDraftsMax(parsed: ParsedCompositionLimits): number | undefined { return parsed.values.LIVE_GUEST_DRAFTS_MAX; }
+
+/**
+ * Engineering constant, not policy: the longest delay a JavaScript timer can hold (2^31 - 1 ms). A longer delay would make
+ * `setTimeout` fire at once, so a scan timeout beyond it is invalid rather than silently zero.
+ */
+export const TIMER_STRUCTURAL_CEILING_MS = 2147483647;
+export type ScanLimits = Readonly<{ timeoutMs: number; leaseMs: number }>;
+/**
+ * Scan timeout and lease (ADR-0022 C5), or `null` (scanning closed: `COMPOSITION_LIMITS_NOT_CONFIGURED`). Both keys are required,
+ * the timeout must fit a JavaScript timer, and the lease must be strictly longer than the timeout: a lease that could pass while the
+ * scanner call is still running would let an explicit expiry close a live attempt, and the next explicit request would then start a
+ * second billable call (AGENTS rule 7). This is a structural relation between two founder values, not a value of its own.
+ */
+export function resolveScanLimits(parsed: ParsedCompositionLimits): ScanLimits | null {
+  const v = need(parsed, CAPABILITY_LIMIT_NAMES.scan); if (!v) return null;
+  const timeoutMs = v.SCAN_TIMEOUT_SECONDS! * 1000, leaseMs = v.SCAN_LEASE_SECONDS! * 1000;
+  if (timeoutMs > TIMER_STRUCTURAL_CEILING_MS || leaseMs <= timeoutMs) return null;
+  return Object.freeze({ timeoutMs, leaseMs });
+}

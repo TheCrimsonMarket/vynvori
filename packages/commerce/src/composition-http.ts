@@ -1,7 +1,7 @@
 import "server-only";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { CompositionReviewProjectionV1 } from "@vynvori/contracts";
-import { CompositionError, draftProjection, isUuid, secretHash, type CompositionAccess, type CompositionRecord, type CompositionService, type VersionRecord } from "./composition";
+import { CompositionError, draftProjection, isUuid, secretHash, type AssetRecord, type CompositionAccess, type CompositionRecord, type CompositionService, type VersionRecord } from "./composition";
 
 export const compositionCookies = Object.freeze({ guest: "__Host-vynvori_guest", session: "__Host-vynvori_session", csrf: "__Host-vynvori_csrf" });
 const opaque = /^[A-Za-z0-9_-]{43}$/;
@@ -23,6 +23,7 @@ const statuses: Record<CompositionError["code"], [number, string, boolean]> = {
   ASSET_NOT_CLEAN: [409, "Artwork in this design has not passed its safety check yet.", false],
   RATE_LIMITED: [429, "Too many requests. Wait a moment and try again.", true],
   GUEST_CAPACITY: [503, "Guest drafts are at capacity right now. Try again later or sign in.", true],
+  SCAN_UNAVAILABLE: [503, "Artwork safety checks are not available yet.", false],
 };
 class HttpError extends Error { constructor(readonly status: number, readonly code: "INVALID_REQUEST" | "FORBIDDEN" | "AUTH_REQUIRED" | "DISABLED" | "UNAVAILABLE") { super(code); } }
 
@@ -39,6 +40,11 @@ function cookie(request: Request, name: string): string | null {
   return values[0]?.slice(name.length + 1) ?? null;
 }
 const baseHeaders = () => new Headers({ "cache-control": "private, no-store, max-age=0", pragma: "no-cache", vary: "Cookie", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff" });
+/**
+ * The ONLY shape in which an asset leaves the API (ADR-0022 C5 whitelist). `scanStatus` is the coarse current status; scan history,
+ * evidence references, scanner identifiers, attempt ids and object keys are internal and are never serialised.
+ */
+const assetView = (a: Pick<AssetRecord, "id" | "sha256" | "mime" | "widthPx" | "heightPx" | "scanStatus">) => ({ assetId: a.id, sha256: a.sha256, mime: a.mime, widthPx: a.widthPx, heightPx: a.heightPx, scanStatus: a.scanStatus });
 const json = (value: unknown, status = 200, extra?: Headers) => { const headers = baseHeaders(); extra?.forEach((v, k) => headers.append(k, v)); return Response.json(value, { status, headers }); };
 
 async function readBody(request: Request, limit: number): Promise<Uint8Array> {
@@ -169,7 +175,7 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
       const compositionId = id(params, "id"), { access } = await actor(request, compositionId, false);
       const [record, assets, versions] = await Promise.all([service!.get(compositionId, access), service!.listAssets(compositionId, access), service!.listVersions(compositionId, access)]);
       return json({ ...view(record, access, new URL(request.url).searchParams.get("zone") ?? undefined), scene: record.scene, sceneHashSha256: record.sceneSha256,
-        assets: assets.map(a => ({ assetId: a.id, sha256: a.sha256, mime: a.mime, widthPx: a.widthPx, heightPx: a.heightPx })), versions: versions.map(versionView) });
+        assets: assets.map(assetView), versions: versions.map(versionView) });
     }),
     save: wrapped(async (request, params) => {
       const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true, false); // the JSON-limit answer waits until access is proven
@@ -235,7 +241,25 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
       await service!.admit("assetUpload", compositionId, access);
       const bytes = await readBody(request, cfg.maxUploadBytes);
       const asset = await service!.uploadAsset(compositionId, access, bytes, request.headers.get("content-type"));
-      return json({ asset: { assetId: asset.id, sha256: asset.sha256, mime: asset.mime, widthPx: asset.widthPx, heightPx: asset.heightPx } }, 201);
+      // ADR-0022 D3: scanned inline, once, after the row exists. The verdict comes only from the server's scan port; nothing from this
+      // request (no header, no field) can influence it. A non-clean result is still a stored upload (201) with its status.
+      const scanStatus = await service!.scanAsset(compositionId, asset.id, access, bytes);
+      return json({ asset: assetView({ ...asset, scanStatus }) }, 201);
+    }),
+    /**
+     * POST /api/v1/compositions/:id/assets/:assetId/scan: an explicit rescan request (ADR-0022 C5). It accepts NO body: no verdict,
+     * evidence, reason or time can come from the client (C3b hard gate). Order: ids and credentials, access in SQL, scanner and
+     * configuration, charge `*_RESCAN`, then the empty-body check. Answers only the coarse status.
+     */
+    scanAsset: wrapped(async (request, params) => {
+      const compositionId = id(params, "id"), assetId = id(params, "assetId"), { access } = await actor(request, compositionId, true, false);
+      await service!.authorize(compositionId, access);
+      service!.assertScanningAvailable();
+      requireApiLimits();
+      await service!.admit("rescan", compositionId, access);
+      if (request.body) await readBody(request, 0); // any byte at all is refused (413)
+      const scanStatus = await service!.rescanAsset(compositionId, assetId, access);
+      return json({ asset: { assetId, scanStatus } });
     }),
     readAsset: wrapped(async (request, params) => {
       const compositionId = id(params, "id"), { access } = await actor(request, compositionId, false);

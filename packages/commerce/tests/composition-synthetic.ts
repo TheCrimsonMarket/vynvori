@@ -2,6 +2,7 @@
  * SYNTHETIC test configuration. These numbers are test fixtures only: they are not product policy, not proposals and not
  * founder values (ADR-0022). Never import this file from src.
  */
+import type { ArtifactScanPort, ArtifactScanRequest } from "@vynvori/contracts/composition-port";
 import type { CompositionConfig } from "../src/composition";
 import type { CompositionHttpConfig } from "../src/composition-http";
 import { COMPOSITION_LIMIT_KEYS, RATE_LIMITED_OPERATIONS, type RatePolicies } from "../src/composition-limits";
@@ -23,10 +24,28 @@ export const SYNTHETIC_RATE_LIMIT_WINDOW_SECONDS = 3600;
 export const syntheticRatePolicies = (over: RatePolicies = {}): RatePolicies =>
   Object.freeze({ ...Object.fromEntries(RATE_LIMITED_OPERATIONS.map(operation => [operation, { windowSeconds: SYNTHETIC_RATE_LIMIT_WINDOW_SECONDS, max: SYNTHETIC_GENEROUS_RATE_MAX }])), ...over });
 
+/**
+ * SYNTHETIC C5 scan double. NOT a scanner and not a vendor stand-in (founder ruling QC): it inspects nothing and answers whatever
+ * the test asks for, by default a well-formed `clean` answer for the request's own hash. It records every call so tests can prove
+ * that the port is called at most once per request. Never import this from src.
+ */
+export type SyntheticScanBehaviour = (request: ArtifactScanRequest, signal: AbortSignal) => unknown;
+export const syntheticScanAnswer = (verdict: "clean" | "infected" | "error", request: Pick<ArtifactScanRequest, "sha256">, over: Record<string, unknown> = {}) => ({
+  verdict, sha256: request.sha256, engineVersion: "synthetic-engine-0", definitionsVersion: "synthetic-defs-0", evidenceRef: `evidence://synthetic/${verdict}`, scannedAt: new Date().toISOString(), ...over,
+});
+export function syntheticScanPort(behaviour: SyntheticScanBehaviour = request => syntheticScanAnswer("clean", request)): ArtifactScanPort & { calls: ArtifactScanRequest[] } {
+  const calls: ArtifactScanRequest[] = [];
+  return { scannerId: "synthetic-scanner", calls, async scan(request, signal) { calls.push(request); return (await behaviour(request, signal)) as never; } };
+}
+/** SYNTHETIC scan timeout and lease in milliseconds (the service takes ms; production derives them from `M3_LIMIT_SCAN_*` seconds). */
+export const SYNTHETIC_SCAN_TIMEOUT_MS = 250;
+export const SYNTHETIC_SCAN_LEASE_MS = 60_000;
+
 export const SYNTHETIC_COMPOSITION_CONFIG: CompositionConfig = Object.freeze({
   uploadsEnabled: false, guestTtlMs: SYNTHETIC_GUEST_TTL_SECONDS * 1000, imageLimits: SYNTHETIC_IMAGE_LIMITS,
   maxAssetsPerComposition: SYNTHETIC_MAX_ASSETS, maxBytesPerComposition: SYNTHETIC_MAX_BYTES_PER_COMPOSITION,
   rate: syntheticRatePolicies(), liveGuestDraftsMax: SYNTHETIC_LIVE_GUEST_DRAFTS_MAX,
+  scanPort: syntheticScanPort(), scanTimeoutMs: SYNTHETIC_SCAN_TIMEOUT_MS, scanLeaseMs: SYNTHETIC_SCAN_LEASE_MS,
 });
 export const SYNTHETIC_HTTP_LIMITS: Pick<CompositionHttpConfig, "guestTtlSeconds" | "maxJsonBytes" | "maxUploadBytes"> = Object.freeze({
   guestTtlSeconds: SYNTHETIC_GUEST_TTL_SECONDS, maxJsonBytes: SYNTHETIC_JSON_MAX_BYTES, maxUploadBytes: SYNTHETIC_IMAGE_LIMITS.maxBytes,
