@@ -4,6 +4,8 @@ Status: **PROPOSED — awaiting founder review. No worker may start until the fo
 
 Authority: founder-authorized W1 scope as relayed in the M3-closure manager kickoff. ADR-0022 and migration number `0002` in `packages/db/composition-migrations/` were granted by root in that kickoff, and so were additive edits to the M3-owned contract files. The registry does not yet record them (§7 asks root to). This document changes no code, schema, flag, workflow or protected file.
 
+> **CI names (2026-11-27, PR #42).** The milestone-named workflows were replaced by one `ci.yml` with jobs named by purpose. Read older references as follows: `m2.yml` `foundation` → `db-integration` (still the only job that counts as database evidence); `m0.yml` `verify` → `lint-typecheck`, `unit`, `build`, `security`; `m0.yml` `browser` → `browser (chromium)`, `browser (firefox)`, `browser (webkit)`; `medusa-container.yml` `local-container` and the worker-container steps → `container`; `m0.yml` `docs-only` → `integrity` (now runs on every change). Historical rows below keep the names used at the time.
+
 ## 0. Founder rulings relayed by root (rev 3)
 
 The founder gave these rulings to root, and root relayed them to this manager on 2026-11-03. **They are rulings relayed by root, recorded here as such. They are not approval of this plan.** The founder approves the plan directly, and no worker starts before that.
@@ -217,12 +219,12 @@ flowchart LR
 | C1b (**not approved**) | Server-backed interactive fixture | — | founder ruling needed | — |
 | C2 | ADR-0022, typed limits, contract types, "24 hours" text | — | — | `m0.yml` `verify`, `m2.yml` |
 | C3a | Migration `0002` DDL, rollback, `0001` down repair | `0002` | C2 | `m2.yml` `foundation` |
-| C3b | Store port + PostgreSQL and in-memory implementations + conformance | — | C3a | `m2.yml` `foundation` |
-| C4 | Quota, rate limits, authorize-before-read | — | C3b | `m2.yml`, `m0.yml` |
-| C5 | Malware-scanning boundary | — | C4 (uses the `rescan` bucket) | `m2.yml`, `m0.yml` |
-| C6 | Short-lived owner-checked download grants | — | C5 | `m2.yml`, `m0.yml` |
-| C7a | Editor core accessibility: keyboard, focus, names, roles, live regions | — | C1a | `m0.yml` `browser` |
-| C7b | Visual accessibility: reduced motion, 200 % text, reflow, target size, full-state sweep | — | C6, C7a | `m0.yml` `browser` |
+| C3b | Store port + PostgreSQL and in-memory implementations + conformance | — | C3a | `db-integration` |
+| C4 | Quota, rate limits, authorize-before-read | — | C3b | `db-integration`, `unit` |
+| C5 | Malware-scanning boundary | — | C4 (uses the `rescan` bucket) | `db-integration`, `unit` |
+| C6 | Short-lived owner-checked download grants | — | C5 | `db-integration`, `unit` |
+| C7a | Editor core accessibility: keyboard, focus, names, roles, live regions | — | C1a | `browser` |
+| C7b | Visual accessibility: reduced motion, 200 % text, reflow, target size, full-state sweep | — | C6, C7a | `browser` |
 | C8 | Founder checklists and evidence ledger | — | C6, C7b | docs-only; link check |
 | P1 | Scanner options paper (`docs/implementation/M3-Scanner-Options-Paper.md`) | — | — | docs-only; every external fact carries a source link or is marked "unknown" |
 
@@ -266,14 +268,14 @@ Founder ruling QA (relayed by root): **flags-OFF scenarios only; no identity can
 ### C3a — Migration `0002` DDL, rollback, `0001` down repair (strongest model)
 
 *Tasks.* Author `0002_asset_access_and_limits.sql` (D6), `plan.json` entry (pinned SHA-256), `rollback/0002_*.down.sql`. Repair `0001`'s down script per F8. Switch the runner and fixture allow-lists to the name pattern (D8); give existing test files their own databases only if needed to stay isolated.
-*Tests (CI-counted in `foundation`).* replay and drift; every legal and illegal scan edge; `clean→quarantined` allowed; hash-mismatch rejected; scan-event immutability and gap-free `seq` under concurrent inserts; one open attempt per asset; grant uniqueness and expiry CHECK; bucket atomic admission (`SYNTHETIC_L` limit, N concurrent ⇒ exactly `SYNTHETIC_L`); rollback up → down → up for `0002` and for `0001`; `0002` down refuses with data; `0001` down refuses while `0002` is applied; additive-only SQL scan (no GRANT, no DROP of foreign objects).
+*Tests (CI-counted in `db-integration`).* replay and drift; every legal and illegal scan edge; `clean→quarantined` allowed; hash-mismatch rejected; scan-event immutability and gap-free `seq` under concurrent inserts; one open attempt per asset; grant uniqueness and expiry CHECK; bucket atomic admission (`SYNTHETIC_L` limit, N concurrent ⇒ exactly `SYNTHETIC_L`); rollback up → down → up for `0002` and for `0001`; `0002` down refuses with data; `0001` down refuses while `0002` is applied; additive-only SQL scan (no GRANT, no DROP of foreign objects).
 *Files.* `packages/db/composition-migrations/**`, `packages/db/src/composition-migrations.ts`, `packages/db/tests/**`.
 
 ### C3b — Store port and implementations (strongest model)
 
 *Tasks.* Extend `CompositionStore` with scan-event recording and current-status join (required `scanStatus` on `AssetRecord`, with the grep from F9 in the PR), attempt open/close, grant create/validate/consume, `consumeRateToken`, `countLiveGuestDrafts`, `pruneRateBuckets`, lock helpers. Implement in the PostgreSQL store **and** the in-memory conformance harness; the same scenario list runs on both. Put the freeze-time status check inside the freeze transaction.
 *Tests.* parity of all new operations on both stores; grant single-use race (N concurrent redeems ⇒ one winner); wrong-principal consume returns nothing and leaves the grant spendable; freeze refuses a non-clean asset including the idempotent re-point branch; per-asset lock serialises scan events; pool/connection budget respected.
-*Exit.* DDL and conformance suites green in `foundation` with `ok` lines; no runtime import of the new primitives yet.
+*Exit.* DDL and conformance suites green in `db-integration` with `ok` lines; no runtime import of the new primitives yet.
 
 ### C4 — Quota, rate limits, authorize-before-read (default model)
 
@@ -381,7 +383,7 @@ Prepared, not executed. Each item will list prerequisites, ordered steps, the ex
 
 ## 10. Evidence policy and proposed ACC effects
 
-- **Counts:** only CI-executed results, cited by job and test lines. `m2.yml` `foundation` for PostgreSQL and commerce suites; `m0.yml` `verify` for contracts/web; `m0.yml` `browser` for the harness.
+- **Counts:** only CI-executed results, cited by job and test lines. `ci.yml` `db-integration` for PostgreSQL and commerce suites; `unit` for contracts/web; `browser (<engine>)` for the harness.
 - **Does not count:** any local run, local PG16 run or local Chromium run (reported `NOT_RUN`).
 - **Every step PR** includes: ADR reference, tests, security-review notes, API examples for new routes, and an explicit NOT_RUN list.
 - **Proposed ACC effects (root writes the matrix; nothing changes without executed evidence):**

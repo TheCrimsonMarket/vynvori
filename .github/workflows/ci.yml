@@ -1,0 +1,378 @@
+name: CI
+# One workflow, jobs named by purpose. Job names are check names, so keep them stable.
+#
+#   changes         decides whether a change is docs-only (see the job for the exact, fail-closed rule)
+#   integrity       protected canonical docs, reference contracts and logo files match their recorded hashes (always runs)
+#   lint-typecheck  Biome lint and every workspace typecheck
+#   unit            the full unit suite plus the design-reference rebuild and byte checks
+#   build           Vercel-style clean install and production web build with an unchanged lockfile
+#   security        security source smokes, the immutable PR5 policy test, dependency tree and the dated-waiver audit
+#   db-integration  the only job whose results count as database evidence: Postgres 17.6, migrations, every
+#                   Postgres-backed suite with CI_REQUIRE_PG_TESTS=1, the M1b identity harness and the Medusa boot test
+#   container       Medusa and image-processing images built and exercised locally (no registry, no credentials)
+#   browser         production web build in Chromium, Firefox and WebKit, one check per engine
+#
+# Docs-only changes run only `changes` and `integrity`; every other job reports "skipped", which a required check accepts.
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  # A newer push to a pull request supersedes the old run. Runs on main are never cancelled, so every merge gets a result.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+env:
+  NODE_VERSION: '22.23.3'
+  NEXT_TELEMETRY_DISABLED: '1'
+jobs:
+  changes:
+    # Answers one question: does this pull request or push change nothing but plain Markdown documentation?
+    # Other jobs skip only when `docs_only` is exactly 'true', so an empty or missing output always means full CI.
+    #
+    # "Docs-only" is deliberately narrow. Every changed path (both sides of a rename) must be one of:
+    #   - a Markdown file directly in the repository root (README.md, AGENTS.md, CLAUDE.md, ...), or
+    #   - a Markdown file anywhere under docs/,
+    # and none may be code-coupled documentation:
+    #   - docs/technical/reference-contracts/**  byte-compared to design/reference by `npm run verify:reference`
+    #   - docs/implementation/ADR-0022-*         parsed by packages/commerce/tests/composition-limits.test.ts
+    #   - docs/implementation/ADR-0020-*         the decision record named by security/dependency-waiver-policy.json
+    # Everything else (workflows, package files, security/**, scripts/**, apps/**, packages/**, non-Markdown files under
+    # docs/, including M0-protected-files.json) means full CI. Protected docs (docs/technical/00-25, the acceptance matrix)
+    # stay docs-only on purpose: the `integrity` job still checks them.
+    #
+    # Fail closed: any doubt (unknown event, unexpected merge shape, unreachable base commit, empty diff, git error)
+    # yields docs_only=false.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0 # A push can span many commits, and the base of the diff must be reachable.
+          persist-credentials: false
+      - id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          allow_pattern='^(docs/.+|[^/]+)\.md$'
+          deny_pattern='^(docs/technical/reference-contracts/|docs/implementation/ADR-0020-|docs/implementation/ADR-0022-)'
+          result=false
+          reason=
+          docs=()
+          other=()
+
+          classify() {
+            local base head parents changed
+            case "$EVENT_NAME" in
+              pull_request)
+                # The checkout is GitHub's test merge of the PR head into the base. Its first parent is the base tip,
+                # so the diff below is exactly what merging would change. Any other shape: run everything.
+                parents="$(git rev-list --parents -n 1 HEAD)" || { reason='could not read the merge commit'; return 1; }
+                set -- $parents
+                if [ "$#" -ne 3 ] || [ "$3" != "$PR_HEAD_SHA" ]; then
+                  reason='checkout is not the expected merge of the pull request head'; return 1
+                fi
+                base="$2"; head="$1"
+                ;;
+              push)
+                case "$PUSH_BEFORE" in
+                  ''|*[!0-9a-f]*|0000000000000000000000000000000000000000) reason='push has no usable previous commit (new branch)'; return 1 ;;
+                esac
+                git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null || { reason='previous commit is not reachable (force push?)'; return 1; }
+                base="$PUSH_BEFORE"; head="$PUSH_AFTER"
+                ;;
+              *)
+                reason="event '$EVENT_NAME' is not classified"; return 1
+                ;;
+            esac
+
+            changed="$RUNNER_TEMP/changed-paths.z"
+            # --no-renames lists both the old and the new path of a rename, so moving code into docs/ is never hidden.
+            git diff --name-only -z --no-renames "$base" "$head" -- > "$changed" || { reason='git diff failed'; return 1; }
+            mapfile -d '' files < "$changed" || { reason='could not read the changed path list'; return 1; }
+            if [ "${#files[@]}" -eq 0 ]; then reason='no changed paths found'; return 1; fi
+
+            local f
+            for f in "${files[@]}"; do
+              if [[ "$f" =~ $allow_pattern ]] && ! [[ "$f" =~ $deny_pattern ]]; then docs+=("$f"); else other+=("$f"); fi
+            done
+            if [ "${#other[@]}" -gt 0 ]; then
+              reason="${#other[@]} of ${#files[@]} changed paths are not plain documentation"; return 1
+            fi
+            reason="all ${#files[@]} changed paths are plain documentation"
+            return 0
+          }
+
+          if classify; then result=true; fi
+
+          {
+            if [ "$result" = true ]; then echo '### Docs-only change: only `integrity` runs'; else echo '### Full CI will run'; fi
+            echo
+            echo "Reason: $reason"
+            if [ "${#other[@]}" -gt 0 ]; then
+              echo
+              echo 'Paths that need full CI (first 20):'
+              printf '%s\n' "${other[@]:0:20}" | sed 's/^/- `/; s/$/`/'
+            fi
+            if [ "${#docs[@]}" -gt 0 ]; then
+              echo
+              echo "Documentation paths (first 20 of ${#docs[@]}):"
+              printf '%s\n' "${docs[@]:0:20}" | sed 's/^/- `/; s/$/`/'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "docs_only=$result ($reason)"
+          echo "docs_only=$result" >> "$GITHUB_OUTPUT"
+
+  integrity:
+    # Runs on every change, docs-only included. Plain Node, no install.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - run: node scripts/integrity.mjs
+
+  lint-typecheck:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+
+  unit:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0 # The security-policy tests hash the immutable reviewed baseline commit.
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      # Postgres-backed suites inside `npm test` skip here (no database); they run for real in `db-integration`.
+      - run: npm test
+      - name: Tests left the checkout unchanged
+        run: |
+          git status --short --untracked-files=all
+          git diff --stat --exit-code
+      - name: Design reference rebuild matches the shipped bundle
+        run: npm run build
+      - run: npm run verify:reference
+
+  build:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      # Clean `npm install` and `next build` in a Vercel-like copy outside the checkout; fails if the lockfile changes
+      # or the output traces pull in reference or test material. Local readiness only, never a deployment.
+      - run: npm run test:deployment
+
+  security:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PR5_SECURITY_SCOPE: local-synthetic-only
+      M1B_SECURITY_SCOPE: m1b-github-ci-source-only
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0 # The PR5 policy test diffs against the reviewed implementation commit.
+          # Credentials are kept in this job only: the next step fetches that commit from this private repository.
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Fetch immutable PR5 policy implementation
+        run: |
+          node --input-type=module -e 'import { execFileSync } from "node:child_process"; import { PR5_IMPLEMENTATION_COMMIT as sha } from "./scripts/security/run-audit.mjs"; if (!/^[a-f0-9]{40}$/.test(sha)) throw new Error("Unactivated local policy"); execFileSync("git", ["fetch", "--no-tags", "origin", sha], { stdio: "inherit" });'
+      - run: node --test scripts/tests/pr5-local-policy.test.mjs
+      - run: npm run smoke:security
+      - run: npm run smoke:m2-security
+      - name: Installed dependency tree is complete and consistent
+        run: npm ls --all --omit=optional
+      # Unfiltered `npm audit` (production and full), judged only by the dated ADR-0020/ADR-0023 waiver policy.
+      # Runs even if an earlier step failed, so the audit result is always visible.
+      - run: npm run security:audit
+        if: ${{ !cancelled() }}
+        env:
+          SECURITY_AUDIT_EVIDENCE_DIR: ${{ runner.temp }}/security-audit
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ !cancelled() }}
+        with:
+          name: security-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/security-audit
+          if-no-files-found: error
+          retention-days: 14
+
+  db-integration:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17.6-bookworm
+        env:
+          POSTGRES_USER: synthetic
+          POSTGRES_PASSWORD: synthetic-local-only
+          POSTGRES_DB: vynvori_creative_staging
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U synthetic -d vynvori_creative_staging" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      M2_ENV: local
+      M2_CREATIVE_DATABASE_URL: postgres://synthetic:synthetic-local-only@127.0.0.1:5432/vynvori_creative_staging
+      M2_MEDUSA_DATABASE_URL: postgres://synthetic:synthetic-local-only@127.0.0.1:5432/vynvori_medusa_staging
+      M2_APPLY_MIGRATIONS: vynvori-creative-staging
+      # Postgres-backed suites must run here, never skip. M3 composition suites use these disposable databases.
+      M3_TEST_POSTGRES_URL: postgres://synthetic:synthetic-local-only@127.0.0.1:5432/vynvori_m3_migration_test
+      CI_REQUIRE_PG_TESTS: '1'
+      PGPASSWORD: synthetic-local-only
+      MEDUSA_DISABLE_TELEMETRY: 'true'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Prepare databases (max_connections 250 for the concurrency acceptance tests)
+        run: |
+          psql -h 127.0.0.1 -U synthetic -d postgres -c 'CREATE DATABASE vynvori_medusa_staging'
+          psql -h 127.0.0.1 -U synthetic -d postgres -c 'ALTER SYSTEM SET max_connections = 250'
+          docker restart "${{ job.services.postgres.id }}"
+          for attempt in $(seq 1 30); do pg_isready -h 127.0.0.1 -U synthetic -d postgres && break; sleep 1; done
+          test "$(psql -h 127.0.0.1 -U synthetic -d postgres -tAc 'SHOW max_connections')" = "250"
+          psql -h 127.0.0.1 -U synthetic -d postgres -c 'CREATE DATABASE vynvori_m3_migration_test' -c 'CREATE DATABASE vynvori_m3_service_test'
+      - run: npm run db:check
+      - name: Committed migrations match the schema
+        run: npm run db:generate && git diff --exit-code -- packages/db/migrations
+      - name: Migrations apply, and re-apply as a no-op
+        run: npm run db:migrate && npm run db:migrate
+      - run: npm run test:m2
+      - name: M1b identity Postgres harness (disposable container, restricted role, backup/restore drill)
+        run: |
+          docker pull postgres:16-alpine
+          node scripts/test-m1b-identity-state.mjs
+        timeout-minutes: 6
+      - name: Build Medusa for the boot test (the other build:m2 steps are typechecks, run in lint-typecheck)
+        run: npm run build:medusa
+        env:
+          M2_MEDUSA_DATABASE_NAME: vynvori_medusa_staging
+          M2_MEDUSA_JWT_SECRET: synthetic-build-jwt-only-0000000000000
+          M2_MEDUSA_COOKIE_SECRET: synthetic-build-cookie-only-000000000
+          M2_MEDUSA_STORE_CORS: http://localhost:3000
+          M2_MEDUSA_ADMIN_CORS: http://localhost:19000
+          M2_MEDUSA_AUTH_CORS: http://localhost:19000
+      - name: Medusa boots against Postgres
+        run: node scripts/test-medusa.mjs
+        timeout-minutes: 8
+
+  container:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Deliberately no registry login, push, cloud credentials or deployment.
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - run: docker build -f apps/medusa/Dockerfile -t vynvori-medusa-local:readiness .
+      - name: Medusa image readiness (local Postgres container, scoped roles)
+        run: node scripts/test-medusa-container.mjs
+      - run: docker build -t vynvori-worker services/image-processing
+      - name: Image-processing worker container
+        run: |
+          docker run -d --name vynvori-worker -p 127.0.0.1:18080:8080 -e M2_ENV=local -e M2_PROCESSING_TOKEN=synthetic-ci-worker-token-000000000000 vynvori-worker
+          node scripts/test-worker-container.mjs
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ !cancelled() }}
+        with:
+          name: container-evidence
+          path: |
+            /tmp/VYNVORI-medusa-container-*/*.log
+            /tmp/VYNVORI-medusa-container-*/*.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  browser:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    # One engine per job. Measured with all three in one job (run 41584515832): about 75-105 s of harness per engine
+    # plus install and build; 15 min keeps wide headroom.
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false # Every engine reports, even when one fails.
+      matrix:
+        engine: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.engine }}
+      # Unit test of the harness's lazy-image settle helper. It needs Playwright's Chromium, so it runs on that leg only.
+      - if: matrix.engine == 'chromium'
+        run: node --test scripts/tests/browser-settle.test.mjs
+      - run: npm run build:web
+      - run: npm run test:browser:web
+        env:
+          M0_BROWSER: ${{ matrix.engine }}
+          M0_EVIDENCE_DIR: ${{ runner.temp }}/browser-${{ matrix.engine }}
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ !cancelled() }}
+        with:
+          name: browser-${{ matrix.engine }}
+          path: ${{ runner.temp }}/browser-${{ matrix.engine }}
+          if-no-files-found: error
+          retention-days: 14
