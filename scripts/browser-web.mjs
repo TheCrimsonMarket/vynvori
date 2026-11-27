@@ -68,6 +68,29 @@ try {
   page.on("pageerror", error => result.errors.push(error.message));
   page.on("console", message => { if (message.type() === "error") result.errors.push(message.text()); });
   page.on("response", response => { if (response.status() >= 400 && /\/_next\/|\/assets\//.test(response.url())) result.failedAssets.push(response.url()); });
+  // Next.js prefetches visible <Link> targets as same-origin `?_rsc=` fetches. When the harness starts a hard navigation
+  // while one is in flight, WebKit cancels it and logs "Fetch API cannot load <url> due to access control checks." as a
+  // console error (CI runs on c99f589: /studio and /gallery; earlier: /, /cart, /account). That error comes from the
+  // harness's own timing, not from the app. Before each page.goto, wait until no prefetch is in flight and none has
+  // started for a short quiet period. Nothing is filtered: every console error is still collected and still fails the run,
+  // and a prefetch that never settles fails loudly.
+  const prefetches = new Set();
+  const isPrefetch = request => { const url = new URL(request.url()); return url.origin === base && url.searchParams.has("_rsc"); };
+  page.on("request", request => { if (isPrefetch(request)) prefetches.add(request); });
+  page.on("requestfinished", request => prefetches.delete(request));
+  page.on("requestfailed", request => prefetches.delete(request));
+  const settlePrefetches = async (quietMs = 250, timeoutMs = 10000) => {
+    const deadline = Date.now() + timeoutMs;
+    let quietSince = null;
+    for (;;) {
+      if (prefetches.size) quietSince = null; else quietSince ??= Date.now();
+      if (quietSince !== null && Date.now() - quietSince >= quietMs) return;
+      if (Date.now() > deadline) throw new Error(`RSC prefetches still in flight after ${timeoutMs} ms: ${[...prefetches].map(request => request.url()).join(", ")}`);
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+  };
+  const hardNavigate = page.goto.bind(page);
+  page.goto = async (url, options) => { await settlePrefetches(); return hardNavigate(url, options); };
   const routes = [["/", "WEAR WHAT"], ["/studio", "A COLLECTION"], ["/customize", "YOUR ART"], ["/products/black-oversized-tshirt", "THE BLACK"], ["/gallery", "PERSONAL FIRST"]];
   const viewports = [[320,480],[320,640],[390,568],[390,844],[768,1024],[1440,900],[1920,1080],[2560,1440],[3440,1440]];
   for (const [width,height] of viewports) {
