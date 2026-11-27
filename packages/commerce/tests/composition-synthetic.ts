@@ -40,12 +40,15 @@ export function syntheticScanPort(behaviour: SyntheticScanBehaviour = request =>
 /** SYNTHETIC scan timeout and lease in milliseconds (the service takes ms; production derives them from `M3_LIMIT_SCAN_*` seconds). */
 export const SYNTHETIC_SCAN_TIMEOUT_MS = 250;
 export const SYNTHETIC_SCAN_LEASE_MS = 60_000;
+/** SYNTHETIC C6 download-grant lifetime in milliseconds (production derives it from `M3_LIMIT_DOWNLOAD_GRANT_TTL_SECONDS`). */
+export const SYNTHETIC_DOWNLOAD_GRANT_TTL_MS = 120_000;
 
 export const SYNTHETIC_COMPOSITION_CONFIG: CompositionConfig = Object.freeze({
   uploadsEnabled: false, guestTtlMs: SYNTHETIC_GUEST_TTL_SECONDS * 1000, imageLimits: SYNTHETIC_IMAGE_LIMITS,
   maxAssetsPerComposition: SYNTHETIC_MAX_ASSETS, maxBytesPerComposition: SYNTHETIC_MAX_BYTES_PER_COMPOSITION,
   rate: syntheticRatePolicies(), liveGuestDraftsMax: SYNTHETIC_LIVE_GUEST_DRAFTS_MAX,
   scanPort: syntheticScanPort(), scanTimeoutMs: SYNTHETIC_SCAN_TIMEOUT_MS, scanLeaseMs: SYNTHETIC_SCAN_LEASE_MS,
+  downloadGrantTtlMs: SYNTHETIC_DOWNLOAD_GRANT_TTL_MS,
 });
 export const SYNTHETIC_HTTP_LIMITS: Pick<CompositionHttpConfig, "guestTtlSeconds" | "maxJsonBytes" | "maxUploadBytes"> = Object.freeze({
   guestTtlSeconds: SYNTHETIC_GUEST_TTL_SECONDS, maxJsonBytes: SYNTHETIC_JSON_MAX_BYTES, maxUploadBytes: SYNTHETIC_IMAGE_LIMITS.maxBytes,
