@@ -9,6 +9,7 @@ import { ledgerMigrationPlan } from "../src/ledger-migrations";
 import { databaseFor, dropLedger, freshEmptyDatabase, grantSyntheticCredits, ledgerPoolAs, ledgerTarget, registerSyntheticGrantSource } from "./ledger-fixture";
 import { assessQuoteForAuthorization, getQuote, issueQuote, renewQuote } from "../src/ledger-quotes";
 import { authorizeQuote, getReservation, recordWorkflowRef, releaseReservation } from "../src/ledger-reservations";
+import { getBundleState, openRefinements, recordBundleDelivery, skipRefinementSlot } from "../src/ledger-entitlements";
 import { holdReservation, settleReservation } from "../src/ledger-settlement";
 import { recordVendorCostEvidence } from "../src/ledger-evidence";
 import { SYNTHETIC_BUNDLE_HOLD, SYNTHETIC_CHARGES, SYNTHETIC_FINAL_HOLD, SYNTHETIC_HOLDS, consent, currentPricePolicy, eligibilityPort, issueTestQuote, releaseEvidence } from "./ledger-reservation-fixture";
@@ -76,7 +77,7 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
       await admin.query(`GRANT USAGE ON SCHEMA vynvori_identity TO ${q(owner)}`);
       await admin.query(`GRANT REFERENCES ON vynvori_identity.profiles TO ${q(owner)}`);
 
-      await t.test("the migration applies as a plain non-superuser owner; exactly two definer functions, owned by the owner, not executable by the runtime role", async () => {
+      await t.test("the migration applies as a plain non-superuser owner; exactly four definer functions, owned by the owner, not executable by the runtime role", async () => {
         await admin.query(`SET ROLE ${q(owner)}`);
         try { for (const sql of migrationSql()) await admin.query(sql); } finally { await admin.query("RESET ROLE"); }
         // runtime grants as the S9 proposal will shape them (test only; the migration grants nothing)
@@ -95,13 +96,20 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
           // S6 (ADR-0021 S6 addendum): SELECT, INSERT on vendor_cost_evidence; settle and hold need nothing new (they write
           // ledger_entries and ledger_commands, already granted; the reservation definer moves the state).
           await admin.query(`GRANT SELECT, INSERT ON vynvori_ledger.vendor_cost_evidence TO ${q(role)}`);
+          // S7 (ADR-0021 S7 addendum): SELECT, INSERT on the two insert-only event tables and SELECT on the slots; NO UPDATE on packages or slots.
+          await admin.query(`GRANT SELECT, INSERT ON vynvori_ledger.ledger_package_events, vynvori_ledger.refinement_slot_events TO ${q(role)}`);
+          await admin.query(`GRANT SELECT ON vynvori_ledger.refinement_slots TO ${q(role)}`);
+          // SELECT ... FOR UPDATE needs an UPDATE privilege on at least one column (as with GRANT UPDATE (user_id) ON wallets above). The
+          // lock-only grants are on identity columns the update guards never let change: no state or field can move through them.
+          await admin.query(`GRANT UPDATE (package_id) ON vynvori_ledger.ledger_packages TO ${q(role)}`);
+          await admin.query(`GRANT UPDATE (slot_id) ON vynvori_ledger.refinement_slots TO ${q(role)}`);
         }
         // a role with TABLE-level UPDATE on wallets that is NOT in pg_write_all_data: only the design (not missing privileges) can stop it
         await admin.query(`GRANT USAGE ON SCHEMA vynvori_ledger TO ${q(rtt)}`);
         await admin.query(`GRANT SELECT, UPDATE ON vynvori_ledger.wallets TO ${q(rtt)}`);
         assert.equal((await admin.query(`SELECT has_function_privilege($1, '${APPLY}', 'EXECUTE') AS x`, [rt])).rows[0].x, false);
         const definers = (await admin.query("SELECT p.proname, pg_get_userbyid(p.proowner) AS owner FROM pg_proc p WHERE p.pronamespace = 'vynvori_ledger'::regnamespace AND p.prosecdef")).rows;
-        assert.deepEqual(definers.sort((a, b) => a.proname.localeCompare(b.proname)), [{ proname: "ledger_entries_apply_to_reservation", owner }, { proname: "ledger_entries_apply_to_wallet", owner }], "exactly two definers: S2's wallet writer and S5's reservation writer");
+        assert.deepEqual(definers.sort((a, b) => a.proname.localeCompare(b.proname)), [{ proname: "ledger_entries_apply_to_reservation", owner }, { proname: "ledger_entries_apply_to_wallet", owner }, { proname: "ledger_package_events_apply", owner }, { proname: "refinement_slot_events_apply", owner }], "exactly four definers: S2's wallet writer, S5's reservation writer and S7's package and slot writers");
         assert.equal((await admin.query(`SELECT has_function_privilege($1, '${APPLY_RESERVATION}', 'EXECUTE') AS x`, [rt])).rows[0].x, false);
         assert.equal((await admin.query("SELECT count(*)::int n FROM vynvori_ledger.ledger_grant_sources")).rows[0].n, 0, "0002 registered no grant source (applied by a non-superuser)");
       });
@@ -497,7 +505,7 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
         assert.equal((await admin.query("SELECT has_table_privilege($1, 'vynvori_ledger.credit_reservations', 'UPDATE') AS x", [rtw])).rows[0].x, true, "precondition: pg_write_all_data CAN update reservations by privilege alone");
         await probe(rtwPool, "pg_write_all_data");
         await assert.rejects(rtwPool.query("DELETE FROM vynvori_ledger.credit_reservations WHERE reservation_id = $1", [target.reservationId]), code("23000", /append-only/), "pg_write_all_data: delete");
-        await assert.rejects(rtwPool.query("UPDATE vynvori_ledger.ledger_packages SET state = 'closed'"), code("23000", /append-only/), "pg_write_all_data: package state (no transition exists before S7)");
+        await assert.rejects(rtwPool.query("UPDATE vynvori_ledger.ledger_packages SET state = 'closed'"), code("23000", /only through package events/), "pg_write_all_data: package state moves only through package events (S7 replaced S5's reject-every-update trigger)");
         await assert.rejects(rtwPool.query("UPDATE vynvori_ledger.ledger_authorizations SET consent_text_version = 'forged'"), code("23000", /append-only/), "pg_write_all_data: authorization");
         assert.deepEqual([await reservationRow(target.reservationId), await buckets(s5User)], before, "reservation and wallet unchanged");
       });
@@ -532,7 +540,7 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
           "DROP TABLE vynvori_ledger.credit_reservations",
         ]) await assert.rejects(rtPool.query(sql), code("42501"), sql);
         const triggers = (await admin.query("SELECT c.relname, count(*)::int n FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE c.relnamespace = 'vynvori_ledger'::regnamespace AND NOT t.tgisinternal AND t.tgenabled = 'O' AND c.relname IN ('credit_reservations','ledger_authorizations','ledger_packages') GROUP BY 1 ORDER BY 1")).rows;
-        assert.deepEqual(triggers, [{ relname: "credit_reservations", n: 5 }, { relname: "ledger_authorizations", n: 4 }, { relname: "ledger_packages", n: 3 }], "every S5 trigger present and enabled");
+        assert.deepEqual(triggers, [{ relname: "credit_reservations", n: 5 }, { relname: "ledger_authorizations", n: 4 }, { relname: "ledger_packages", n: 4 }], "every S5 trigger present and enabled (S7 swapped the package trigger for its delete guard and owner-checked update guard)");
       });
 
       await t.test("S9 step for S5: re-owning ONLY the reservation definer to a dedicated role with EXACTLY USAGE + SELECT + UPDATE(state) on credit_reservations keeps the path working, fails when any one is removed, and blocks the old owner and a superuser", async () => {
@@ -579,6 +587,118 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
         await assert.rejects(admin.query("INSERT INTO su_s5 VALUES (1)"), code("23000", /only through ledger entries/), "superuser through a trigger");
         await admin.query("DROP TABLE su_s5; DROP FUNCTION pg_temp.su_s5_fn()");
         assert.deepEqual(await reservationRow(target.reservationId), before);
+      });
+
+      let s7Funds = 0;
+      /** A user with a funded wallet and one authorized bundle, advanced to `stage` through the REAL commands as the restricted runtime role. */
+      const s7Bundle = async (stage: "authorized" | "delivered" | "open") => {
+        const user = await profile(); await ensureWallet(rtPool, user);
+        await grantSyntheticCredits(rtPool, { userId: user, grantSourceId: source, sourceRef: `s7-funds-${++s7Funds}`, units: SYNTHETIC_BUNDLE_HOLD });
+        const bundle = await s5Authorize(rtPool, user, await issueTestQuote(rtPool, user, "bundle", `priv-s7-bundle-${s7Funds}`));
+        const base = { userId: user, component: "priv", packageId: bundle.packageId! };
+        if (stage !== "authorized") await recordBundleDelivery(rtPool, { ...base, artifactCount: 3, evidenceRef: "priv/delivery", idempotencyKey: `priv-s7-delivery-${s7Funds}-0001` });
+        if (stage === "open") await openRefinements(rtPool, { ...base, idempotencyKey: `priv-s7-open-${s7Funds}-00001` });
+        return { ...base, idempotencyKey: `priv-s7-next-${s7Funds}-000001` };
+      };
+      const packageRow = async (id: string) => (await admin.query("SELECT state FROM vynvori_ledger.ledger_packages WHERE package_id = $1", [id])).rows[0];
+      const slotRows = async (packageId: string) => (await admin.query("SELECT ordinal, state FROM vynvori_ledger.refinement_slots WHERE package_id = $1 ORDER BY ordinal", [packageId])).rows;
+
+      await t.test("S7: the runtime role runs the real package and slot commands but holds no privilege to move package or slot state; table-level UPDATE and pg_write_all_data are stopped by the design (23000), directly and through a TEMP trigger", async () => {
+        const b = await s7Bundle("open");
+        const skipped = await skipRefinementSlot(rtPool, { userId: b.userId, packageId: b.packageId, ordinal: 1, idempotencyKey: "priv-s7-skip-000001" });
+        assert.deepEqual([skipped.state, skipped.customerState, skipped.slots.map(s => s.view.state)], ["open_for_refinements", "refinements_open", ["skipped", "available"]]);
+        for (const sql of [
+          "UPDATE vynvori_ledger.ledger_packages SET state = 'closed'", "UPDATE vynvori_ledger.refinement_slots SET state = 'used'", "UPDATE vynvori_ledger.ledger_package_events SET evidence_ref = 'x'", "UPDATE vynvori_ledger.refinement_slot_events SET evidence_ref = 'x'",
+          "INSERT INTO vynvori_ledger.refinement_slots(slot_id, user_id, package_id, ordinal, state) VALUES (gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), 1, 'available')",
+          "DELETE FROM vynvori_ledger.refinement_slots", "DELETE FROM vynvori_ledger.ledger_package_events", "TRUNCATE vynvori_ledger.refinement_slots", "TRUNCATE vynvori_ledger.refinement_slot_events",
+        ]) await assert.rejects(rtPool.query(sql), code("42501"), sql);
+        await assert.rejects(rtPool.query("UPDATE vynvori_ledger.ledger_packages SET package_id = package_id"), code("23000", /only through package events/), "the lock-only column grant moves nothing (package)");
+        await assert.rejects(rtPool.query("UPDATE vynvori_ledger.refinement_slots SET slot_id = slot_id"), code("23000", /only through slot events/), "the lock-only column grant moves nothing (slot)");
+        for (const [table, column, expected] of [["ledger_packages", "state", false], ["refinement_slots", "state", false], ["ledger_package_events", "to_state", false], ["refinement_slot_events", "to_state", false]] as const)
+          assert.equal((await admin.query("SELECT has_column_privilege($1, $2, $3, 'UPDATE') AS x", [rt, `vynvori_ledger.${table}`, column])).rows[0].x, expected, `${table}.${column}`);
+        for (const fn of ["ledger_package_events_apply", "refinement_slot_events_apply", "ledger_packages_update_guard", "refinement_slots_insert_guard", "refinement_slots_update_guard", "ledger_package_events_bind", "refinement_slot_events_bind"])
+          assert.equal((await admin.query(`SELECT has_function_privilege($1, 'vynvori_ledger.${fn}()', 'EXECUTE') AS x`, [rt])).rows[0].x, false, `${fn} is not executable by the runtime role`);
+        const before = [await packageRow(b.packageId), await slotRows(b.packageId), await buckets(b.userId)];
+        await admin.query(`GRANT SELECT, UPDATE ON vynvori_ledger.ledger_packages, vynvori_ledger.refinement_slots TO ${q(rtt)}`);
+        await admin.query(`GRANT INSERT ON vynvori_ledger.refinement_slots TO ${q(rtt)}`);
+        const tempTrigger = (pool: Pool, update: string) => runAs(pool,
+          ["CREATE TEMP TABLE s7_exploit(x int)"],
+          [`CREATE FUNCTION pg_temp.s7_exploit_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN ${update}; RETURN NEW; END $$`],
+          ["CREATE TRIGGER s7_exploit_tg AFTER INSERT ON s7_exploit FOR EACH ROW EXECUTE FUNCTION pg_temp.s7_exploit_fn()"],
+          ["INSERT INTO s7_exploit VALUES (1)"]);
+        const closePackage = `UPDATE vynvori_ledger.ledger_packages SET state = 'closure_pending' WHERE package_id = '${b.packageId}'`;
+        const useSlot = `UPDATE vynvori_ledger.refinement_slots SET state = 'forfeited' WHERE package_id = '${b.packageId}' AND ordinal = 2`;
+        const insertSlot = `INSERT INTO vynvori_ledger.refinement_slots(slot_id, user_id, package_id, ordinal, state) VALUES (gen_random_uuid(), '${b.userId}', '${b.packageId}', 1, 'available')`;
+        const probe = async (pool: Pool, label: string) => {
+          await assert.rejects(pool.query(closePackage), code("23000", /only through package events/), `${label}: direct package state`);
+          await assert.rejects(pool.query(useSlot), code("23000", /only through slot events/), `${label}: direct slot state`);
+          await assert.rejects(pool.query("UPDATE vynvori_ledger.ledger_packages SET state = state"), code("23000", /only through package events/), `${label}: a no-op state update`);
+          await assert.rejects(tempTrigger(pool, closePackage), code("23000", /only through package events/), `${label}: TEMP trigger (depth 2, not the function owner), package`);
+          await assert.rejects(tempTrigger(pool, useSlot), code("23000", /only through slot events/), `${label}: TEMP trigger, slot`);
+          await assert.rejects(tempTrigger(pool, insertSlot), code("23000", /refinement slots are created/), `${label}: TEMP trigger (depth 2, not the function owner) cannot create a slot`);
+        };
+        await withRole(rtt, pool => probe(pool, "table-level UPDATE"));
+        await probe(rtwPool, "pg_write_all_data");
+        await assert.rejects(rtwPool.query("DELETE FROM vynvori_ledger.refinement_slots"), code("23000", /append-only/), "pg_write_all_data: slot delete");
+        await assert.rejects(rtwPool.query("DELETE FROM vynvori_ledger.ledger_packages"), code("23000", /append-only/), "pg_write_all_data: package delete");
+        await assert.rejects(rtwPool.query("UPDATE vynvori_ledger.refinement_slot_events SET evidence_ref = 'x'"), code("23000", /append-only/), "pg_write_all_data: slot event update");
+        await assert.rejects(rtwPool.query("UPDATE vynvori_ledger.ledger_package_events SET evidence_ref = 'x'"), code("23000", /append-only/), "pg_write_all_data: package event update");
+        await admin.query(`REVOKE UPDATE ON vynvori_ledger.ledger_packages, vynvori_ledger.refinement_slots FROM ${q(rtt)}`);
+        await admin.query(`REVOKE INSERT ON vynvori_ledger.refinement_slots FROM ${q(rtt)}`);
+        assert.deepEqual([await packageRow(b.packageId), await slotRows(b.packageId), await buckets(b.userId)], before, "package, slots and wallet unchanged");
+        assert.equal((await getBundleState(rtPool, b.userId, b.packageId)).state, "open_for_refinements");
+      });
+
+      await t.test("S9 step for S7: re-owning ONLY the package and the slot definers to dedicated roles with EXACTLY their listed privileges keeps the paths working, fails (42501) when any one is removed, and blocks the old owner and a superuser", async () => {
+        const pkgdef = "m7_pkgdef_" + suffix, slotdef = "m7_slotdef_" + suffix;
+        await mkRole(pkgdef); await mkRole(slotdef);
+        const slotColumns = "state, source_version_id, operation_id, delivered_version_id, closure_cause, closure_notice_version";
+        type Priv = [label: string, grant: string, revoke: string, stage: "authorized" | "delivered" | "open", command: "delivery" | "open" | "skip"];
+        const pkgPrivs: Priv[] = [
+          ["USAGE on schema vynvori_ledger", `GRANT USAGE ON SCHEMA vynvori_ledger TO ${q(pkgdef)}`, `REVOKE USAGE ON SCHEMA vynvori_ledger FROM ${q(pkgdef)}`, "authorized", "delivery"],
+          ["SELECT on vynvori_ledger.ledger_packages", `GRANT SELECT ON vynvori_ledger.ledger_packages TO ${q(pkgdef)}`, `REVOKE SELECT ON vynvori_ledger.ledger_packages FROM ${q(pkgdef)}`, "authorized", "delivery"],
+          ["UPDATE (state) on vynvori_ledger.ledger_packages", `GRANT UPDATE (state) ON vynvori_ledger.ledger_packages TO ${q(pkgdef)}`, `REVOKE UPDATE (state) ON vynvori_ledger.ledger_packages FROM ${q(pkgdef)}`, "authorized", "delivery"],
+          ["INSERT on vynvori_ledger.refinement_slots", `GRANT INSERT ON vynvori_ledger.refinement_slots TO ${q(pkgdef)}`, `REVOKE INSERT ON vynvori_ledger.refinement_slots FROM ${q(pkgdef)}`, "delivered", "open"],
+        ];
+        const slotPrivs: Priv[] = [
+          ["USAGE on schema vynvori_ledger", `GRANT USAGE ON SCHEMA vynvori_ledger TO ${q(slotdef)}`, `REVOKE USAGE ON SCHEMA vynvori_ledger FROM ${q(slotdef)}`, "open", "skip"],
+          ["SELECT on vynvori_ledger.refinement_slots", `GRANT SELECT ON vynvori_ledger.refinement_slots TO ${q(slotdef)}`, `REVOKE SELECT ON vynvori_ledger.refinement_slots FROM ${q(slotdef)}`, "open", "skip"],
+          [`UPDATE (${slotColumns}) on vynvori_ledger.refinement_slots`, `GRANT UPDATE (${slotColumns}) ON vynvori_ledger.refinement_slots TO ${q(slotdef)}`, `REVOKE UPDATE (${slotColumns}) ON vynvori_ledger.refinement_slots FROM ${q(slotdef)}`, "open", "skip"],
+        ];
+        for (const [, grant] of [...pkgPrivs, ...slotPrivs]) await admin.query(grant);
+        await admin.query(`ALTER FUNCTION vynvori_ledger.ledger_package_events_apply() OWNER TO ${q(pkgdef)}`);
+        await admin.query(`ALTER FUNCTION vynvori_ledger.refinement_slot_events_apply() OWNER TO ${q(slotdef)}`);
+        assert.equal((await admin.query("SELECT pg_get_userbyid(relowner) AS o FROM pg_class WHERE oid = 'vynvori_ledger.refinement_slots'::regclass")).rows[0].o, owner, "tables keep the migration login as owner");
+        for (const [role, tables] of [[pkgdef, ["ledger_package_events", "refinement_slot_events"]], [slotdef, ["ledger_packages", "ledger_package_events", "refinement_slot_events"]]] as const) {
+          const held = (await admin.query("SELECT t, p, has_table_privilege($1, 'vynvori_ledger.' || t, p) AS x FROM unnest($2::text[]) t, unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p", [role, tables])).rows;
+          assert.ok(held.every(r => r.x === false), `${role} holds nothing on the event tables${role === slotdef ? " or ledger_packages" : ""}`);
+        }
+        assert.equal((await admin.query("SELECT has_table_privilege($1, 'vynvori_ledger.refinement_slots', 'INSERT') AS x", [slotdef])).rows[0].x, false, "the slot definer cannot create slots");
+        assert.equal((await admin.query("SELECT has_column_privilege($1, 'vynvori_ledger.refinement_slots', 'ordinal', 'UPDATE') AS x", [slotdef])).rows[0].x, false, "nor change a slot's identity columns");
+        const run = (command: Priv[4], b: Awaited<ReturnType<typeof s7Bundle>>) =>
+          command === "delivery" ? recordBundleDelivery(rtPool, { ...b, artifactCount: 3, evidenceRef: "priv/delivery-2" })
+            : command === "open" ? openRefinements(rtPool, b) : skipRefinementSlot(rtPool, { userId: b.userId, packageId: b.packageId, ordinal: 2, idempotencyKey: b.idempotencyKey });
+        for (const [label, grant, revoke, stage, command] of [...pkgPrivs, ...slotPrivs]) {
+          const b = await s7Bundle(stage); // advanced with ALL privileges still in place: the exact lists are enough
+          await admin.query(revoke);
+          const before = [await packageRow(b.packageId), await slotRows(b.packageId), await buckets(b.userId)];
+          await assert.rejects(run(command, b), (e: unknown) => (e as { sqlstate?: string }).sqlstate === "42501", `without ${label} the legitimate path fails (privilege not padded)`);
+          assert.deepEqual([await packageRow(b.packageId), await slotRows(b.packageId), await buckets(b.userId)], before, "nothing moved on the failed attempt");
+          await admin.query(grant);
+          await run(command, b); // the same command works again once the privilege is back
+        }
+        const target = await s7Bundle("open");
+        const beforeDirect = [await packageRow(target.packageId), await slotRows(target.packageId)];
+        await withRole(owner, async pool => {
+          await assert.rejects(pool.query("UPDATE vynvori_ledger.ledger_packages SET state = 'closure_pending' WHERE package_id = $1", [target.packageId]), code("23000", /only through package events/), "old table owner, direct package");
+          await assert.rejects(pool.query("UPDATE vynvori_ledger.refinement_slots SET state = 'skipped' WHERE package_id = $1 AND ordinal = 1", [target.packageId]), code("23000", /only through slot events/), "old table owner, direct slot");
+        });
+        await assert.rejects(admin.query("UPDATE vynvori_ledger.ledger_packages SET state = 'closure_pending' WHERE package_id = $1", [target.packageId]), code("23000", /only through package events/), "superuser that is not the function owner, direct package");
+        await assert.rejects(admin.query("UPDATE vynvori_ledger.refinement_slots SET state = 'skipped' WHERE package_id = $1 AND ordinal = 1", [target.packageId]), code("23000", /only through slot events/), "superuser, direct slot");
+        await admin.query(`CREATE TEMP TABLE su_s7(x int); CREATE FUNCTION pg_temp.su_s7_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN UPDATE vynvori_ledger.refinement_slots SET state = 'skipped' WHERE package_id = '${target.packageId}' AND ordinal = 1; RETURN NEW; END $$; CREATE TRIGGER su_s7_tg AFTER INSERT ON su_s7 FOR EACH ROW EXECUTE FUNCTION pg_temp.su_s7_fn()`);
+        await assert.rejects(admin.query("INSERT INTO su_s7 VALUES (1)"), code("23000", /only through slot events/), "superuser through a trigger");
+        await admin.query("DROP TABLE su_s7; DROP FUNCTION pg_temp.su_s7_fn()");
+        assert.deepEqual([await packageRow(target.packageId), await slotRows(target.packageId)], beforeDirect);
       });
 
       await t.test("TEMP: revoking it from the role alone does nothing while PUBLIC holds it; revoking from PUBLIC closes the exploit's first step", async () => {

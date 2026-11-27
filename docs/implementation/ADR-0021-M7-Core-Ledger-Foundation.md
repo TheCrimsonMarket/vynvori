@@ -434,7 +434,7 @@ S5 rows survive it. Tests check that `prosrc` equals the 0005 bodies, that exact
 
 **Checks run locally only (NOT_RUN as CI evidence; only the CI `db-integration` job's log counts).**
 - The ledger Postgres tests ran against a throwaway PostgreSQL 16 cluster in this container: loopback, `synthetic` superuser, `max_connections = 250`, the port acknowledged through `M7_TEST_POSTGRES_PORT_ACK`, and `CI_REQUIRE_PG_TESTS=1`.
-- Result: 194/194 across the nine ledger test files, plus the mutation table above.
+- Result: 194/194 across the nine ledger test files, plus the mutation table above. After S6 merged, `main` was merged into this branch; one subtest now runs S6's real `settleReservation` and `holdReservation` against S7's closure and reopen rules (a settled final closes by delivery and never reopens; a held final blocks both).
 
 **Security review (S6, before the PR).** The `security-reviewer` agent reviewed the migration, the rollback, the library and the tests. It found nothing CRITICAL or HIGH. It confirmed that the replaced bodies equal 0005 plus the new edges, that the owner-and-depth guard is intact, and that the rollback is byte-identical to the 0005 bodies.
 
@@ -444,3 +444,110 @@ S5 rows survive it. Tests check that `prosrc` equals the 0005 bodies, that exact
 | LOW-1: a settle or hold before the dispatch marker was a persisted rejection, so a component that retries with the same key could never hold an unknown outcome | Fixed: "not dispatched yet" is a non-persisted `INVALID_TRANSITION`. The test now holds under the same key after the marker commits. |
 | LOW-2: append-only, unattributed `vendor_cost_evidence` rows can be added by anyone holding `INSERT` and removed only by a superuser | S9 grant note: prefer a dedicated internal reconciliation role. The shape `CHECK`s bound each row. |
 | INFO: the hold's `reason` is hashed into the request but not stored on the entry | No change. `evidence_kind` maps one-to-one to the reason (schema refine), so nothing is lost. |
+## S7 addendum — refinement slots, package transitions and closure (migration `0007_refinement_slots`)
+Status: **proposed, implemented locally for S7 only; not deployed.** Plan step: `M7-Plan.md` §7 S7 (with D9, F11/Q7, §2, §3). Nothing in S7 adds a flag, a dependency, a route, an `.env` key or a runtime import (`ledger-isolation.test.ts`, D13: `ledger-entitlements.ts` is on the ledger-source list and nothing under `apps/` imports it). `0007_refinement_slots.sql` adds no `GRANT`, no role, no `OWNER TO`, inserts no rows, references no Medusa object, registers no credit grant source and writes no ledger entry (refinements never touch a wallet bucket). It replaces exactly one S5 object (the `ledger_packages_immutable` trigger, which rejected every update "until S7") and does not replace or alter any 0005/0006 function. The package edge guard in root (`canTransitionPlaneCBundle`) and the operation guards are imported, not edited.
+
+**What S7 adds.** Tables `ledger_package_events`, `refinement_slots`, `refinement_slot_events`; two pure edge functions; nine trigger functions (two of them `SECURITY DEFINER`); `packages/db/src/ledger-entitlements.ts` (eleven commands and reads, export `@vynvori/db/ledger-entitlements`). The migration is additive with a tested up/down/up; the down script refuses while any row exists in the three new tables, while any package has left `authorized`, or while a later migration is journaled.
+
+**Design (binding for S7).**
+- Every S7 operation is a ledger **command of the package owner through `runLedgerCommand`** (ten new command kinds, registered in A4(2): `refinement_skip`, `refinement_restore`, `refinement_pending`, `refinement_unknown`, `refinement_consume`, `bundle_record_delivery`, `bundle_open_refinements`, `bundle_begin_closure`, `bundle_close`, `bundle_reopen`). Lock order: wallet → package `FOR UPDATE` → slots by ordinal → reservations. Business refusals (`INVALID_TRANSITION`, `EVIDENCE_INVALID`, `TERMS_NOT_APPROVED`) are persisted per idempotency key.
+- **Package state changes only through `ledger_package_events`** (insert-only). A `BEFORE INSERT` binding trigger (invoker rights) demands an *applied command of the right kind written in this transaction* (xid8 widening plus `pg_xact_status = 'in progress'`), the stored `from_state`, an allowed edge, and the per-edge evidence. An `AFTER INSERT` `SECURITY DEFINER` function (`ledger_package_events_apply`) is the only writer of `ledger_packages.state` and the only inserter of `refinement_slots` (it creates the two slots when the package first becomes `open_for_refinements`). A deferred constraint trigger makes each event atomic with its consequences (two slots on opening; every slot resolved on closing; forfeiture only together with the closing event).
+- **Slot state changes only through `refinement_slot_events`**, same pattern (`refinement_slot_events_apply`).
+- **Edges.** Packages: `authorized → partial | delivered_3_of_3`, `partial → delivered_3_of_3`, `delivered_3_of_3 → open_for_refinements`, `open_for_refinements → closure_pending`, `closure_pending → closed`, and the guarded C-02 reopen `closure_pending → open_for_refinements`. Slots: `available ↔ skipped`, `available → pending`, `pending → unknown | used`, `unknown → used`, `available | skipped → forfeited`. A test compares the database edge function with root's guard for all 64 package pairs; the only differences are the declared ones (reopen is db-only and guarded; `quoted → authorized`, `closure_pending → remedy_pending` and `remedy_pending → closed` are root-only and deferred).
+- **Delivery.** `bundle_record_delivery` takes an artifact count and an evidence reference; only exactly 3 durable artifacts reach `delivered_3_of_3`, 0–2 reach `partial`. A bundle opens once, from `delivered_3_of_3` only. Internal names are used in the database (`open_for_refinements`); the customer name (`refinements_open`) is mapped by `toCustomerPackageState` at the projection boundary.
+- **Closure.** `closure_pending` blocks restore, skip, pending and consume. Beginning closure is refused while a refinement is `pending` or `unknown`. Closing forfeits only `available`/`skipped` slots, in the same transaction as the closing event, under the **disclosed notice**: the notice version must equal the one stored with the disclosing quote (`TERMS_NOT_APPROVED` otherwise). A quote that discloses no notice can never close a package (the feature stays closed). A `used` slot stays `used`. Closing is refused while any final of the package is unresolved (`authorization_requested`, `reserved`, `reconciliation_hold`, `operator_remedy`). Causes are `final_delivered` (a settled final) and `explicit_close`; `explicit_close` is refused once a final settled.
+- **No clock, no expiry.** There is no clock-based expiry anywhere (a static test scans the module and the migration); `approved_expiry` is not an allowed cause because no approved terms exist, and that value is rejected as `INVALID_INPUT`.
+- **C-02 reopen.** `reopenBundleAfterUnchargedFinal` reopens a package only for a **released first final** that began on an open package, whose committed `release` entry carries `verified_zero_charge_failure`, when closure began *because of this final* (the latest `closure_pending` event is `final_authorized` for it) and no sibling final is settled or unresolved. Slots come back exactly as they were; none is recreated. A later revision on a closed package never reopens or recreates slots. This is stricter than the plan's wording (an explicit close request is never undone by a final, and every other final must be released).
+- **Ownership and identity.** Every command and read is scoped by the authenticated `userId` (the verified issuer + subject mapping lives upstream); another user's package or slot is `NOT_FOUND` and nothing is recorded. Operation ids are unique system-wide, a delivered version consumes at most one slot of a package, and a source version binds once.
+- **Free text.** `evidenceRef` (1–512) and `closureNoticeVersion` (1–256) are printable ASCII only, enforced in TypeScript and by `CHECK` constraints on all affected tables. A driver error while reading state is surfaced as `LedgerError("TRANSIENT")`, never as a raw driver message.
+
+**Privilege model B for packages and slots (hard gate satisfied).** `ledger_packages_update_guard()`, `refinement_slots_insert_guard()` and `refinement_slots_update_guard()` reject every write unless `pg_trigger_depth() > 1` **and** `current_user` is the owner of the corresponding apply function (compared by name, never a `regrole` cast); depth alone is never enough. Every S7 function pins `search_path = pg_catalog, pg_temp`, schema-qualifies every object, uses no dynamic SQL, is `REVOKE ALL … FROM PUBLIC` (the two pure edge functions excepted) and the two definers verify what fired them (`TG_RELID`, `TG_OP`, `TG_WHEN`, `TG_LEVEL`).
+
+**S9 grants this design needs (founder-executed; never in a migration).**
+- Runtime role: `SELECT, INSERT` on `ledger_package_events` and `refinement_slot_events`; `SELECT` on `refinement_slots`; `SELECT` on `ledger_packages` (already granted); lock-only `UPDATE (package_id)` on `ledger_packages` and `UPDATE (slot_id)` on `refinement_slots` (identity columns the guards never let change; `SELECT … FOR UPDATE` needs an `UPDATE` column privilege, exactly as `UPDATE (user_id)` on wallets does). No other `UPDATE`, no `DELETE`/`TRUNCATE`, no grant option.
+- Package definer owner: a dedicated `NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE` role holding **exactly** `USAGE` on `vynvori_ledger`, `SELECT` and `UPDATE (state)` on `ledger_packages`, `INSERT` on `refinement_slots`; `ALTER FUNCTION vynvori_ledger.ledger_package_events_apply() OWNER TO` it.
+- Slot definer owner: a dedicated role of the same kind holding exactly `USAGE`, `SELECT` and `UPDATE (state, source_version_id, operation_id, delivered_version_id, closure_cause, closure_notice_version)` on `refinement_slots`; `ALTER FUNCTION vynvori_ledger.refinement_slot_events_apply() OWNER TO` it.
+- `ledger-privileges.test.ts` proves the real commands work under exactly these grants and that re-owning ONLY the package and slot definers is enough (table-level `UPDATE` and `pg_write_all_data` still cannot move state). Whether S5's and S7's definers share one role or use separate ones is a founder question (below).
+
+**Honest limits (stated, not overclaimed).**
+1. The runtime role keeps `INSERT` on the two event tables and the command table by design (it runs the library). The database enforces the **shape and graph** of every S7 write, not the business decisions behind it. Code holding the runtime role's privileges and writing raw SQL could, for a user whose package state allows the edge, record an event with caller-asserted evidence: a delivery count, an `explicit_close_request` (customer consent is not recorded in a ledger-verifiable form), or slot evidence. It still cannot mint credits, move units, touch a wallet bucket, skip an edge, forfeit without the closing event, change state outside an event, or leave a slot unresolved on a closed package. This is the same boundary as S5 limit 1. The fix is a `SECURITY DEFINER` command path with a ledger-verifiable consent and evidence record; raised as a founder question.
+2. Evidence verification is the caller's: whether a delivery really produced three durable artifacts, or a slot's operation really produced the delivered version, is a Plane B / M6b integration seam. S7 binds evidence to the slot's own operation and stores it; it does not call a provider.
+3. **Final eligibility by package state is not done in S7.** `credit_reservations_check_insert` is unchanged, so a final can still be reserved against an `authorized`, `partial` or `closed` package, and nothing forces `closure_pending` while a final is reserved. S7 makes closing and reopening safe in the presence of finals; the rule that decides which package states may host a final is deferred (it needs a reservation-trigger change outside this lane).
+4. There is no `pending → available` edge for a refinement that failed uncharged, and `unknown → used` is allowed (reconciliation evidence). Both are declared design choices pending founder confirmation.
+5. A system actor learns whether an operation id is already used (ids share a namespace with reservations' operation ids). System actors are trusted components, not customers.
+6. Rate limiting belongs at the API layer (there is no API in S7).
+7. `LedgerError` exposes `sqlstate`/`constraint` fields (ledger-core, outside this lane) which carry internal names; the S7 library only ever raises codes.
+8. The runtime's `FOR UPDATE` lock grants let raw SQL lock any user's package or slot rows; two raw sessions could deadlock (the library locks in the documented order).
+9. 0006 (S6) is on `main` and 0007 follows it in `plan.json`; the migrations test runs `down7` before `down6`. S7 replaces none of the three S5 functions S6 replaced. The library names no S6-only reservation state: unresolved finals are `state <> 'released'` and not `settled` in TypeScript, and the database lists the states itself (S6's static scan forbids `reconciliation_hold` in `packages/db/src` TypeScript).
+
+**Table and trigger inventory (all in `vynvori_ledger`).**
+
+| Object | Kind | Notes |
+|---|---|---|
+| `ledger_package_events` | table | insert-only; `CHECK`s on counts, evidence, notice, reasons; FKs to package, command |
+| `refinement_slots` | table | two per package (`ordinal` 1, 2); state `CHECK`; unique `operation_id`; unique `(package_id, delivered_version_id)`; no `DELETE`/`TRUNCATE` |
+| `refinement_slot_events` | table | insert-only |
+| `ledger_package_edge_allowed()` / `refinement_slot_edge_allowed()` | pure SQL | used by `CHECK`s and the binding triggers; not revoked from `PUBLIC` (as 0004's promo edge function) |
+| `ledger_packages_no_delete` | `BEFORE DELETE` | replaces S5's `ledger_packages_immutable` |
+| `ledger_packages_update_guard()` | `BEFORE UPDATE` | only `state`, only by the definer owner at depth > 1, only an allowed edge |
+| `ledger_package_events_bind()` | `BEFORE INSERT` | command of the right kind in this transaction; wallet, package, slot and reservation locks; per-edge evidence; C-02 reopen binding |
+| `ledger_package_events_apply()` | **`SECURITY DEFINER`**, `AFTER INSERT` | only writer of package state; creates the two slots on opening |
+| `ledger_package_events_check_complete()` | deferred constraint trigger | two slots on opening; none unresolved on closing; forfeiture only with the closing event |
+| `refinement_slots_insert_guard()` / `refinement_slots_update_guard()` | `BEFORE INSERT` / `BEFORE UPDATE` | depth > 1 and the owner of the matching definer |
+| `refinement_slot_events_bind()` | `BEFORE INSERT` | command in this transaction; slot binding (operation, source, delivered version); package must be open |
+| `refinement_slot_events_apply()` | **`SECURITY DEFINER`**, `AFTER INSERT` | only writer of slot state and fields |
+| `refinement_slot_events_check_complete()` | deferred constraint trigger | a forfeiture comes with the package's closing event |
+| `*_immutable`, `*_no_truncate` | triggers | insert-only event tables; no `TRUNCATE` of slots or events |
+
+**Honest mutation table (run locally on PostgreSQL 16; 18 mutations of `0007_refinement_slots.sql`, each applied to the pinned file, re-pinned in `plan.json`, run against `ledger-entitlements`, `ledger-privileges` and `ledger-migrations`, then restored).** A first run left 13 mutants alive because the TypeScript pre-checks answered before the database did; the "database refuses each business precondition on its own" test (raw SQL, no library) and a slot-insert probe in the privileges test were added, and the survivors were re-run.
+
+| Mutation | Failing named test(s) |
+|---|---|
+| M1 package state guard keeps only `pg_trigger_depth() > 1` (owner check removed) | `ledger-privileges.test.ts`: "S7: the runtime role runs the real package and slot commands but holds no privilege to move package or slot state…" |
+| M2 slot state guard keeps only `pg_trigger_depth() > 1` | the same test; "S9 step for S7: re-owning ONLY the package and the slot definers…" |
+| M3 slot-insert guard keeps only `pg_trigger_depth() > 1` | "S7: the runtime role runs the real package and slot commands…" (a TEMP trigger at depth 2 cannot create a slot) |
+| M4 package-event same-transaction check removed | `ledger-entitlements.test.ts`: "backstop: the database refuses each business precondition on its own…" |
+| M5 slot-event same-transaction check removed | "backstop: package and slot state cannot be written directly, and an event needs its own applied command…" |
+| M6 closure notice comparison removed | "backstop: the database refuses each business precondition on its own…" |
+| M7 begin closure no longer refused while a refinement is pending or unknown | the same |
+| M8 close no longer refused while a final is unresolved | the same |
+| M9 reopen no longer requires the final to have begun on an open package | **survives; equivalent mutant** (see below) |
+| M10 reopen no longer requires the durable verified-zero-charge release entry | **survives; equivalent mutant** (see below) |
+| M11 forfeiture no longer needs `closure_pending` | "backstop: the database refuses each business precondition on its own…" |
+| M12 slot commands no longer require an open package | the same |
+| M13 deferred check that a forfeiture comes with the closing package event removed | "closure_pending blocks restore, skip, pending and consume; nothing is forfeited or consumed silently…" |
+| M14 deferred check that a closed package has no unresolved slot removed | "backstop: a closing event that leaves a slot unresolved…" |
+| M15 one delivered version may consume several slots (unique index removed) | "backstop: the database refuses each business precondition on its own…" |
+| M16 slot events no longer need the slot's own operation | the same |
+| M17 explicit close allowed after a final settled | the same |
+| M18 package edge function allows `closed → open_for_refinements` | "package edge set: the database function equals root's guard for all 64 pairs…" |
+
+M9 and M10 are equivalent in S7's world, not untested behaviour: the reopen binding already demands that closure began because of *this* final (`final_authorized`), and beginning closure for a final already demands `pre_attempt_package_state = 'open_for_refinements'` (so M9 cannot differ); and S5's entry binding admits only `verified_zero_charge_failure` evidence on a `release` entry (so a `released` final always has one, and M10 cannot differ). Both conditions stay as defence in depth and become independent the day S6 or a later step admits other release evidence; that step must add the matching probe.
+
+**Connection use.** `ledger-entitlements.test.ts` is a standard file (database `vynvori_m7_entitlements_test`, a new allow-list name): one pool capped at 5 plus one fixture client, declared peak **6**. `ledger-privileges.test.ts` stays within its existing connection budget (the S7 cases reuse its pools and roles).
+
+**Files outside the plan's S7 list (all inside M7's lane, `packages/db/**` and this ADR).** `tests/ledger-migrations.test.ts` (0007 in the plan list, golden digests, "0007 is additive", rollback refusal and down/up subtests), `tests/ledger-privileges.test.ts` (the two new definers, S9 grants, privilege proofs), `tests/ledger-isolation.test.ts` (D13 source list, API allow-list, ten command kinds, A4(3) probe), `tests/ledger-fixture.ts` (the `entitlements` database name).
+
+**Rollback.** `rollback/0007_refinement_slots.down.sql`, one `DO` block under the runner's advisory lock: refuses unless 0007 is journaled and no later migration is; takes `ACCESS EXCLUSIVE` locks before checking emptiness; refuses while any row exists in the three new tables or any package is no longer `authorized` (real data is restored from backup, never deleted); restores `ledger_packages_immutable`, drops the new triggers, tables and functions, and deletes its journal row. If S6's PR merges second, its `0006` rollback runs after this one (`down7` before `down6`).
+
+**Checks run locally only (NOT_RUN as CI evidence; only the CI `db-integration` job's log counts).** All ledger Postgres tests were run against a throwaway PostgreSQL 16 cluster in this container (loopback, `synthetic` superuser, port acknowledged via `M7_TEST_POSTGRES_PORT_ACK`) with `CI_REQUIRE_PG_TESTS=1`, plus the mutation table above.
+
+**Security review (S7, before the PR).** The `security-reviewer` agent reviewed the migration, rollback, library and tests. No critical or high findings. Dispositions:
+
+| Finding | Disposition |
+|---|---|
+| MEDIUM-1: the runtime role's raw-SQL reach (an `explicit_close_request`, delivery counts and slot evidence are caller-asserted) | Documented as honest limit 1 with the founder question below; no hard-gate break (nothing is minted, state moves only through events). |
+| LOW-2: reopen did not bind to *why* closure began, so an explicit close request could be undone by an unrelated earlier released final | Fixed in SQL and TypeScript (closure must have begun by `final_authorized` for this final); tests added at library and database level. |
+| LOW-3: final eligibility by package state is not enforced | Documented (honest limit 3); needs a reservation-trigger change outside this lane. |
+| LOW-4: a sibling final that is settled or unresolved could race the reopen | Fixed: TypeScript pre-check plus the existing database check; test added. |
+| LOW-5: control characters in free text reached SQL | Fixed: printable ASCII only in TypeScript and by `CHECK`; tests added (a NUL byte now fails as an input error before SQL). |
+| LOW-6, LOW-7: operation-id existence oracle for system actors; rate limiting | Documented (honest limits 5 and 6). |
+| INFO: one owner role per definer is recommended; runtime lock grants allow raw-SQL deadlocks; `LedgerError.sqlstate/.constraint` carry internal names; 0006 must precede 0007 in the plan | Documented (S9 grants, honest limits 7–9). |
+
+**Open questions for the founder.**
+1. One definer role or separate ones for S5's reservation definer, S7's package definer and S7's slot definer (this ADR recommends separate roles; the S9 grants above are written per role).
+2. A ledger-verifiable consent record and a definer-only command path for `explicit_close_request`, delivery counts and refinement evidence (honest limit 1, and S5's limit 1).
+3. Failed refinements: should a `pending` slot that failed uncharged return to `available`? No such edge exists; `unknown → used` is allowed.
+4. Only `final_delivered` and `explicit_close` are closure causes (`approved_expiry` is unavailable until approved terms exist); a quote with no disclosed notice cannot close its package.
+5. Reopen is stricter than the plan's wording (closure must have begun because of that final; every other final must be released).
+6. Final eligibility by package state is deferred (honest limit 3): which step owns it?
