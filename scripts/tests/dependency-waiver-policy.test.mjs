@@ -20,11 +20,24 @@ for (const waiver of policy.waivers) for (const node of waiver.nodes) {
   packages[node.path] = { ...packages[node.path], version: node.version };
   installed[node.path] = { name: waiver.package, version: node.version, context: node.context };
 }
+// ADR-0024: the production audit is clean, so production-side cases inject records at this synthetic production node.
+const PRODUCTION_NODE = "node_modules/synthetic-production-package";
+packages[PRODUCTION_NODE] = { version: "1.0.0" };
 const state = { lockSha256: "a".repeat(64), lock: { lockfileVersion: 3, packages }, installed };
+const ESBUILD = "GHSA-67mh-4wv8-2f99";
 const now = new Date("2026-11-03T00:00:00Z");
 const run = audit => ({ stdout: JSON.stringify(audit), exitCode: audit.metadata?.vulnerabilities?.total ? 1 : 0 });
 const call = (overrides = {}) => evaluateWaivers({ policy, state, production: run(fixture.production), all: run(fixture.all), now, env: {}, ...overrides });
 const rejected = (result, code) => { assert.equal(result.accepted, false); assert.equal(result.status, "REJECTED"); if (code) assert.equal(result.code, code); };
+// A production finding for a package that is not in the reviewed waiver set, with consistent counts.
+const withProductionRecord = (audit, { name = "synthetic-production-package", severity = "moderate", ghsa = "GHSA-1111-2222-3333", range = "<2.0.0" } = {}) => {
+  const changed = structuredClone(audit);
+  changed.vulnerabilities[name] = { name, severity, isDirect: true, via: [{ source: 1, name, dependency: name, title: "Synthetic production advisory",
+    url: `https://github.com/advisories/${ghsa}`, severity, cwe: [], cvss: {}, range }], effects: [], range, nodes: [PRODUCTION_NODE], fixAvailable: false };
+  changed.metadata.vulnerabilities[severity]++; changed.metadata.vulnerabilities.total++;
+  return changed;
+};
+const origin = audit => audit.vulnerabilities.esbuild.via.find(item => typeof item === "object");
 const addOrigin = (audit, name, origin) => {
   const changed = structuredClone(audit);
   changed.vulnerabilities[name].via.push({ ...changed.vulnerabilities[name].via.find(item => typeof item === "object"), ...origin });
@@ -37,10 +50,13 @@ test("reviewed policy is anchored and the captured audits are accepted with ever
   const result = call();
   assert.equal(result.accepted, true, result.code);
   assert.equal(result.status, "ACCEPTED_WITH_DATED_WAIVER");
-  assert.equal(result.counts.total, 61);
-  assert.equal(result.counts.high + result.counts.critical, 0);
-  assert.equal(result.allDependencyCounts.total, 65);
-  assert.deepEqual(result.waiversUsed, policy.waivers.map(waiver => waiver.ghsa).sort());
+  // ADR-0024: Medusa 2.23.1 leaves no production finding; the full audit holds only the esbuild origin and its three dependents.
+  assert.equal(result.counts.total, 0);
+  assert.equal(result.originalAuditExitCode, 0);
+  assert.equal(result.allDependencyCounts.total, 4);
+  assert.equal(result.allDependencyCounts.moderate, 4);
+  assert.deepEqual(Object.keys(fixture.all.vulnerabilities).sort(), ["@esbuild-kit/core-utils", "@esbuild-kit/esm-loader", "drizzle-kit", "esbuild"]);
+  assert.deepEqual(result.waiversUsed, [ESBUILD]);
 });
 
 test("unrelated lockfile and source changes do not invalidate the waiver", () => {
@@ -54,6 +70,9 @@ test("policy or metadata edits cannot bless themselves, and expiry cannot exceed
   const widened = structuredClone(policy);
   widened.waivers[0].severity = "high";
   rejected(call({ policy: widened }), "WAIVER_POLICY_FINGERPRINT_MISMATCH");
+  const context = structuredClone(policy);
+  context.waivers[0].nodes[0].context = "production";
+  rejected(call({ policy: context }), "WAIVER_POLICY_FINGERPRINT_MISMATCH");
   assert.throws(() => validateWaiverPolicy({ ...policy, waivers: [] }), /WAIVER_POLICY_FINGERPRINT_MISMATCH/);
 });
 
@@ -64,37 +83,39 @@ test("waiver window is absolute and the boundary instant is rejected", () => {
   }
 });
 
-for (const severity of ["low", "moderate"]) test(`a new ${severity} advisory is rejected without severity filtering`, () => {
-  const changed = addOrigin(fixture.production, "glob", { severity, url: "https://github.com/advisories/GHSA-1111-2222-3333" });
-  rejected(call({ production: run(changed) }), "UNWAIVED_ADVISORY");
+for (const severity of ["low", "moderate"]) test(`a new ${severity} advisory is rejected without severity filtering, in either audit`, () => {
+  const changed = addOrigin(fixture.all, "esbuild", { severity, url: "https://github.com/advisories/GHSA-1111-2222-3333" });
+  rejected(call({ all: run(changed) }), "UNWAIVED_ADVISORY");
+  rejected(call({ production: run(withProductionRecord(fixture.production, { severity })) }), "UNWAIVED_ADVISORY");
 });
 
 for (const severity of ["high", "critical"]) test(`a ${severity} record can never be waived`, () => {
-  const changed = structuredClone(fixture.production);
-  changed.vulnerabilities.glob.severity = severity;
-  rejected(call({ production: run(changed) }), "UNWAIVABLE_SEVERITY");
+  const changed = structuredClone(fixture.all);
+  changed.vulnerabilities.esbuild.severity = severity;
+  rejected(call({ all: run(changed) }), "UNWAIVABLE_SEVERITY");
+  rejected(call({ production: run(withProductionRecord(fixture.production, { severity })) }), "UNWAIVABLE_SEVERITY");
 });
 
 test("a waived GHSA must keep its exact package, severity and range", () => {
-  const borrowed = structuredClone(fixture.production);
-  borrowed.vulnerabilities.unreviewed = { ...structuredClone(borrowed.vulnerabilities.glob), name: "unreviewed", nodes: ["node_modules/glob"] };
+  const borrowed = structuredClone(fixture.all);
+  borrowed.vulnerabilities.unreviewed = { ...structuredClone(borrowed.vulnerabilities.esbuild), name: "unreviewed" };
   borrowed.metadata.vulnerabilities.moderate++; borrowed.metadata.vulnerabilities.total++;
-  rejected(call({ production: run(borrowed) }), "ADVISORY_ORIGIN_MISMATCH");
+  rejected(call({ all: run(borrowed) }), "ADVISORY_ORIGIN_MISMATCH");
   for (const field of [{ severity: "low" }, { range: "<=99.0.0" }, { name: "other" }]) {
-    const changed = structuredClone(fixture.production);
-    Object.assign(changed.vulnerabilities.glob.via.find(item => typeof item === "object"), field);
-    rejected(call({ production: run(changed) }), "ADVISORY_ORIGIN_MISMATCH");
+    const changed = structuredClone(fixture.all);
+    Object.assign(origin(changed), field);
+    rejected(call({ all: run(changed) }), "ADVISORY_ORIGIN_MISMATCH");
   }
 });
 
 test("a waived package at a new path or unreviewed installed version is rejected", () => {
-  const path = structuredClone(fixture.production);
-  path.vulnerabilities.glob.nodes.push("node_modules/other/node_modules/glob");
-  const pathState = structuredClone(state);
-  pathState.lock.packages["node_modules/other/node_modules/glob"] = { version: "13.0.7" };
-  rejected(call({ production: run(path), state: pathState }), "UNWAIVED_VULNERABLE_NODE");
+  const moved = structuredClone(fixture.all);
+  moved.vulnerabilities.esbuild.nodes.push("node_modules/other/node_modules/esbuild");
+  const movedState = structuredClone(state);
+  movedState.lock.packages["node_modules/other/node_modules/esbuild"] = { version: "0.18.20", dev: true };
+  rejected(call({ all: run(moved), state: movedState }), "UNWAIVED_VULNERABLE_NODE");
   const version = structuredClone(state);
-  version.installed["node_modules/glob"].version = "13.0.5";
+  version.installed["node_modules/@esbuild-kit/core-utils/node_modules/esbuild"].version = "0.18.19";
   rejected(call({ state: version }), "UNWAIVED_VULNERABLE_NODE");
 });
 
@@ -103,48 +124,56 @@ test("development-only waivers cannot cover production-audit findings", () => {
   changed.vulnerabilities.esbuild = structuredClone(fixture.all.vulnerabilities.esbuild);
   changed.metadata.vulnerabilities.moderate++; changed.metadata.vulnerabilities.total++;
   rejected(call({ production: run(changed) }), "DEVELOPMENT_NODE_IN_PRODUCTION_AUDIT");
+  // Even at a production node, the development-only waiver does not apply.
+  const promoted = structuredClone(changed);
+  promoted.vulnerabilities.esbuild.nodes = [PRODUCTION_NODE];
+  rejected(call({ production: run(promoted) }), "UNWAIVED_VULNERABLE_NODE");
 });
 
 test("vulnerable paths outside the lockfile are rejected", () => {
-  const changed = structuredClone(fixture.production);
-  const name = Object.keys(changed.vulnerabilities).find(key => !["glob", "minimatch", "i18next"].includes(key));
-  changed.vulnerabilities[name].nodes = ["node_modules/not-in-lock"];
-  rejected(call({ production: run(changed) }), "UNREVIEWED_VULNERABLE_PATH");
+  const changed = structuredClone(fixture.all);
+  changed.vulnerabilities["drizzle-kit"].nodes = ["node_modules/not-in-lock"];
+  rejected(call({ all: run(changed) }), "UNREVIEWED_VULNERABLE_PATH");
 });
 
 test("missing, malformed, truncated and inconsistent audit output fail", () => {
-  for (const stdout of ["", "not json", "{", "null", "{}", JSON.stringify({ ...fixture.production, metadata: {} })]) rejected(call({ production: { stdout, exitCode: 1 } }));
-  const counts = structuredClone(fixture.production);
-  counts.metadata.vulnerabilities.total--;
-  rejected(call({ production: run(counts) }), "AUDIT_COUNTS_INCOMPLETE");
-  const truncated = structuredClone(fixture.production);
-  truncated.vulnerabilities.glob.via = [];
-  rejected(call({ production: run(truncated) }), "ADVISORY_RECORD_INCOMPLETE");
-  const reference = structuredClone(fixture.production);
-  const dependent = Object.keys(reference.vulnerabilities).find(key => reference.vulnerabilities[key].via.every(item => typeof item === "string"));
-  reference.vulnerabilities[dependent].via = ["missing-package"];
-  rejected(call({ production: run(reference) }), "UNMAPPABLE_ADVISORY_REFERENCE");
-  const origin = structuredClone(fixture.production);
-  origin.vulnerabilities.glob.via.find(item => typeof item === "object").url = "https://example.invalid/unmapped";
-  rejected(call({ production: run(origin) }), "UNMAPPABLE_ADVISORY_ORIGIN");
+  for (const key of ["production", "all"]) {
+    for (const stdout of ["", "not json", "{", "null", "{}", JSON.stringify({ ...fixture[key], metadata: {} })]) rejected(call({ [key]: { stdout, exitCode: 1 } }));
+    const counts = structuredClone(fixture[key]);
+    counts.metadata.vulnerabilities.total++;
+    rejected(call({ [key]: run(counts) }), "AUDIT_COUNTS_INCOMPLETE");
+    rejected(call({ [key]: run({ ...fixture[key], auditReportVersion: 1 }) }), "AUDIT_INCOMPLETE");
+    rejected(call({ [key]: run({ ...fixture[key], vulnerabilities: [] }) }), "AUDIT_INCOMPLETE");
+    const dependencies = structuredClone(fixture[key]);
+    dependencies.metadata.dependencies.total = 0;
+    rejected(call({ [key]: run(dependencies) }), "AUDIT_DEPENDENCIES_INCOMPLETE");
+  }
+  const truncated = structuredClone(fixture.all);
+  truncated.vulnerabilities.esbuild.via = [];
+  rejected(call({ all: run(truncated) }), "ADVISORY_RECORD_INCOMPLETE");
+  const reference = structuredClone(fixture.all);
+  reference.vulnerabilities["drizzle-kit"].via = ["missing-package"];
+  rejected(call({ all: run(reference) }), "UNMAPPABLE_ADVISORY_REFERENCE");
+  const unmapped = structuredClone(fixture.all);
+  origin(unmapped).url = "https://example.invalid/unmapped";
+  rejected(call({ all: run(unmapped) }), "UNMAPPABLE_ADVISORY_ORIGIN");
 });
 
 test("propagated records must trace to a waived origin and cannot exceed its severity", () => {
-  const cycle = structuredClone(fixture.production);
-  const record = name => ({ name, severity: "moderate", isDirect: false, via: [name === "cycle-a" ? "cycle-b" : "cycle-a"], effects: [], range: "*", nodes: ["node_modules/glob"], fixAvailable: false });
+  const cycle = structuredClone(fixture.all);
+  const record = name => ({ name, severity: "moderate", isDirect: false, via: [name === "cycle-a" ? "cycle-b" : "cycle-a"], effects: [], range: "*", nodes: ["node_modules/drizzle-kit"], fixAvailable: false });
   cycle.vulnerabilities["cycle-a"] = record("cycle-a");
   cycle.vulnerabilities["cycle-b"] = record("cycle-b");
   cycle.metadata.vulnerabilities.moderate += 2; cycle.metadata.vulnerabilities.total += 2;
-  rejected(call({ production: run(cycle) }), "UNMAPPABLE_ADVISORY_GRAPH");
-  // Every waiver is moderate since ADR-0023 removed the only low one (deepmerge), so a propagated record can only exceed its
-  // origin by becoming high or critical, which is rejected earlier as UNWAIVABLE_SEVERITY. The ADVISORY_GRAPH_CHANGED
-  // comparison stays in the evaluator as defence in depth; this case proves the escalation is still rejected.
-  const escalated = structuredClone(fixture.production);
-  const dependent = Object.keys(escalated.vulnerabilities).find(key => escalated.vulnerabilities[key].via.length === 1 && escalated.vulnerabilities[key].via[0] === "i18next");
-  assert.ok(dependent, "fixture has a record propagated only from the moderate i18next origin");
-  escalated.vulnerabilities[dependent].severity = "high";
+  rejected(call({ all: run(cycle) }), "UNMAPPABLE_ADVISORY_GRAPH");
+  // The only waiver is moderate, so a propagated record can exceed its origin only by becoming high or critical, which is
+  // rejected earlier as UNWAIVABLE_SEVERITY. ADVISORY_GRAPH_CHANGED stays in the evaluator as defence in depth (unreachable
+  // by tests since ADR-0023); this case proves the escalation is still rejected.
+  const escalated = structuredClone(fixture.all);
+  assert.deepEqual(escalated.vulnerabilities["@esbuild-kit/core-utils"].via, ["esbuild"]);
+  escalated.vulnerabilities["@esbuild-kit/core-utils"].severity = "high";
   escalated.metadata.vulnerabilities.moderate--; escalated.metadata.vulnerabilities.high++;
-  rejected(call({ production: run(escalated) }), "UNWAIVABLE_SEVERITY");
+  rejected(call({ all: run(escalated) }), "UNWAIVABLE_SEVERITY");
 });
 
 test("execution, signal and exit-status failures are never waived, for either audit", () => {
@@ -153,7 +182,8 @@ test("execution, signal and exit-status failures are never waived, for either au
     rejected(call({ [key]: { ...base, executionError: true } }), "AUDIT_EXECUTION_FAILURE");
     rejected(call({ [key]: { ...base, signal: "SIGKILL" } }), "AUDIT_EXECUTION_FAILURE");
     rejected(call({ [key]: { ...base, exitCode: 2 } }), "AUDIT_EXECUTION_FAILURE");
-    rejected(call({ [key]: { ...base, exitCode: 0 } }), "AUDIT_EXIT_STATUS_INCONSISTENT");
+    // The clean production audit exits 0 and the full audit exits 1; flipping either is inconsistent.
+    rejected(call({ [key]: { ...base, exitCode: base.exitCode ? 0 : 1 } }), "AUDIT_EXIT_STATUS_INCONSISTENT");
     rejected(call({ [key]: { stdout: JSON.stringify({ error: { code: "EAI_AGAIN" } }), exitCode: 1 } }), "AUDIT_EXECUTION_FAILURE");
   }
 });
@@ -175,12 +205,11 @@ test("configuration that could narrow either audit is rejected", () => {
 test("a full audit that silently dropped development or production findings is rejected", () => {
   // Equivalent to running the "all" audit with dev dependencies omitted.
   rejected(call({ all: run(fixture.production) }), "AUDIT_GRAPH_INCOMPLETE");
-  const narrowed = structuredClone(fixture.all);
-  const dropped = Object.keys(fixture.production.vulnerabilities).find(key => !["glob", "minimatch", "i18next"].includes(key) &&
-    !Object.values(narrowed.vulnerabilities).some(record => record.via.includes(key)));
-  delete narrowed.vulnerabilities[dropped];
-  narrowed.metadata.vulnerabilities[fixture.all.vulnerabilities[dropped].severity]--; narrowed.metadata.vulnerabilities.total--;
-  rejected(call({ all: run(narrowed) }), "FULL_AUDIT_NARROWED");
+  // Coverage change (ADR-0024), for reviewers to accept explicitly: with no production waiver left, any production finding is
+  // rejected (UNWAIVED_ADVISORY, UNWAIVED_VULNERABLE_NODE or DEVELOPMENT_NODE_IN_PRODUCTION_AUDIT) before the superset
+  // comparison runs, so FULL_AUDIT_NARROWED is unreachable by tests. It stays in the evaluator as defence in depth. This case
+  // proves a production finding missing from the full audit is still rejected.
+  rejected(call({ production: run(withProductionRecord(fixture.production)) }), "UNWAIVED_ADVISORY");
 });
 
 test("an empty audit cannot pass while reviewed vulnerable nodes are still installed", () => {
@@ -195,7 +224,7 @@ test("an empty audit cannot pass while reviewed vulnerable nodes are still insta
       if (!gone.has(name) && record.via.some(item => typeof item === "string" && gone.has(item))) { gone.add(name); grew = true; }
     }
   }
-  assert.ok(gone.size > 1, "fixture has records that depend on the esbuild origin");
+  assert.equal(gone.size, 4, "every record in the full audit depends on the esbuild origin");
   for (const name of gone) {
     missing.metadata.vulnerabilities[missing.vulnerabilities[name].severity]--; missing.metadata.vulnerabilities.total--;
     delete missing.vulnerabilities[name];
@@ -211,65 +240,40 @@ test("installed-tree collection fails closed on changed versions or contexts", a
   // An unreviewed policy is rejected before any path it names is read.
   await assert.rejects(collectWaiverState(root, { ...policy, waivers: [{ ...policy.waivers[0], nodes: [{ ...policy.waivers[0].nodes[0], path: "node_modules/../../etc" }] }] }), /WAIVER_POLICY_FINGERPRINT_MISMATCH/);
   if (current.error) return;
-  for (const [field, value] of [["version", "13.0.5"], ["integrity", "sha512-AAAA"], ["resolved", "https://registry.npmjs.org/glob/-/glob-0.0.0.tgz"]]) {
+  for (const [field, value] of [["version", "0.18.19"], ["integrity", "sha512-AAAA"], ["resolved", "https://registry.npmjs.org/esbuild/-/esbuild-0.0.0.tgz"]]) {
     const changed = structuredClone(policy);
     changed.waivers[0].nodes[0][field] = value;
     await assert.rejects(inspectWaivedNodes(root, changed), /WAIVED_LOCK_ENTRY_CHANGED/);
   }
   const context = structuredClone(policy);
-  context.waivers[0].nodes[0].context = "development";
+  context.waivers[0].nodes[0].context = "production";
   await assert.rejects(inspectWaivedNodes(root, context), /WAIVED_NODE_CONTEXT_CHANGED/);
 });
 
-test("ADR-0023 refresh: the reviewed waiver set is exactly glob, minimatch, esbuild and i18next", () => {
-  assert.deepEqual(policy.waivers.map(waiver => waiver.package).sort(), ["esbuild", "glob", "i18next", "minimatch"]);
+test("ADR-0024 reduction: the reviewed waiver set is exactly esbuild, and the ceiling is unchanged", () => {
+  assert.deepEqual(policy.waivers.map(waiver => [waiver.package, waiver.ghsa]), [["esbuild", ESBUILD]]);
+  assert.deepEqual(policy.waivers[0].nodes.map(node => [node.path, node.version, node.context]), [["node_modules/@esbuild-kit/core-utils/node_modules/esbuild", "0.18.20", "development"]]);
   assert.equal(policy.expiresAt, "2026-12-17T23:59:59Z");
-  // The ESLint development copies of minimatch are outside the current advisory range and are no longer waived.
-  assert.deepEqual(policy.waivers.find(waiver => waiver.package === "minimatch").nodes.map(node => node.path), ["node_modules/minimatch"]);
+  assert.equal(WAIVER_CEILING, "2026-12-17T23:59:59Z");
 });
 
-test("the minimatch advisory must keep its current range, so an upstream range change fails closed", () => {
-  const changed = structuredClone(fixture.production);
-  Object.assign(changed.vulnerabilities.minimatch.via.find(item => typeof item === "object"), { range: "<11.0.1" });
-  rejected(call({ production: run(changed) }), "ADVISORY_ORIGIN_MISMATCH");
+test("the removed glob, minimatch and i18next waivers fail closed if their advisories come back", () => {
+  for (const [name, ghsa, range] of [["glob", "GHSA-3g3m-2fjr-6pw4", ">=9.0.0 <=14.0.1"], ["minimatch", "GHSA-g3hv-75wg-m249", ">=7.0.0 <11.0.1"], ["i18next", "GHSA-6jcc-5g8w-32mx", "<26.3.4"]]) {
+    assert.ok(!policy.waivers.some(waiver => waiver.ghsa === ghsa || waiver.package === name), name);
+    rejected(call({ production: run(withProductionRecord(fixture.production, { name, ghsa, range })) }), "UNWAIVED_ADVISORY");
+    rejected(call({ all: run(addOrigin(fixture.all, "esbuild", { url: `https://github.com/advisories/${ghsa}` })) }), "UNWAIVED_ADVISORY");
+  }
 });
 
 test("the Next.js advisories are not waived", () => {
   for (const ghsa of ["GHSA-mfr8-8qww-v76h", "GHSA-vc7v-qv4w-wrv8", "GHSA-7qx7-33qx-rqx2", "GHSA-f3mh-rxg3-f5g2", "GHSA-pc58-hwjq-p385", "GHSA-rhh4-g77r-r9qj", "GHSA-vvgp-ww4w-46vf"]) {
     assert.ok(!policy.waivers.some(waiver => waiver.ghsa === ghsa), ghsa);
-    rejected(call({ production: run(addOrigin(fixture.production, "glob", { url: `https://github.com/advisories/${ghsa}` })) }), "UNWAIVED_ADVISORY");
+    rejected(call({ production: run(withProductionRecord(fixture.production, { name: "next", ghsa })) }), "UNWAIVED_ADVISORY");
   }
 });
 
-test("the i18next waiver covers only the reviewed production path and version", () => {
-  const moved = structuredClone(fixture.production);
-  moved.vulnerabilities.i18next.nodes.push("node_modules/other/node_modules/i18next");
-  const movedState = structuredClone(state);
-  movedState.lock.packages["node_modules/other/node_modules/i18next"] = { version: "23.7.11" };
-  rejected(call({ production: run(moved), state: movedState }), "UNWAIVED_VULNERABLE_NODE");
-  const version = structuredClone(state);
-  version.installed["node_modules/i18next"].version = "23.7.12";
-  rejected(call({ state: version }), "UNWAIVED_VULNERABLE_NODE");
-});
-
-// Removes a record and everything that depends on it, keeping the counts consistent, so only the completeness check can object.
-const without = (audit, origin) => {
-  const changed = structuredClone(audit);
-  const gone = new Set([origin]);
-  for (let grew = true; grew;) {
-    grew = false;
-    for (const [name, record] of Object.entries(changed.vulnerabilities)) {
-      if (!gone.has(name) && record.via.some(item => typeof item === "string" && gone.has(item))) { gone.add(name); grew = true; }
-    }
-  }
-  for (const name of gone) {
-    changed.metadata.vulnerabilities[changed.vulnerabilities[name].severity]--; changed.metadata.vulnerabilities.total--;
-    delete changed.vulnerabilities[name];
-  }
-  return changed;
-};
-
-for (const name of ["glob", "minimatch", "i18next"]) test(`a production audit that omits the reviewed ${name} node is rejected as incomplete`, () => {
-  rejected(call({ production: run(without(fixture.production, name)) }), "AUDIT_GRAPH_INCOMPLETE");
-  rejected(call({ all: run(without(fixture.all, name)) }), "AUDIT_GRAPH_INCOMPLETE");
+test("the esbuild advisory must keep its current range, so an upstream range change fails closed", () => {
+  const changed = structuredClone(fixture.all);
+  Object.assign(origin(changed), { range: "<=0.25.0" });
+  rejected(call({ all: run(changed) }), "ADVISORY_ORIGIN_MISMATCH");
 });
