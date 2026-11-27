@@ -25,7 +25,9 @@ const SCAN_TEXT_MAX = 512;
 const hex64 = /^[a-f0-9]{64}$/;
 /** RFC 3339 date-time with an explicit offset; `Date.parse` alone accepts far too much. */
 const rfc3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
-const isText = (value: unknown): value is string => typeof value === "string" && value.trim() !== "" && value === value.trim() && value.length <= SCAN_TEXT_MAX;
+/** Printable ASCII only (no control characters or newlines: these land in append-only tables and operator logs). */
+const printable = /^[\x20-\x7e]+$/;
+const isText = (value: unknown): value is string => typeof value === "string" && value.trim() !== "" && value === value.trim() && value.length <= SCAN_TEXT_MAX && printable.test(value);
 
 /** A port is usable only if it is not the unconfigured default and names itself with valid scanner text. */
 export function isScanPortConfigured(port: ArtifactScanPort | null | undefined): port is ArtifactScanPort {
@@ -33,7 +35,7 @@ export function isScanPortConfigured(port: ArtifactScanPort | null | undefined):
 }
 
 /** Coarse reason codes recorded with an `unknown` event (they match the store's `^[a-z][a-z0-9_]*$`). Never a vendor message. */
-export type ScanUnknownReason = "scanner_error" | "scan_result_malformed" | "scan_hash_mismatch" | "scan_timeout" | "scanner_threw" | "scanner_not_configured";
+export type ScanUnknownReason = "scanner_error" | "scan_result_malformed" | "scan_hash_mismatch" | "scan_timeout" | "scanner_threw" | "scanner_not_configured" | "scan_not_started";
 const RESULT_KEYS = ["verdict", "sha256", "engineVersion", "definitionsVersion", "evidenceRef", "scannedAt"] as const;
 
 /**

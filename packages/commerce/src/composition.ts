@@ -5,7 +5,7 @@ import {
   canonicalSceneJson, normalizeScene, runPreviewPreflight, sceneSourceHashes, canTransitionPlaneD,
   type AssetFacts, type CompositionSceneV1, type EditorDraftProjectionV1, type PlaneDState, type PrintProfileV1,
 } from "@vynvori/contracts";
-import type { ArtifactScanPort, ArtifactScanStatus, CompositionAccess, CompositionRecord, AssetRecord, VersionRecord, CompositionStore } from "@vynvori/contracts/composition-port";
+import type { ArtifactScanPort, ArtifactScanStatus, CompositionAccess, CompositionRecord, AssetRecord, VersionRecord, CompositionStore, ScanResultEvent } from "@vynvori/contracts/composition-port";
 import { inspectImage, type ImageLimits, ImageRejectedError } from "./image-inspect";
 import type { CompositionAssetStorage } from "./composition-storage";
 import type { RateLimitedOperation, RatePolicies, RatePolicy } from "./composition-limits";
@@ -164,7 +164,11 @@ export function compositionService(store: CompositionStore, storage: Composition
       if (expired.status === "not_found") throw new CompositionError("NOT_FOUND");
       return expired.status === "recorded" ? expired.event.toStatus : expired.scanStatus;
     }
-    const result = await runScan(port, Object.freeze({ assetId: asset.id, sha256: asset.sha256, byteSize: asset.byteSize, mime: asset.mime, bytes }), timeoutMs);
+    // The one call must be able to finish inside the lease it reserved; if opening the attempt took so long that it no longer can,
+    // the attempt is closed as `unknown` WITHOUT a call, so a lapsed lease can never let a second request start a concurrent call.
+    const result: ScanResultEvent = now().getTime() + timeoutMs < startedAt.getTime() + leaseMs
+      ? await runScan(port, Object.freeze({ assetId: asset.id, sha256: asset.sha256, byteSize: asset.byteSize, mime: asset.mime, bytes }), timeoutMs)
+      : { toStatus: "unknown", reasonCode: "scan_not_started", scannerId: port.scannerId };
     const done = await store.completeScanAttempt(id, asset.id, access, now(), { attemptId, result });
     if (done.status === "not_found") throw new CompositionError("NOT_FOUND");
     return done.status === "recorded" ? done.event.toStatus : done.scanStatus;
@@ -355,13 +359,15 @@ export function compositionService(store: CompositionStore, storage: Composition
       let asset = await store.getAsset(id, assetId, access, now());
       if (!asset) throw new CompositionError("NOT_FOUND");
       if (asset.scanStatus === "clean" || asset.scanStatus === "quarantined") return asset.scanStatus;
+      // Bytes are read and verified BEFORE `unknown -> pending` is recorded, so a storage failure leaves the asset as it was.
+      const bytes = await originalBytes(asset);
       if (asset.scanStatus === "unknown") {
         const requested = await store.requestRescan(id, assetId, access, now(), { reasonCode: "rescan_requested" });
         if (requested.status === "not_found") throw new CompositionError("NOT_FOUND");
         if (requested.status === "rejected") return requested.scanStatus; // another request moved it first
         asset = { ...asset, scanStatus: "pending" };
       }
-      return scanPending(id, asset, access, undefined, true);
+      return scanPending(id, asset, access, bytes, true);
     },
     /**
      * Bytes are streamed through the app after an ownership check; no presigned or public URL is ever issued. Only a `clean` asset

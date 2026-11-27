@@ -38,6 +38,9 @@ test("parser: only a complete clean/infected answer for the same hash is clean/q
     ["other hash", syntheticScanAnswer("clean", request, { sha256: "b".repeat(64) }), "scan_hash_mismatch"],
     ["empty engine", syntheticScanAnswer("clean", request, { engineVersion: "" }), "scan_result_malformed"],
     ["padded definitions", syntheticScanAnswer("clean", request, { definitionsVersion: " d " }), "scan_result_malformed"],
+    ["newline in evidence", syntheticScanAnswer("clean", request, { evidenceRef: "evidence://a\nforged log line" }), "scan_result_malformed"],
+    ["control character in engine", syntheticScanAnswer("clean", request, { engineVersion: "engine\u0007" }), "scan_result_malformed"],
+    ["non-ASCII definitions", syntheticScanAnswer("clean", request, { definitionsVersion: "defs-\u00e9" }), "scan_result_malformed"],
     ["oversized evidence", syntheticScanAnswer("clean", request, { evidenceRef: "e".repeat(513) }), "scan_result_malformed"],
     ["numeric evidence", syntheticScanAnswer("clean", request, { evidenceRef: 7 }), "scan_result_malformed"],
     ["loose date", syntheticScanAnswer("clean", request, { scannedAt: "yesterday" }), "scan_result_malformed"],
@@ -99,15 +102,18 @@ test("static (C3b hard gate): scanner-side store calls are reachable only from t
   // every completion's result comes from runScan, i.e. from the port, inside the scan path
   const completions = service.split("\n").filter(line => line.includes("completeScanAttempt("));
   assert.equal(completions.length, 1); assert.match(completions[0]!, /\{ attemptId, result \}\)/, "the recorded result is the runScan result");
-  assert.match(service, /const result = await runScan\(port,/);
+  assert.match(service, /const result: ScanResultEvent = [^;]*\? await runScan\(port,/, "the only other value is the no-call scan_not_started outcome");
   const httpBoundary = readFileSync(join(repo, "packages/commerce/src/composition-http.ts"), "utf8");
   for (const name of ["openScanAttempt", "requestRescan", "runScan", "parseScanResult", "verdict", "evidenceRef", "scannerId", "toStatus"]) assert.equal(httpBoundary.includes(name), false, `composition-http.ts must not name ${name}`);
 });
 
 test("static (ruling QC): no scanner is chosen: the only ArtifactScanPort implementation in src is unconfiguredScanPort, and the scan module imports only contract types", () => {
-  const roots = ["packages/commerce/src", "packages/db/src", "packages/shared/src", "apps/web/src", "services/image-processing/src"].map(dir => join(repo, dir));
+  const roots = ["packages/commerce/src", "packages/db/src", "packages/shared/src", "packages/contracts/src", "apps/web/src", "apps/medusa/src", "services/image-processing/src"].map(dir => join(repo, dir));
   const implementers = roots.flatMap(walk).filter(file => { const text = readFileSync(file, "utf8"); return /\bscannerId\s*:/.test(text) && /\bscan\s*(\(|:)/.test(text); }).map(file => file.slice(repo.length + 1));
-  assert.deepEqual(implementers, ["packages/commerce/src/composition-scan.ts"]);
+  assert.deepEqual(implementers, ["packages/commerce/src/composition-scan.ts", "packages/contracts/src/composition-port.ts"]);
+  // the contracts file only DECLARES the port: it is type-only, with no runtime value at all
+  const port = readFileSync(join(repo, "packages/contracts/src/composition-port.ts"), "utf8");
+  assert.doesNotMatch(port, /^\s*(export\s+)?(const|let|var|function|class)\s/m, "composition-port.ts declares types only");
   const scan = readFileSync(join(repo, "packages/commerce/src/composition-scan.ts"), "utf8");
   assert.deepEqual([...scan.matchAll(/^import\s.*?from\s+"([^"]+)"/gm)].map(m => m[1]), ["@vynvori/contracts/composition-port"]);
   assert.match(scan, /^import "server-only";/);

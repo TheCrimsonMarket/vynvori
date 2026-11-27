@@ -19,6 +19,8 @@ import {
 } from "./composition-synthetic";
 
 const ORIGIN = "https://staging.vynvori.test", SESSION = "s".repeat(43);
+/** SYNTHETIC: a lease only 1 ms longer than the timeout, and an attempt-open delay longer than that margin. */
+const SYNTHETIC_TIGHT_TIMEOUT_MS = 200, SYNTHETIC_SLOW_OPEN_MS = 20;
 /** SYNTHETIC: a lease short enough to pass on the real (database) clock inside a test, and a timeout shorter than it. */
 const SYNTHETIC_SHORT_LEASE_MS = 1000, SYNTHETIC_SHORT_TIMEOUT_MS = 100;
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -28,10 +30,10 @@ const tokenHash = () => createHash("sha256").update(randomBytes(32)).digest("hex
 export function scanConformance(label: string, factory: () => Promise<StoreHarness>, options: { skip?: boolean } = {}) {
   const t = (name: string, fn: () => Promise<void>) => test(`${label}: ${name}`, { skip: options.skip ?? false }, fn);
 
-  async function build(over: { port?: ArtifactScanPort; behaviour?: SyntheticScanBehaviour; config?: Partial<CompositionConfig> } = {}) {
+  async function build(over: { port?: ArtifactScanPort; behaviour?: SyntheticScanBehaviour; config?: Partial<CompositionConfig>; wrapStore?: (store: StoreHarness["store"]) => StoreHarness["store"] } = {}) {
     const h = await factory(), storage = memoryStorage(), synthetic = syntheticScanPort(over.behaviour), port = over.port ?? synthetic;
     const config: CompositionConfig = { ...SYNTHETIC_COMPOSITION_CONFIG, uploadsEnabled: true, scanPort: port, ...over.config };
-    const service = compositionService(h.store, storage, config);
+    const service = compositionService(over.wrapStore ? over.wrapStore(h.store) : h.store, storage, config);
     const users = new Map<string, string>();
     const identity: CompositionIdentityPort = {
       async verify(secret) { const userId = users.get(secret); if (!userId) throw new Error("no session"); return { userId }; },
@@ -201,6 +203,24 @@ export function scanConformance(label: string, factory: () => Promise<StoreHarne
     assert.equal(await ctx.service.rescanAsset(c.id, c.asset.id, c.access), "clean");
     assert.equal(await ctx.service.rescanAsset(c.id, c.asset.id, c.access), "clean");
     assert.equal(ctx.calls.length, 3, "a clean asset is not scanned again by this path");
+  });
+  t("a storage failure on rescan leaves an unknown asset unknown: the bytes are verified before unknown -> pending is recorded", async () => {
+    const ctx = await build({ behaviour: r => syntheticScanAnswer("error", r) }), g = await ctx.pendingAsset();
+    assert.equal(await ctx.service.scanAsset(g.id, g.asset.id, g.access, g.bytes), "unknown");
+    ctx.storage.objects.clear();
+    await code(ctx.service.rescanAsset(g.id, g.asset.id, g.access), "STORAGE_UNAVAILABLE");
+    assert.deepEqual(await history(ctx, g, g.asset.id), ["pending>unknown:scanner_error"]); assert.equal(ctx.calls.length, 1);
+  });
+  t("if opening the attempt left too little lease for the call, the attempt closes as unknown(scan_not_started) and the scanner is never called", async () => {
+    const delayed = (store: StoreHarness["store"]) => new Proxy(store, { get(target, prop) {
+      const value = Reflect.get(target, prop, target);
+      if (prop !== "openScanAttempt" || typeof value !== "function") return typeof value === "function" ? value.bind(target) : value;
+      return async (...args: unknown[]) => { const opened = await value.apply(target, args); await new Promise(resolve => setTimeout(resolve, SYNTHETIC_SLOW_OPEN_MS)); return opened; };
+    } });
+    const ctx = await build({ wrapStore: delayed, config: { scanTimeoutMs: SYNTHETIC_TIGHT_TIMEOUT_MS, scanLeaseMs: SYNTHETIC_TIGHT_TIMEOUT_MS + 1 } }), g = await ctx.pendingAsset();
+    assert.equal(await ctx.service.scanAsset(g.id, g.asset.id, g.access, g.bytes), "unknown");
+    assert.equal(ctx.calls.length, 0, "no call that could outlive its lease is started");
+    assert.deepEqual(await history(ctx, g, g.asset.id), ["pending>unknown:scan_not_started"]);
   });
   t("an asset row with no scan history (as before 0002, or stranded before its first attempt) is pending and is scanned by a rescan request", async () => {
     const ctx = await build(), g = await ctx.pendingAsset();
