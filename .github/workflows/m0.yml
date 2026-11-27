@@ -9,7 +9,25 @@ concurrency:
   group: m0-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  # Docs-only changes (see changes.yml for the exact, conservative definition) skip `verify` and `browser`. They still run
+  # the protected-file integrity check below. A skipped job reports "skipped", which satisfies a required check.
+  changes:
+    uses: ./.github/workflows/changes.yml
+  docs-only:
+    needs: changes
+    if: needs.changes.outputs.docs_only == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.23.3'
+      # Protected canonical docs, reference files and original logo files must still match their recorded hashes. No npm ci needed.
+      - run: node scripts/integrity.mjs
   verify:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -57,6 +75,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   browser:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     # Three engines in one job. Measured in CI (run 41584515832): the whole job took about 7 min
     # (harness ~75 s Chromium, ~83 s Firefox, ~105 s WebKit, plus install and build); 15 min keeps about 2x headroom.
