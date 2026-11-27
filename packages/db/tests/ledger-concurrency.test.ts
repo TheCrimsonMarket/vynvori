@@ -5,6 +5,7 @@ import { grantSyntheticCredits, databaseFor, dropLedger, freshLedger, ledgerPool
 import { getWalletSummary } from "../src/ledger-core";
 import { assessQuoteForAuthorization, issueQuote, renewQuote } from "../src/ledger-quotes";
 import { authorizeQuote, recordWorkflowRef, releaseReservation } from "../src/ledger-reservations";
+import { holdReservation, settleReservation } from "../src/ledger-settlement";
 import { SYNTHETIC_BUNDLE_HOLD, bundleAllocations, bundleView, consent, currentPricePolicy, eligibilityPort, issueTestQuote, releaseEvidence } from "./ledger-reservation-fixture";
 
 /**
@@ -180,6 +181,78 @@ test("100-way concurrent grants in disposable PostgreSQL", { skip: ledgerTarget.
       const summary = await getWalletSummary(client, userId);
       assert.deepEqual({ a: summary.availableUnits, r: summary.reservedUnits }, { a: target.holdUnits, r: SYNTHETIC_BUNDLE_HOLD - target.holdUnits });
       assert.equal((await client.query("SELECT count(*)::int n FROM vynvori_ledger.ledger_entries WHERE reservation_id = $1 AND entry_kind = 'release'", [target.reservationId])).rows[0].n, 1);
+    });
+
+    // ---- S6 (ADR-0021 S6 addendum): settle, release and hold race only through the owner's wallet lock ----------------------
+    const settleEvidence = (operationId: string, ref: string) => ({ transition: "settle", operationId, evidenceKind: "persisted_delivered", evidenceRef: ref, hasVerifiedManifestHash: true, ownerAndRightsVerified: true });
+    const holdEvidence = (operationId: string, ref: string) => ({ transition: "hold", operationId, evidenceKind: "outcome_unknown", evidenceRef: ref, reason: "outcome_unknown" });
+    type Target = { userId: string; reservationId: string; operationId: string };
+    const terminal = (kind: number, target: Target, key: string) => {
+      const base = { userId: target.userId, component: "workflow", reservationId: target.reservationId, idempotencyKey: key };
+      if (kind === 0) return settleReservation(pool, { ...base, evidence: settleEvidence(target.operationId, `plane-b/${key}`) });
+      if (kind === 1) return releaseReservation(pool, { ...base, evidence: releaseEvidence(target.operationId, `plane-b/${key}`) });
+      return holdReservation(pool, { ...base, evidence: holdEvidence(target.operationId, `plane-b/${key}`) });
+    };
+    /** Every bucket equals the sum of its entry deltas, no bucket is negative, and each bucket equals the sum over reservation states. */
+    const assertWalletConsistent = async (userId: string) => {
+      const row = (await client.query(`SELECT w.available_units::text a, w.reserved_units::text r, w.held_for_review_units::text h, w.consumed_units::text c,
+          (SELECT coalesce(sum(delta_available),0)::text FROM vynvori_ledger.ledger_entries e WHERE e.user_id = w.user_id) ea,
+          (SELECT coalesce(sum(delta_reserved),0)::text FROM vynvori_ledger.ledger_entries e WHERE e.user_id = w.user_id) er,
+          (SELECT coalesce(sum(delta_held),0)::text FROM vynvori_ledger.ledger_entries e WHERE e.user_id = w.user_id) eh,
+          (SELECT coalesce(sum(delta_consumed),0)::text FROM vynvori_ledger.ledger_entries e WHERE e.user_id = w.user_id) ec,
+          (SELECT coalesce(sum(hold_units) FILTER (WHERE state = 'reserved'),0)::text FROM vynvori_ledger.credit_reservations cr WHERE cr.user_id = w.user_id) sr,
+          (SELECT coalesce(sum(hold_units) FILTER (WHERE state = 'reconciliation_hold'),0)::text FROM vynvori_ledger.credit_reservations cr WHERE cr.user_id = w.user_id) sh,
+          (SELECT coalesce(sum(charge_units) FILTER (WHERE state = 'settled'),0)::text FROM vynvori_ledger.credit_reservations cr WHERE cr.user_id = w.user_id) sc
+        FROM vynvori_ledger.wallets w WHERE w.user_id = $1`, [userId])).rows[0];
+      assert.deepEqual([row.a, row.r, row.h, row.c], [row.ea, row.er, row.eh, row.ec], `buckets == sum of entry deltas (${userId})`);
+      assert.deepEqual([row.r, row.h, row.c], [row.sr, row.sh, row.sc], `reserved, held and consumed == sums over reservation states (${userId})`);
+      for (const value of [row.a, row.r, row.h, row.c]) assert.ok(Number(value) >= 0, "no negative bucket");
+      return row;
+    };
+
+    await t.test("S6: 100 mixed settle, release and hold commands over 100 distinct dispatched reservations of 10 users -> all succeed; every wallet stays consistent; exactly one terminal per reservation", async () => {
+      const users = await Promise.all(Array.from({ length: 10 }, () => syntheticProfileWithWallet(client)));
+      const targets: Target[] = [];
+      for (const [u, userId] of users.entries()) {
+        await grantSyntheticCredits(pool, { userId, grantSourceId: source, sourceRef: `s6-mixed-funds-${u}`, units: 4 * SYNTHETIC_BUNDLE_HOLD });
+        for (let b = 0; b < 4; b++) {
+          const auth = await authorizeIn(userId, await issueTestQuote(pool, userId, "bundle", `s6-mixed-${u}-${b}`), `s6-mixed-authorize-${u}-${b}`);
+          for (const r of auth.reservations) targets.push({ userId, reservationId: r.reservationId, operationId: r.operationId });
+        }
+      }
+      const chosen = targets.slice(0, IN_FLIGHT);
+      await Promise.all(chosen.map((r, i) => recordWorkflowRef(pool, { userId: r.userId, component: "workflow", reservationId: r.reservationId, workflowRef: `wf/s6-mixed-${i}`, idempotencyKey: `s6-mixed-dispatch-${String(i).padStart(4, "0")}` })));
+      const results = await Promise.all(chosen.map((r, i) => terminal(i % 3, r, `s6-mixed-terminal-${String(i).padStart(4, "0")}`)));
+      assert.deepEqual(results.map(r => r.state), chosen.map((_, i) => ["settled", "released", "reconciliation_hold"][i % 3]));
+      for (const userId of users) await assertWalletConsistent(userId);
+      const terminals = (await client.query("SELECT reservation_id, count(*)::int n FROM vynvori_ledger.ledger_entries WHERE entry_kind IN ('settle','release','hold') AND reservation_id = ANY($1::uuid[]) GROUP BY 1", [chosen.map(r => r.reservationId)])).rows;
+      assert.equal(terminals.length, IN_FLIGHT); assert.ok(terminals.every(r => r.n === 1), "exactly one terminal entry per reservation");
+    });
+
+    await t.test("S6: 100 mixed settle, release and hold commands on ONE dispatched reservation under distinct keys -> exactly one wins, the rest INVALID_TRANSITION; one terminal entry", async () => {
+      const userId = await syntheticProfileWithWallet(client);
+      await grantSyntheticCredits(pool, { userId, grantSourceId: source, sourceRef: "s6-one-race", units: SYNTHETIC_BUNDLE_HOLD });
+      const auth = await authorizeIn(userId, await issueTestQuote(pool, userId, "bundle", "s6-one-race-quote"), "s6-one-race-authorize");
+      const target = { userId, reservationId: auth.reservations[0]!.reservationId, operationId: auth.reservations[0]!.operationId };
+      await recordWorkflowRef(pool, { userId, component: "workflow", reservationId: target.reservationId, workflowRef: "wf/s6-one-race", idempotencyKey: "s6-one-race-dispatch" });
+      const settled = await Promise.allSettled(Array.from({ length: IN_FLIGHT }, (_, i) => terminal(i % 3, target, `s6-one-race-${String(i).padStart(4, "0")}`)));
+      assert.equal(settled.filter(r => r.status === "fulfilled").length, 1, "exactly one terminal command wins");
+      assert.ok(settled.filter(r => r.status === "rejected").every(r => (r as PromiseRejectedResult).reason?.code === "INVALID_TRANSITION"), "every loser is INVALID_TRANSITION");
+      assert.equal((await client.query("SELECT count(*)::int n FROM vynvori_ledger.ledger_entries WHERE reservation_id = $1 AND entry_kind IN ('settle','release','hold')", [target.reservationId])).rows[0].n, 1);
+      await assertWalletConsistent(userId);
+    });
+
+    await t.test("S6: 100 identical settles (same key) in flight -> one settle entry and one command; every caller sees the settled reservation", async () => {
+      const userId = await syntheticProfileWithWallet(client);
+      await grantSyntheticCredits(pool, { userId, grantSourceId: source, sourceRef: "s6-same-key", units: SYNTHETIC_BUNDLE_HOLD });
+      const auth = await authorizeIn(userId, await issueTestQuote(pool, userId, "bundle", "s6-same-key-quote"), "s6-same-key-authorize");
+      const target = { userId, reservationId: auth.reservations[0]!.reservationId, operationId: auth.reservations[0]!.operationId };
+      await recordWorkflowRef(pool, { userId, component: "workflow", reservationId: target.reservationId, workflowRef: "wf/s6-same-key", idempotencyKey: "s6-same-key-dispatch" });
+      const results = await Promise.all(Array.from({ length: IN_FLIGHT }, () => terminal(0, target, "s6-same-settle-key")));
+      assert.ok(results.every(r => r.state === "settled"));
+      assert.equal((await client.query("SELECT count(*)::int n FROM vynvori_ledger.ledger_entries WHERE reservation_id = $1 AND entry_kind = 'settle'", [target.reservationId])).rows[0].n, 1);
+      assert.equal((await client.query("SELECT count(*)::int n FROM vynvori_ledger.ledger_commands WHERE user_id = $1 AND command_kind = 'reservation_settle'", [userId])).rows[0].n, 1);
+      await assertWalletConsistent(userId);
     });
 
     await t.test("A2 fail-safe: two raw connections (no runLedgerCommand, no wallet lock) race to insert version k+1 directly -> exactly one succeeds, never a duplicate, never a gap", async () => {
