@@ -233,6 +233,43 @@ test("durable identity state in disposable loopback PostgreSQL", { skip: !connec
       const row = (await commerceMappingStore(pool).get(current.userId, "synthetic-medusa-project"))!;
       assert.ok(!row.requestCipher.includes("synthetic@example.invalid"));
     });
+    await t.test("concurrent first reservations for one identity converge on one mapping and never leak a unique violation", async () => {
+      // M1b-fix-1 regression. Before the fix, reserve() arbitrated only (user_id,project_id), so racing first inserts could lose on
+      // UNIQUE (project_id,entity_id) and raise 23505 to the caller (about 1 in 11 rounds). Each round races fresh identities on warmed connections.
+      const width = 8, rounds = 150, projectId = "synthetic-medusa-project";
+      const racePool = new Pool({ connectionString: url.toString(), max: width, connectionTimeoutMillis: 2000, statement_timeout: 5000 });
+      try {
+        const journal = commerceMappingStore(racePool);
+        const warm = await Promise.all(Array.from({ length: width }, () => racePool.connect())); warm.forEach(client => client.release());
+        for (let round = 0; round < rounds; round++) {
+          const subject = `synthetic-reserve-race-${randomUUID()}`, userId = await store.ensureProfile(issuer, subject), entityId = centralEntityId(issuer, subject);
+          const attempts = Array.from({ length: width }, () => ({ userId, projectId, entityId, operationId: randomUUID(), requestCipher: `synthetic-encrypted-${randomUUID()}` }));
+          const settled = await Promise.allSettled(attempts.map(input => journal.reserve(input)));
+          const failures = settled.flatMap(result => result.status === "rejected" ? [String((result.reason as { code?: unknown }).code ?? "error")] : []);
+          assert.deepEqual(failures, [], `round ${round} leaked ${failures.join(",")}`);
+          const rows = settled.map(result => (result as PromiseFulfilledResult<Awaited<ReturnType<typeof journal.reserve>>>).value);
+          const winner = attempts.find(input => input.operationId === rows[0].operationId);
+          assert.ok(winner, "the surviving mapping belongs to one of the racing reservations");
+          for (const row of rows) assert.deepEqual(row, { userId, projectId, entityId, operationId: winner.operationId, requestCipher: winner.requestCipher, state: "reserved", authIdentityId: null, customerId: null });
+          const stored = await racePool.query("SELECT count(*)::int AS n FROM vynvori_identity.commerce_mappings WHERE project_id=$1 AND (user_id=$2 OR entity_id=$3)", [projectId, userId, entityId]);
+          assert.equal(stored.rows[0].n, 1);
+          assert.equal(await journal.claimDispatch(winner.operationId), true);
+          assert.equal((await Promise.all(attempts.filter(input => input !== winner).map(input => journal.claimDispatch(input.operationId)))).some(Boolean), false);
+        }
+      } finally { await racePool.end(); }
+    });
+    await t.test("a reservation colliding with another user's entity fails closed without a unique violation or a write", async () => {
+      // Unreachable through profiles (issuer+subject is unique), so this is defence in depth: the foreign mapping is never returned or changed.
+      const projectId = "synthetic-medusa-project", journal = commerceMappingStore(pool), subject = `synthetic-foreign-entity-${randomUUID()}`, entityId = centralEntityId(issuer, subject);
+      const owner = await store.ensureProfile(issuer, subject), other = await store.ensureProfile(issuer, `synthetic-foreign-other-${randomUUID()}`);
+      const original = await journal.reserve({ userId: owner, projectId, entityId, operationId: randomUUID(), requestCipher: "synthetic-encrypted-owner" });
+      await assert.rejects(journal.reserve({ userId: other, projectId, entityId, operationId: randomUUID(), requestCipher: "synthetic-encrypted-other" }),
+        (error: unknown) => error instanceof Error && error.message === "Mapping unavailable" && !("code" in error));
+      await assert.rejects(journal.reserve({ userId: other, projectId, entityId: centralEntityId(issuer, `synthetic-foreign-fresh-${randomUUID()}`), operationId: original.operationId, requestCipher: "synthetic-encrypted-other" }),
+        (error: unknown) => error instanceof Error && error.message === "Mapping unavailable" && !("code" in error));
+      assert.equal(await journal.get(other, projectId), null);
+      assert.deepEqual(await journal.get(owner, projectId), original);
+    });
     await t.test("unknown customer-create outcome reconciles original encrypted contact without another create", async () => {
       let creates = 0, reconciles = 0;
       const native: NativeCustomerProvisioner = { async ensure(input) {
