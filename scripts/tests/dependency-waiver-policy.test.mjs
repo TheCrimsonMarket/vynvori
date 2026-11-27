@@ -39,7 +39,7 @@ test("reviewed policy is anchored and the captured audits are accepted with ever
   assert.equal(result.status, "ACCEPTED_WITH_DATED_WAIVER");
   assert.equal(result.counts.total, 61);
   assert.equal(result.counts.high + result.counts.critical, 0);
-  assert.equal(result.allDependencyCounts.total, 71);
+  assert.equal(result.allDependencyCounts.total, 65);
   assert.deepEqual(result.waiversUsed, policy.waivers.map(waiver => waiver.ghsa).sort());
 });
 
@@ -250,4 +250,26 @@ test("the i18next waiver covers only the reviewed production path and version", 
   const version = structuredClone(state);
   version.installed["node_modules/i18next"].version = "23.7.12";
   rejected(call({ state: version }), "UNWAIVED_VULNERABLE_NODE");
+});
+
+// Removes a record and everything that depends on it, keeping the counts consistent, so only the completeness check can object.
+const without = (audit, origin) => {
+  const changed = structuredClone(audit);
+  const gone = new Set([origin]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const [name, record] of Object.entries(changed.vulnerabilities)) {
+      if (!gone.has(name) && record.via.some(item => typeof item === "string" && gone.has(item))) { gone.add(name); grew = true; }
+    }
+  }
+  for (const name of gone) {
+    changed.metadata.vulnerabilities[changed.vulnerabilities[name].severity]--; changed.metadata.vulnerabilities.total--;
+    delete changed.vulnerabilities[name];
+  }
+  return changed;
+};
+
+for (const name of ["glob", "minimatch", "i18next"]) test(`a production audit that omits the reviewed ${name} node is rejected as incomplete`, () => {
+  rejected(call({ production: run(without(fixture.production, name)) }), "AUDIT_GRAPH_INCOMPLETE");
+  rejected(call({ all: run(without(fixture.all, name)) }), "AUDIT_GRAPH_INCOMPLETE");
 });

@@ -195,18 +195,12 @@
     "via": [
      "@medusajs/framework"
     ],
-    "effects": [
-     "@medusajs/medusa"
-    ],
+    "effects": [],
     "range": "<=2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/caching"
     ],
-    "fixAvailable": {
-     "name": "@medusajs/medusa",
-     "version": "2.23.1",
-     "isSemVerMajor": false
-    }
+    "fixAvailable": true
    },
    "@medusajs/caching-redis": {
     "name": "@medusajs/caching-redis",
@@ -215,12 +209,18 @@
     "via": [
      "@medusajs/framework"
     ],
-    "effects": [],
+    "effects": [
+     "@medusajs/medusa"
+    ],
     "range": "<=2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/caching-redis"
     ],
-    "fixAvailable": true
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.23.1",
+     "isSemVerMajor": false
+    }
    },
    "@medusajs/cart": {
     "name": "@medusajs/cart",
@@ -1122,11 +1122,11 @@
    },
    "dependencies": {
     "prod": 1010,
-    "dev": 360,
-    "optional": 224,
+    "dev": 135,
+    "optional": 211,
     "peer": 19,
     "peerOptional": 0,
-    "total": 1488
+    "total": 1263
    }
   }
  },
@@ -1410,6 +1410,7 @@
      "glob"
     ],
     "effects": [
+     "@medusajs/draft-order",
      "@medusajs/framework"
     ],
     "range": "2.3.0 - 2.22.3-snapshot-20261103230838",
@@ -1609,7 +1610,6 @@
      "@medusajs/core-flows",
      "@medusajs/currency",
      "@medusajs/customer",
-     "@medusajs/draft-order",
      "@medusajs/event-bus-local",
      "@medusajs/event-bus-redis",
      "@medusajs/file",
@@ -2167,88 +2167,6 @@
     ],
     "fixAvailable": true
    },
-   "@typescript-eslint/eslint-plugin": {
-    "name": "@typescript-eslint/eslint-plugin",
-    "severity": "moderate",
-    "isDirect": false,
-    "via": [
-     "@typescript-eslint/type-utils",
-     "@typescript-eslint/utils"
-    ],
-    "effects": [],
-    "range": "6.16.0 - 8.72.2",
-    "nodes": [
-     "node_modules/@typescript-eslint/eslint-plugin"
-    ],
-    "fixAvailable": true
-   },
-   "@typescript-eslint/parser": {
-    "name": "@typescript-eslint/parser",
-    "severity": "moderate",
-    "isDirect": false,
-    "via": [
-     "@typescript-eslint/typescript-estree"
-    ],
-    "effects": [
-     "typescript-eslint"
-    ],
-    "range": "6.16.0 - 8.72.2",
-    "nodes": [
-     "node_modules/@typescript-eslint/parser"
-    ],
-    "fixAvailable": true
-   },
-   "@typescript-eslint/type-utils": {
-    "name": "@typescript-eslint/type-utils",
-    "severity": "moderate",
-    "isDirect": false,
-    "via": [
-     "@typescript-eslint/typescript-estree",
-     "@typescript-eslint/utils"
-    ],
-    "effects": [],
-    "range": "6.16.0 - 8.72.2",
-    "nodes": [
-     "node_modules/@typescript-eslint/type-utils"
-    ],
-    "fixAvailable": true
-   },
-   "@typescript-eslint/typescript-estree": {
-    "name": "@typescript-eslint/typescript-estree",
-    "severity": "moderate",
-    "isDirect": false,
-    "via": [
-     "minimatch"
-    ],
-    "effects": [
-     "@typescript-eslint/parser",
-     "@typescript-eslint/type-utils",
-     "@typescript-eslint/utils",
-     "typescript-eslint"
-    ],
-    "range": "6.16.0 - 8.72.2",
-    "nodes": [
-     "node_modules/@typescript-eslint/typescript-estree"
-    ],
-    "fixAvailable": true
-   },
-   "@typescript-eslint/utils": {
-    "name": "@typescript-eslint/utils",
-    "severity": "moderate",
-    "isDirect": false,
-    "via": [
-     "@typescript-eslint/typescript-estree"
-    ],
-    "effects": [
-     "@typescript-eslint/eslint-plugin",
-     "typescript-eslint"
-    ],
-    "range": "6.16.0 - 8.72.2",
-    "nodes": [
-     "node_modules/@typescript-eslint/utils"
-    ],
-    "fixAvailable": true
-   },
    "drizzle-kit": {
     "name": "drizzle-kit",
     "severity": "moderate",
@@ -2399,7 +2317,6 @@
      }
     ],
     "effects": [
-     "@typescript-eslint/typescript-estree",
      "glob"
     ],
     "range": "7.0.0 - 11.0.0",
@@ -2411,41 +2328,24 @@
      "version": "2.23.1",
      "isSemVerMajor": false
     }
-   },
-   "typescript-eslint": {
-    "name": "typescript-eslint",
-    "severity": "moderate",
-    "isDirect": false,
-    "via": [
-     "@typescript-eslint/eslint-plugin",
-     "@typescript-eslint/parser",
-     "@typescript-eslint/typescript-estree",
-     "@typescript-eslint/utils"
-    ],
-    "effects": [],
-    "range": "<=8.72.2",
-    "nodes": [
-     "node_modules/typescript-eslint"
-    ],
-    "fixAvailable": true
    }
   },
   "metadata": {
    "vulnerabilities": {
     "info": 0,
     "low": 0,
-    "moderate": 71,
+    "moderate": 65,
     "high": 0,
     "critical": 0,
-    "total": 71
+    "total": 65
    },
    "dependencies": {
     "prod": 1010,
-    "dev": 360,
-    "optional": 224,
+    "dev": 135,
+    "optional": 211,
     "peer": 19,
     "peerOptional": 0,
-    "total": 1488
+    "total": 1263
    }
   }
  }
