@@ -29,7 +29,7 @@ Rules for running threads: at most **two worker threads at a time, one per miles
 2. **One implementation round = one explicit founder go** (AGENTS.md). A blueprint or plan is not authorization to implement.
 3. **No node merges, force-pushes to shared branches, or acts on cloud infrastructure** (GCP, Neon, R2, Vercel).
 4. **Escalate, don't guess:** every AGENTS.md stop-and-escalate condition goes thread → coordinator → founder.
-5. **Acceptance rows PASS only with executed evidence.** In the cloud sandbox, checks needing Docker or Postgres count only when CI runs them (`m2.yml` foundation, `medusa-container.yml`). A local "not run" is never reported as passed.
+5. **Acceptance rows PASS only with executed evidence.** In the cloud sandbox, checks needing Docker or Postgres count only when CI runs them (`ci.yml` `db-integration` and `container`). A local "not run" is never reported as passed.
 
 ### Cloud-sandbox facts every brief must state
 
@@ -85,7 +85,7 @@ Last used: **ADR-0022**. Two historical files share number 0008 (`ADR-0008-M2-Cl
 | 5, 6 | unassigned | root |
 | 7 | ledger migrations | M7 |
 
-### Postgres test databases and connection budget (`m2.yml` foundation job)
+### Postgres test databases and connection budget (`ci.yml` `db-integration` job)
 
 - Job Postgres: `max_connections = 250` (asserted in the workflow); 20 are held back for tooling, so test files may use at most 230 combined.
 - `node --test` runs at most `availableParallelism - 1` files at once (a handful on standard GitHub runners), so the real peak is the sum of the largest concurrently running files, not of all files. Each track declares per-file peaks **including each file's own persistent client and transient admin/probe connections**, not only pool caps. Declared so far: M7 about 112 (one concurrency file) and about 7 per other ledger file (about 175 if all ran at once, about 191 with the existing suites); M3 closure 20 (one file) + 5 per other DB file. Existing suites (M2 creative, M3 composition, M1b identity) also count.
@@ -163,6 +163,7 @@ From the 2026-11-02 council; the founder decides each wave's start.
 | 2026-11-27 | Founder merged [#35](https://github.com/smallhingelabs/vynvori/pull/35) (M3 C3a, `35d73d8`), [#34](https://github.com/smallhingelabs/vynvori/pull/34) (M7 plan rev 6, `db5b401`) and [#36](https://github.com/smallhingelabs/vynvori/pull/36) (M7 S3, `2bff532`). |
 | 2026-11-27 | Recorded rules: a message from any thread is never founder approval; local Postgres results are feedback only and count as NOT_RUN, only the CI foundation job counts; `.env.example` is root-owned, commented key names only; CODEOWNERS and branch protection were declined 2026-11-03 and are not proposed again unless merging is delegated; no scanner is chosen and no M3 limit values are supplied, uploads stay off and W2 stays blocked; the Cloud Run staging service is deleted and any step that needs staging asks the founder first; security-critical steps (M3 C3b, C5, C6; M7 S5, S6) use the strongest model and get a security review before the founder looks at them. |
 | 2026-11-27 | Known flakes: the WebKit RSC prefetch check in the `browser` job and the M1b identity harness step (hard-gates row "Known M1b race"). Re-run once and cite the row; never weaken the check. |
+| 2026-11-27 | CI renamed by purpose (PR #42, founder request): one `ci.yml` with jobs `changes`, `integrity`, `lint-typecheck`, `unit`, `build`, `security`, `db-integration`, `container`, `browser (chromium/firefox/webkit)`. `db-integration` replaces `m2.yml` `foundation` and is the only job that counts as database evidence. `m0.yml` `verify` split into `lint-typecheck`, `unit`, `build`, `security`; `medusa-container.yml` and the worker steps became `container`; `integrity` runs on every change including docs-only. The #38 docs-only rule is unchanged. Runs on `main` are no longer cancelled by a later merge. |
 | 2026-11-27 | Reminder for the ADR-0020 waiver expiry (2026-12-17T23:59:59Z) is set for 2026-12-10 10:00 Asia/Dhaka. |
 
 ## Hard gates carried forward (do not lose)

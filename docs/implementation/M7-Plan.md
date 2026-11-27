@@ -4,6 +4,8 @@ Status: **APPROVED by the founder (rev 4, PR #20, merged `190a73e`); implementat
 
 Authority: founder-authorized W1 scope as relayed in the M7 manager kickoff; ADR-0021, the `packages/db/ledger-migrations/` journal and the `packages/contracts` lane are granted by root. This document changes no code, schema, flag or protected file.
 
+> **CI names (2026-11-27, PR #42).** The milestone-named workflows were replaced by one `ci.yml` with jobs named by purpose. Read older references as follows: `m2.yml` `foundation` → `db-integration` (still the only job that counts as database evidence); `m0.yml` `verify` → `lint-typecheck`, `unit`, `build`, `security`; `m0.yml` `browser` → `browser (chromium)`, `browser (firefox)`, `browser (webkit)`; `medusa-container.yml` `local-container` and the worker-container steps → `container`; `m0.yml` `docs-only` → `integrity` (now runs on every change). Historical rows below keep the names used at the time.
+
 ## 1. Objective and scope
 
 Implement the **M7 credit-ledger core** in Neon/Drizzle with **no Medusa-funded flows**.
@@ -258,7 +260,7 @@ Common exit criteria for every step: `npm ci`; `npm run lint`; `npm run typechec
 
 | Target | Steps | Runs where |
 |---|---|---|
-| 100-way concurrent balance operations (100 commands in flight over up to 110 connections — D15) | S2, S5, S6 (`ledger-concurrency.test.ts`), S9 | CI `foundation` job only |
+| 100-way concurrent balance operations (100 commands in flight over up to 110 connections — D15) | S2, S5, S6 (`ledger-concurrency.test.ts`), S9 | CI `db-integration` job only |
 | Duplicate and out-of-order events | S2, S5, S6, S9 | CI only |
 | Isolation of unknown provider cost | S6, S9 | CI only |
 | Stale-quote renewal | S3, S5 | CI only (injected clock) |
@@ -281,7 +283,7 @@ Common exit criteria for every step: `npm ci`; `npm run lint`; `npm run typechec
 | Rounding of fractional USD costs | partly | whole-number units only; non-integers rejected; allocations must sum exactly; USD→credit conversion needs a rate card and is out |
 | Package fee scenario | partly | S3/S5 bundle with *synthetic* allocations |
 
-**Cannot run in the cloud sandbox** (reported `NOT_RUN` locally; count only from the CI `foundation` log): every Postgres-backed test. Unit tests (plan/SHA pinning, contract schemas, static isolation test, SQL-text lint) run locally; contract tests are evidenced by the M0 job.
+**Cannot run in the cloud sandbox** (reported `NOT_RUN` locally; count only from the CI `db-integration` log): every Postgres-backed test. Unit tests (plan/SHA pinning, contract schemas, static isolation test, SQL-text lint) run locally; contract tests are evidenced by the `unit` job.
 
 **ACC rows the manager expects to propose at close** (root verifies; founder confirms; none is edited by M7): ACC-11 → **IN_PROGRESS** with core evidence only (the row also covers "double grant" via Medusa, which is out of W1); ACC-15 → **IN_PROGRESS**, ledger side only; ACC-23 → **IN_PROGRESS**, ledger-command replay only (no inbox/outbox, no Medusa events). No row is claimed PASSED.
 
