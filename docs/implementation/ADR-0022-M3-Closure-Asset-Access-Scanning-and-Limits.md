@@ -469,3 +469,19 @@ Revert the PR. The C6 behaviour returns: redeem is no longer charged, and the to
 - `composition-download.test.ts`: static, no token is ever put in a URL.
 - `editor-download.test.ts`: `downloadTargetFrom` accepts only the bare route plus a well-formed token, and the editor sends the token in the header and never in a URL.
 - No new database file: the D8 budget is unchanged.
+
+## Founder decisions recorded 2026-11-28 (C4, C5, C6)
+
+Decision record only. The sections above keep their original wording; where they differ, this section governs. Registry entries: decisions log and hard-gates table in [ORCHESTRATION-REGISTRY.md](ORCHESTRATION-REGISTRY.md). No code, migration, dependency or flag changes with this record.
+
+| Step | Question | Decision | Decided by |
+|---|---|---|---|
+| C4 | Two charges beyond the plan's wording | Creating an owned composition (`POST /compositions` with a session) charges `OWNER_WRITE`. `claim` charges `OWNER_WRITE` to the verified user after the session check and before the M1b `claimGuest` call. The store and contracts edits these needed stay in scope of #50. | founder |
+| C5 | Late detection (`clean → quarantined`): trigger and who pays | Re-scan runs when the scanner engine or its signature policy changes, and before print QA. The platform pays; a user's credits are never charged. Build it when a scanner is chosen. | coordinator, delegated |
+| C5 | Recovery after a mid-scan claim costs two `*_RESCAN` tokens | Two "Check again" taps are acceptable for W1. | coordinator, delegated |
+| C5 | Hand-written result parser instead of Zod | Acceptable. Move to Zod later through the dependency lane (commerce has no zod dependency). | coordinator, delegated |
+| C5 | Timed-out scan | A `scan_timeout` is an unknown outcome: quarantine, and a human reconciles before any re-check (AGENTS rule 7). **Not implemented in #55**, where the next explicit rescan is a new call. It needs its own step before uploads are enabled, and the scanner-choice step inherits the point that a port ignoring the abort signal may still be running or billing. | coordinator, delegated |
+| C6 | Download redeem rate limit | The redeem route gets a rate limit that is **configurable**, so it can scale later. Early values are generous because traffic starts small, while still stopping anyone from spamming the system. **Done in [#59](https://github.com/smallhingelabs/vynvori/pull/59)** (merged at `b72b972`): every redeem charges the existing `GUEST_DOWNLOAD_GRANT` and `OWNER_DOWNLOAD_GRANT` buckets, shared with mint, so a download costs two tokens; values are in the "C6 follow-up" section above and live in each deployment's environment, not as code defaults. | founder; values chosen in the follow-up under that direction |
+| C6 | Log redaction of the link code | Logs must not carry the download link code. **Done in #59** by keeping the code out of the URL: the mint response returns `grantToken`, the editor sends it in the `x-vynvori-download-grant` header, and redeem refuses any query string with the uniform `404`. No platform log, proxy, browser history entry or Referer can hold the code. If an APM or error tool is ever set to capture headers or bodies, it must redact `x-vynvori-download-grant` and `grantToken`. | founder |
+
+The founder's C6 direction was given in the project chat on 2026-11-28 (Asia/Dhaka) in reply to the two open questions on [#56](https://github.com/smallhingelabs/vynvori/pull/56), which merged at 20:35Z (`f9daf00`) without either. Both were answered by [#59](https://github.com/smallhingelabs/vynvori/pull/59) (C6 follow-up, `b72b972`, 20:52Z).
