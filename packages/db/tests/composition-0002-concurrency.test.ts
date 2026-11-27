@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { connectionString, freshCompositionDatabase, compositionPool } from "./composition-fixture";
+import { connectionString, freshCompositionDatabase, compositionPool, POOL_CAPS } from "./composition-fixture";
+import { compositionStore, lockAsset, lockComposition, type CompositionTx } from "../src/composition-store";
 
 // CI sets CI_REQUIRE_PG_TESTS=1 so a missing database fails the run instead of silently skipping.
 const requirePg = process.env.CI_REQUIRE_PG_TESTS === "1";
@@ -12,6 +13,10 @@ test("M3 0002 concurrency: scan-event, attempt, grant and rate-bucket races; loc
   const setup = await freshCompositionDatabase("concurrency");
   const q = (text: string, values?: unknown[]) => setup.query(text, values);
   const { pool } = await compositionPool("concurrency", "concurrency"); // pool cap 18 (ADR-0022 D8)
+  const store = compositionStore(pool); // C3b: the store shares this file's pool, so the races below stay inside the 20 budget
+  let peakClients = 0;
+  const sampler = setInterval(() => { peakClients = Math.max(peakClients, pool.totalCount); }, 1);
+  const later = (ms: number) => new Promise<"pending">(resolve => setTimeout(() => resolve("pending"), ms));
 
   async function makeAsset(label: string) {
     const id = randomUUID(); // composition id doubles as the guest_draft id, as in the 0001 fixture pattern.
@@ -30,7 +35,7 @@ test("M3 0002 concurrency: scan-event, attempt, grant and rate-bucket races; loc
       "INSERT INTO vynvori_composition.assets(id,composition_id,kind,object_key,sha256,mime,byte_size,width_px,height_px) VALUES($1,$2,'customer_original',$3,$4,'image/png',10,1,1)",
       [assetId, id, `private/composition/v1/${id}/${hash}`, hash],
     );
-    return { compositionId: id, assetId, hash };
+    return { compositionId: id, assetId, hash, access: { kind: "guest" as const, capabilityHash: hashOf(label + ":cap") } };
   }
   async function openAttempt(assetId: string, compositionId: string) {
     const attemptId = randomUUID();
@@ -137,7 +142,126 @@ test("M3 0002 concurrency: scan-event, attempt, grant and rate-bucket races; loc
         sessionA.release(); sessionB.release();
       }
     });
+    // ---- C3b: the same races through the store primitives -------------------------------------------------------------
+    const lease = () => ({ attemptId: randomUUID(), leaseExpiresAt: new Date(Date.now() + 60_000) });
+    const clean = async (a: Awaited<ReturnType<typeof makeAsset>>) => {
+      const opened = await store.openScanAttempt(a.compositionId, a.assetId, a.access, new Date(), lease());
+      assert.equal(opened.status, "opened"); if (opened.status !== "opened") return;
+      assert.equal((await store.completeScanAttempt(a.compositionId, a.assetId, a.access, new Date(), { attemptId: opened.attempt.attemptId, result: { toStatus: "clean", scannerId: "synthetic-scanner", engineVersion: "synthetic-engine-0", definitionsVersion: "synthetic-defs-0", evidenceRef: "evidence://synthetic/clean" } })).status, "recorded");
+    };
+
+    await t.test("C3b store: SYNTHETIC_CONCURRENCY concurrent redeems of one grant (mixed with wrong-principal callers) give exactly one winner", async () => {
+      const SYNTHETIC_CONCURRENCY = 12;
+      const a = await makeAsset("store-grant-race"), intruder = await makeAsset("store-grant-intruder"), token = hashOf("store-grant-race:token");
+      await clean(a);
+      const minted = await store.createDownloadGrant(a.compositionId, a.assetId, a.access, new Date(), { grantId: randomUUID(), tokenHash: token, expiresAt: new Date(Date.now() + 300_000) });
+      assert.equal(minted.status, "created");
+      const callers = Array.from({ length: SYNTHETIC_CONCURRENCY }, (_, i) => i % 3 === 0 ? intruder.access : a.access);
+      const results = await Promise.all(callers.map(access => store.consumeDownloadGrant(a.compositionId, a.assetId, access, new Date(), token)));
+      assert.equal(results.filter(r => r !== null).length, 1, "exactly one redeem wins");
+      results.forEach((r, i) => { if (r) assert.equal(callers[i], a.access, "only the minting principal can win"); });
+      const row = await q("SELECT count(*) FILTER (WHERE redeemed_at IS NOT NULL) AS n FROM vynvori_composition.asset_download_grants WHERE token_hash=$1", [token]);
+      assert.equal(Number(row.rows[0].n), 1);
+    });
+
+    await t.test("C3b store: a wrong-principal consume returns nothing and leaves the grant spendable", async () => {
+      const a = await makeAsset("store-grant-wrong"), intruder = await makeAsset("store-grant-wrong-intruder"), token = hashOf("store-grant-wrong:token");
+      await clean(a);
+      assert.equal((await store.createDownloadGrant(a.compositionId, a.assetId, a.access, new Date(), { grantId: randomUUID(), tokenHash: token, expiresAt: new Date(Date.now() + 300_000) })).status, "created");
+      assert.equal(await store.consumeDownloadGrant(a.compositionId, a.assetId, intruder.access, new Date(), token), null);
+      const spendable = await q("SELECT redeemed_at FROM vynvori_composition.asset_download_grants WHERE token_hash=$1", [token]);
+      assert.equal(spendable.rows[0].redeemed_at, null, "the wrong principal did not burn the grant");
+      assert.ok(await store.consumeDownloadGrant(a.compositionId, a.assetId, a.access, new Date(), token));
+    });
+
+    await t.test("C3b store: SYNTHETIC_CONCURRENCY concurrent openScanAttempt calls reserve exactly one attempt; the rest see busy", async () => {
+      const SYNTHETIC_CONCURRENCY = 12;
+      const a = await makeAsset("store-open-race");
+      const results = await Promise.all(Array.from({ length: SYNTHETIC_CONCURRENCY }, () => store.openScanAttempt(a.compositionId, a.assetId, a.access, new Date(), lease())));
+      assert.equal(results.filter(r => r.status === "opened").length, 1);
+      assert.equal(results.filter(r => r.status === "busy").length, SYNTHETIC_CONCURRENCY - 1);
+    });
+
+    await t.test("C3b store: SYNTHETIC_CONCURRENCY concurrent completions of one attempt record exactly one event; seq stays gap-free", async () => {
+      const SYNTHETIC_CONCURRENCY = 12;
+      const a = await makeAsset("store-complete-race");
+      const opened = await store.openScanAttempt(a.compositionId, a.assetId, a.access, new Date(), lease());
+      if (opened.status !== "opened") return assert.fail(opened.status);
+      const verdicts = ["clean", "quarantined"] as const;
+      const results = await Promise.all(Array.from({ length: SYNTHETIC_CONCURRENCY }, (_, i) => store.completeScanAttempt(a.compositionId, a.assetId, a.access, new Date(), {
+        attemptId: opened.attempt.attemptId, result: { toStatus: verdicts[i % 2]!, scannerId: "synthetic-scanner", engineVersion: "synthetic-engine-0", definitionsVersion: "synthetic-defs-0", evidenceRef: `evidence://synthetic/${i}` },
+      })));
+      assert.equal(results.filter(r => r.status === "recorded").length, 1);
+      assert.ok(results.every(r => r.status === "recorded" || (r.status === "rejected" && r.reason === "attempt_not_open")));
+      const seqs = await q("SELECT seq FROM vynvori_composition.asset_scan_events WHERE asset_id=$1 ORDER BY seq", [a.assetId]);
+      assert.deepEqual(seqs.rows.map(r => r.seq), [1]);
+    });
+
+    await t.test("C3b store: the per-asset lock serialises store scan events (a held asset lock blocks the store until it is released)", async () => {
+      const a = await makeAsset("store-lock-serial");
+      const opened = await store.openScanAttempt(a.compositionId, a.assetId, a.access, new Date(), lease());
+      if (opened.status !== "opened") return assert.fail(opened.status);
+      const holder = await pool.connect();
+      try {
+        await holder.query("BEGIN");
+        await lockAsset(holder as CompositionTx, a.compositionId, a.assetId);
+        const pending = store.completeScanAttempt(a.compositionId, a.assetId, a.access, new Date(), { attemptId: opened.attempt.attemptId, result: { toStatus: "unknown", reasonCode: "scanner_error" } });
+        assert.equal(await Promise.race([pending.then(() => "done" as const), later(300)]), "pending", "the store must wait for the asset lock");
+        const waiting = await q("SELECT count(*) AS n FROM pg_locks WHERE locktype='advisory' AND NOT granted AND database=(SELECT oid FROM pg_database WHERE datname=current_database())");
+        assert.ok(Number(waiting.rows[0].n) >= 1, "the store's session is queued on an advisory lock");
+        assert.deepEqual((await q("SELECT count(*)::int AS n FROM vynvori_composition.asset_scan_events WHERE asset_id=$1", [a.assetId])).rows[0].n, 0);
+        await holder.query("COMMIT");
+        assert.equal((await pending).status, "recorded");
+      } finally { await holder.query("ROLLBACK").catch(() => undefined); holder.release(); }
+    });
+
+    await t.test("C3b store: consumeRateToken admits exactly SYNTHETIC_LIMIT of SYNTHETIC_CONCURRENCY concurrent callers", async () => {
+      const SYNTHETIC_LIMIT = 5, SYNTHETIC_CONCURRENCY = 14, SYNTHETIC_WINDOW_SECONDS = 60, at = new Date(Date.UTC(2026, 0, 1));
+      const subject = randomUUID();
+      const results = await Promise.all(Array.from({ length: SYNTHETIC_CONCURRENCY }, () => store.consumeRateToken({ operation: "GUEST_ASSET_UPLOAD", subject, windowSeconds: SYNTHETIC_WINDOW_SECONDS, max: SYNTHETIC_LIMIT, at })));
+      assert.equal(results.filter(r => r.admitted).length, SYNTHETIC_LIMIT);
+      assert.deepEqual(results.filter(r => r.admitted).map(r => (r as { count: number }).count).sort((x, y) => x - y), [1, 2, 3, 4, 5]);
+    });
+
+    await t.test("C3b lock helpers: class-4 high word survives a negative hashtext; xact-scoped; opposite helper orders never deadlock", async () => {
+      let negative = "";
+      for (let i = 0; i < 200 && !negative; i += 1) { const id = randomUUID(); if ((await q("SELECT hashtext($1::uuid::text) < 0 AS neg", [id])).rows[0].neg) negative = id; }
+      assert.ok(negative, "found a subject whose hashtext is negative");
+      const holder = await pool.connect();
+      try {
+        await holder.query("BEGIN");
+        await lockComposition(holder as CompositionTx, negative);
+        const mine = await holder.query("SELECT classid::bigint AS hi, objid::bigint AS lo, objsubid FROM pg_locks WHERE locktype='advisory' AND pid=pg_backend_pid()");
+        assert.equal(mine.rows.length, 1); assert.equal(Number(mine.rows[0].hi), 4, "high word is the class constant 4"); assert.equal(mine.rows[0].objsubid, 1, "single-bigint lock form");
+        const expected = await holder.query("SELECT (hashtext($1::uuid::text)::bigint & 4294967295) AS lo", [negative]);
+        assert.equal(String(mine.rows[0].lo), String(expected.rows[0].lo), "low word is the masked hashtext");
+        await holder.query("COMMIT");
+        const after = await holder.query("SELECT count(*)::int AS n FROM pg_locks WHERE locktype='advisory' AND pid=pg_backend_pid()");
+        assert.equal(after.rows[0].n, 0, "transaction-scoped: released at commit");
+      } finally { await holder.query("ROLLBACK").catch(() => undefined); holder.release(); }
+      const { compositionId, assetId } = await makeAsset("store-lock-order");
+      for (let round = 0; round < 5; round += 1) {
+        const one = await pool.connect(), two = await pool.connect();
+        try {
+          await one.query("BEGIN"); await two.query("BEGIN");
+          // Caller one asks composition-then-asset explicitly; caller two asks for the asset first. lockAsset takes the composition lock
+          // first by construction, so both queue on the composition lock and serialise instead of forming a cycle.
+          const first = (async () => { await lockComposition(one as CompositionTx, compositionId); await lockAsset(one as CompositionTx, compositionId, assetId); await one.query("COMMIT"); })();
+          const second = (async () => { await lockAsset(two as CompositionTx, compositionId, assetId); await lockComposition(two as CompositionTx, compositionId); await two.query("COMMIT"); })();
+          assert.equal(await Promise.race([Promise.all([first, second]).then(() => "done" as const), later(5000)]), "done", "no deadlock and no hang");
+        } finally {
+          await one.query("ROLLBACK").catch(() => undefined); await two.query("ROLLBACK").catch(() => undefined); one.release(); two.release();
+        }
+      }
+    });
+
+    await t.test("C3b connection budget: the race file never held more than its declared pool cap", async () => {
+      assert.ok(pool.options.max !== undefined && pool.options.max <= POOL_CAPS.concurrency);
+      assert.ok(peakClients <= POOL_CAPS.concurrency, `peak pool clients ${peakClients} exceeds ${POOL_CAPS.concurrency}`);
+      assert.ok(peakClients >= 2, "the sampler observed the races");
+    });
   } finally {
+    clearInterval(sampler);
     await pool.end().catch(() => {});
     await setup.end().catch(() => {});
   }
