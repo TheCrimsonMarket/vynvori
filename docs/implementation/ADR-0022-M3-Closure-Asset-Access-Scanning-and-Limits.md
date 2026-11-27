@@ -354,3 +354,19 @@ No schema change: revert the PR. `recordLateDetection` is additive and has no ca
 - `apps/web/tests/editor-scan.test.ts` covers the editor helpers and the canvas binding.
 - The scan double (`syntheticScanPort`) and every number are `SYNTHETIC_*` fixtures in `tests/`.
 - No new database file: the D8 budget (40 connections, five files, pool caps 18 and 4) is unchanged.
+
+## Founder decisions recorded 2026-11-28 (C4, C5, C6)
+
+Decision record only. The sections above keep their original wording; where they differ, this section governs. Registry entries: decisions log and hard-gates table in [ORCHESTRATION-REGISTRY.md](ORCHESTRATION-REGISTRY.md). No code, migration, dependency or flag changes with this record.
+
+| Step | Question | Decision | Decided by |
+|---|---|---|---|
+| C4 | Two charges beyond the plan's wording | Creating an owned composition (`POST /compositions` with a session) charges `OWNER_WRITE`. `claim` charges `OWNER_WRITE` to the verified user after the session check and before the M1b `claimGuest` call. The store and contracts edits these needed stay in scope of #50. | founder |
+| C5 | Late detection (`clean → quarantined`): trigger and who pays | Re-scan runs when the scanner engine or its signature policy changes, and before print QA. The platform pays; a user's credits are never charged. Build it when a scanner is chosen. | coordinator, delegated |
+| C5 | Recovery after a mid-scan claim costs two `*_RESCAN` tokens | Two "Check again" taps are acceptable for W1. | coordinator, delegated |
+| C5 | Hand-written result parser instead of Zod | Acceptable. Move to Zod later through the dependency lane (commerce has no zod dependency). | coordinator, delegated |
+| C5 | Timed-out scan | A `scan_timeout` is an unknown outcome: quarantine, and a human reconciles before any re-check (AGENTS rule 7). **Not implemented in #55**, where the next explicit rescan is a new call. It needs its own step before uploads are enabled, and the scanner-choice step inherits the point that a port ignoring the abort signal may still be running or billing. | coordinator, delegated |
+| C6 | Download redeem rate limit (open on #56) | The redeem route gets a rate limit that is **configurable**, so it can scale later. Early values are generous because traffic starts small, while still stopping anyone from spamming the system. The numeric values and their config keys are chosen in the C6 step; `.env.example` changes only through the root lane, key names only. | founder |
+| C6 | Log redaction of the link code (open on #56) | Logs strip the download link code (the `grant=` value). | founder |
+
+The founder's C6 direction was given in the project chat on 2026-11-28 in reply to the two open questions on [#56](https://github.com/smallhingelabs/vynvori/pull/56). Neither is in #56 at head `9f035a8`; both are owed to the C6 step.

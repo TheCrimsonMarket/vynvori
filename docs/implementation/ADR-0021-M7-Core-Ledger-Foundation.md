@@ -600,3 +600,23 @@ Status: **proposed, implemented locally for S8 only; not deployed.** Plan step: 
 | INFO: "takes no lock" was inaccurate; whole-table aggregates on a huge ledger | Fixed wording (`ACCESS SHARE` only; do not run during a migration); documented (limit 8). |
 
 The `security-review` skill checklist (parameterized SQL only, no dynamic SQL from user input, owner-scoped reads not applicable to an internal operator check, no keys logged, bigint bounds, no trigger bypass from the runtime role) is covered by the same review.
+
+## Founder decisions recorded 2026-11-28 (S5, S6, S7, S8)
+
+Decision record only. The addenda above keep their original wording ("not decided here", "founder question"); where they differ, this section governs. Source: the founder in the project thread on 2026-11-28 (Asia/Dhaka), with some items delegated to the coordinator as marked. Registry entries: decisions log and hard-gates table in [ORCHESTRATION-REGISTRY.md](ORCHESTRATION-REGISTRY.md). No code, migration, grant or flag changes with this record.
+
+| Step | Question | Decision | Decided by |
+|---|---|---|---|
+| S5 | One or two definer owner roles | Separate dedicated roles: S5's reservation definer and S7's package and slot definers each get their own owner. The S9 grants are written per role. | founder (S7 item 1) |
+| S5 | Definer command path (MEDIUM-1) | Moves behind a SECURITY DEFINER command function with its own owner, or the runtime role loses direct `INSERT` on `ledger_commands` and `ledger_entries`: a **HARD GATE** before any non-synthetic rollout (see S6). | founder, via S6 |
+| S5 | Q9, never-dispatched reservations | Unchanged: deferred out of W1; the S8 orphan finder lists them for a human. | not decided |
+| S6 | Manifest hash comparison unmet in W1 | Accepted for W1, until a manifest store exists (M6b/M8a). Stored evidence is audit only. | founder |
+| S6 | Forged settle or hold through raw runtime SQL | A definer-only command path for settle and hold, and for S5's authorize, dispatch and release, is a **HARD GATE** before any non-synthetic rollout (and before any rollout that grants the runtime role). | founder |
+| S6 | Who reads `vendor_cost_evidence` | A dedicated internal role, never the runtime role. | coordinator, delegated |
+| S7 | `explicit_close_request`, delivery counts | Need an append-only evidence record (actor `issuer + subject`, time, source event id). Delivery counts come from system delivery events, never from a caller's assertion. **HARD GATE** before any non-synthetic rollout. | coordinator, delegated |
+| S7 | Failed refinement and the slot | A `pending` slot returns to `available` only on a definitive no-charge provider failure. An unknown outcome goes to reconciliation with no automatic retry (the `unknown → used` edge stays). | coordinator, delegated |
+| S7 | Final eligibility by package state (honest limit 3) | Owned by the step that introduces package state. It stays a gate until that step lands. | coordinator, delegated |
+| S7 | Questions 4 (closure causes) and 5 (strict reopen) | Not part of the decision; still owed to the founder. | not decided |
+| S8 | Maintenance rule | Any migration that adds, renames or drops a ledger trigger, adds a definer function, or `CREATE OR REPLACE`s a function must update `EXPECTED_TRIGGERS` and `EXPECTED_FUNCTION_BODIES` in `packages/db/src/ledger-invariants.ts` in the same PR, or the clean-state test fails (61 triggers and 32 functions as of `0007`). | rule from the S8 thread, recorded by the coordinator |
+
+**What the S9 grants proposal must now carry** (founder-executed, never in a migration): the per-role definer owners above; a dedicated internal role for `vendor_cost_evidence`; the S8 checker role (`USAGE` on `vynvori_ledger`, `SELECT` on `wallets`, `ledger_entries`, `credit_reservations`, `ledger_quotes`, `ledger_quote_allocations`, `ledger_authorizations`, `ledger_packages`, `ledger_grant_sources`, `promo_claims` and `promo_claim_events`, nothing on vendor cost, no writes); and the two definer-only hard gates. The checker is wired to no schedule in W1 and must not run during a migration.
