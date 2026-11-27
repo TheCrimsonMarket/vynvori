@@ -260,6 +260,7 @@ DECLARE
   reserved integer;
   total integer;
   packages integer;
+  expected_packages integer;
 BEGIN
   IF TG_RELID IS DISTINCT FROM 'vynvori_ledger.ledger_authorizations'::pg_catalog.regclass OR TG_OP <> 'INSERT' OR TG_WHEN <> 'AFTER' OR TG_LEVEL <> 'ROW' THEN
     RAISE EXCEPTION 'trigger function fired from an unexpected context' USING ERRCODE = 'integrity_constraint_violation';
@@ -270,7 +271,8 @@ BEGIN
   IF allocations = 0 OR total <> allocations OR reserved <> allocations THEN
     RAISE EXCEPTION 'an authorization must reserve every allocation of its quote version' USING ERRCODE = 'integrity_constraint_violation';
   END IF;
-  IF packages <> CASE WHEN NEW.operation_kind = 'concept_bundle_3x2' THEN 1 ELSE 0 END THEN
+  expected_packages := CASE WHEN NEW.operation_kind = 'concept_bundle_3x2' THEN 1 ELSE 0 END;
+  IF packages <> expected_packages THEN
     RAISE EXCEPTION 'a bundle authorization has exactly one package; a final has none' USING ERRCODE = 'integrity_constraint_violation';
   END IF;
   RETURN NULL;
@@ -292,6 +294,7 @@ CREATE FUNCTION vynvori_ledger.ledger_entries_bind_reservation() RETURNS trigger
 DECLARE
   cmd record;
   r record;
+  expected_kind text;
   ref8 bigint;
   full8 bigint;
 BEGIN
@@ -304,7 +307,8 @@ BEGIN
   END IF;
   SELECT c.command_kind, c.xmin AS x INTO cmd FROM vynvori_ledger.ledger_commands c
     WHERE c.command_id = NEW.command_id AND c.user_id = NEW.user_id AND c.outcome = 'applied';
-  IF NOT FOUND OR cmd.command_kind IS DISTINCT FROM CASE NEW.entry_kind WHEN 'reserve' THEN 'reservation_authorize' ELSE 'reservation_release' END THEN
+  expected_kind := CASE NEW.entry_kind WHEN 'reserve' THEN 'reservation_authorize' ELSE 'reservation_release' END;
+  IF NOT FOUND OR cmd.command_kind IS DISTINCT FROM expected_kind THEN
     RAISE EXCEPTION 'a % entry must reference an applied command of the matching kind', NEW.entry_kind USING ERRCODE = 'integrity_constraint_violation';
   END IF;
   ref8 := pg_catalog.pg_current_xact_id()::text::bigint;

@@ -195,9 +195,21 @@ test("wallet, command log and ledger enforce their invariants in disposable Post
       await bad({ cause_kind: "other" }, "23514", "grant with the wrong cause kind");
       await bad({ cause_ref: "forged" }, "23514", "grant whose cause_ref is not source:ref");
       await bad({ src: randomUUID() }, "23503", "grant source that is not registered");
-      for (const [kind, shape] of [["reserve", { da: -5, dr: 5, de: 0 }], ["release", { da: 5, dr: -5, de: 0 }], ["settle", { da: 2, dr: -5, dc: 3, de: 0 }], ["hold", { da: 0, dr: -5, dh: 5, de: 0 }]] as const) {
+      for (const [kind, shape] of [["settle", { da: 2, dr: -5, dc: 3, de: 0 }], ["hold", { da: 0, dr: -5, dh: 5, de: 0 }]] as const) {
         const reservation = randomUUID();
-        await bad({ kind, ...shape, src: null, ref: null, res: reservation, ek: "synthetic", er: "synthetic", cause_kind: "reservation", cause_ref: `${reservation}:${kind}` }, "23514", `${kind} is blocked by ledger_entries_s2_grant_only until S5`);
+        const entry = { ...base, kind, ...shape, src: null, ref: null, res: reservation, ek: "synthetic", er: "synthetic", cause_kind: "reservation", cause_ref: `${reservation}:${kind}` };
+        await assert.rejects(insertEntry(entry), sqlstate("23000", /not available yet/), `${kind} is refused by the S5 binding trigger until S6`);
+        // Second layer: with the binding trigger disabled (rolled-back transaction only), ledger_entries_s5_kinds still refuses it.
+        await raw(client, "BEGIN");
+        try {
+          await raw(client, "ALTER TABLE vynvori_ledger.ledger_entries DISABLE TRIGGER ledger_entries_bind_reservation");
+          await assert.rejects(insertEntry(entry), sqlstate("23514", /ledger_entries_s5_kinds/), `${kind} is blocked by ledger_entries_s5_kinds until S6`);
+        } finally { await raw(client, "ROLLBACK"); }
+      }
+      // S5 (0005): reserve/release pass the kind CHECK but need a real reservation bound to a matching command of this transaction.
+      for (const [kind, shape] of [["reserve", { da: -5, dr: 5, de: 0 }], ["release", { da: 5, dr: -5, de: 0 }]] as const) {
+        const reservation = randomUUID();
+        await assert.rejects(insertEntry({ ...base, kind, ...shape, src: null, ref: null, res: reservation, ek: "synthetic", er: "synthetic", cause_kind: "reservation", cause_ref: `${reservation}:${kind}` }), either("23000", "23503"), `${kind} without a bound reservation`);
       }
       await assert.rejects(insertEntry({ ...base, user: bob }), either("23000", "23503"), "command of another user");
       await assert.rejects(insertEntry({ ...base, command: randomUUID() }), either("23000", "23503"), "unknown command");
@@ -229,13 +241,18 @@ test("wallet, command log and ledger enforce their invariants in disposable Post
       const user = await syntheticProfileWithWallet(client), command = await rawCommand(user), reservation = randomUUID();
       await raw(client, "BEGIN");
       try {
-        await raw(client, "ALTER TABLE vynvori_ledger.ledger_entries DROP CONSTRAINT ledger_entries_s2_grant_only");
+        // Since S5 (0005) a reserve entry also needs a bound reservation; strip that binding too (inside this rolled-back
+        // transaction only) so that nothing but the wallet CHECKs stands between the entry and a negative bucket.
+        await raw(client, "ALTER TABLE vynvori_ledger.ledger_entries DROP CONSTRAINT ledger_entries_reservation_fk");
+        await raw(client, "ALTER TABLE vynvori_ledger.ledger_entries DISABLE TRIGGER ledger_entries_bind_reservation");
+        await raw(client, "ALTER TABLE vynvori_ledger.ledger_entries DISABLE TRIGGER ledger_entries_apply_to_reservation");
         await raw(client, "SAVEPOINT s");
         await assert.rejects(insertEntry({ user, command, kind: "reserve", da: -5, dr: 5, de: 0, src: null, ref: null, res: reservation, ek: "synthetic", er: "synthetic", cause_kind: "reservation", cause_ref: `${reservation}:reserve` }),
           sqlstate("23514", /wallets_available_bounds/), "reserve with no funds -> negative available");
         await raw(client, "ROLLBACK TO SAVEPOINT s");
       } finally { await raw(client, "ROLLBACK"); }
-      assert.equal((await raw(client, "SELECT count(*)::int AS n FROM pg_constraint WHERE conname='ledger_entries_s2_grant_only'")).rows[0].n, 1, "the temporary constraint is back after the rollback");
+      assert.equal((await raw(client, "SELECT count(*)::int AS n FROM pg_constraint WHERE conname IN ('ledger_entries_s5_kinds','ledger_entries_reservation_fk')")).rows[0].n, 2, "the kind constraint and the reservation FK are back after the rollback");
+      assert.equal((await raw(client, "SELECT count(*)::int AS n FROM pg_trigger WHERE tgrelid='vynvori_ledger.ledger_entries'::regclass AND tgname IN ('ledger_entries_bind_reservation','ledger_entries_apply_to_reservation') AND tgenabled = 'O'")).rows[0].n, 2, "both S5 entry triggers are enabled again");
       const big = await syntheticProfileWithWallet(client);
       await grantSyntheticCredits(pool, { userId: big, grantSourceId: source, sourceRef: "big-1", units: 9007199254740991 });
       await assert.rejects(grantSyntheticCredits(pool, { userId: big, grantSourceId: source, sourceRef: "big-2", units: 1 }), (e: unknown) => e instanceof LedgerError && e.code === "DATABASE_REJECTED" && e.sqlstate === "23514", "available would exceed 2^53-1");
