@@ -238,6 +238,7 @@ test("durable identity state in disposable loopback PostgreSQL", { skip: !connec
       // UNIQUE (project_id,entity_id) and raise 23505 to the caller (about 1 in 11 rounds). Each round races fresh identities on warmed connections.
       const width = 8, rounds = 150, projectId = "synthetic-medusa-project";
       const racePool = new Pool({ connectionString: url.toString(), max: width, connectionTimeoutMillis: 2000, statement_timeout: 5000 });
+      const idleErrors: string[] = []; racePool.on("error", error => { idleErrors.push(String((error as { code?: unknown }).code ?? "error")); });
       try {
         const journal = commerceMappingStore(racePool);
         const warm = await Promise.all(Array.from({ length: width }, () => racePool.connect())); warm.forEach(client => client.release());
@@ -245,7 +246,7 @@ test("durable identity state in disposable loopback PostgreSQL", { skip: !connec
           const subject = `synthetic-reserve-race-${randomUUID()}`, userId = await store.ensureProfile(issuer, subject), entityId = centralEntityId(issuer, subject);
           const attempts = Array.from({ length: width }, () => ({ userId, projectId, entityId, operationId: randomUUID(), requestCipher: `synthetic-encrypted-${randomUUID()}` }));
           const settled = await Promise.allSettled(attempts.map(input => journal.reserve(input)));
-          const failures = settled.flatMap(result => result.status === "rejected" ? [String((result.reason as { code?: unknown }).code ?? "error")] : []);
+          const failures = settled.flatMap(result => result.status === "rejected" ? [String((result.reason as { code?: unknown } | null | undefined)?.code ?? "error")] : []);
           assert.deepEqual(failures, [], `round ${round} leaked ${failures.join(",")}`);
           const rows = settled.map(result => (result as PromiseFulfilledResult<Awaited<ReturnType<typeof journal.reserve>>>).value);
           const winner = attempts.find(input => input.operationId === rows[0]?.operationId);
@@ -256,6 +257,7 @@ test("durable identity state in disposable loopback PostgreSQL", { skip: !connec
           assert.equal(await journal.claimDispatch(winner.operationId), true);
           assert.equal((await Promise.all(attempts.filter(input => input !== winner).map(input => journal.claimDispatch(input.operationId)))).some(Boolean), false);
         }
+        assert.deepEqual(idleErrors, []);
       } finally { await racePool.end(); }
     });
     await t.test("a reservation colliding with another user's entity fails closed without a unique violation or a write", async () => {
