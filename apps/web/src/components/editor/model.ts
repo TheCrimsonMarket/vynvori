@@ -157,7 +157,9 @@ export function classifyApiFailure(status: number, data: unknown): ApiFailure {
 }
 /** Status-line text for a rate-limited save (automatic single retry) or a rate-limited action the person started (manual retry). */
 export function describeRateLimited(retryAfterSeconds: number | null, retry: "automatic" | "manual"): string {
-  const when = retryAfterSeconds === null ? "shortly" : `in about ${plural(retryAfterSeconds, "second")}`;
+  // With no wait from the server no timer is armed, so an "automatic" message must not promise one.
+  if (retryAfterSeconds === null) return retry === "automatic" ? "Too many requests. Your edits are still here. Press Save to try again." : "Too many requests. Your edits are still here. Try again shortly.";
+  const when = `in about ${plural(retryAfterSeconds, "second")}`;
   return retry === "automatic" ? `Too many requests. Your edits are still here and saving will try again ${when}.` : `Too many requests. Your edits are still here. Try again ${when}.`;
 }
 export const describeNotConfigured = (what: "saving" | "artwork upload") => `${what === "saving" ? "Saving" : "Artwork upload"} is not set up yet. Your work stays in this tab only.`;

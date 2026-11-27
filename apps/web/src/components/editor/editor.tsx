@@ -10,7 +10,7 @@ import {
   checkUploadDimensions, checkUploadFileSize, classifyApiFailure, describeExpiry, describeGuestCapacity, describeNotConfigured, describeRateLimited, type ApiFailure, type EditorAsset, type LayerPatch, type UploadLimits,
 } from "./model";
 
-type ServerState = { compositionId: string | null; revision: number; owner: "guest" | "owner" | null; autosave: "idle" | "pending" | "conflict" | "failed" | "unavailable" | "limited"; lastSavedKey: string | null; expiresAt: string | null; versions: VersionView[]; currentVersionId: string | null };
+type ServerState = { compositionId: string | null; revision: number; owner: "guest" | "owner" | null; autosave: "idle" | "pending" | "conflict" | "failed" | "unavailable" | "limited" | "blocked"; lastSavedKey: string | null; expiresAt: string | null; versions: VersionView[]; currentVersionId: string | null };
 type VersionView = { versionId: string; versionNo: number; sceneHashSha256: string; frozenAt: string; preflight: { state: "preview_only" | "blocked"; issues: { code: string; severity: string; layerId?: string; zoneId?: string }[] } };
 const ACCEPT = "image/png,image/jpeg,image/webp";
 const ISSUE_TEXT: Record<string, string> = {
@@ -198,6 +198,10 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
   // --- server persistence (all optional; the editor is fully usable without it)
   // ADR-0022 C4: a 429 pauses autosave and arms ONE timer from the server's own Retry-After; no hint means no automatic retry at all
   // (the Save button still works, one click per attempt). The closed-capability 503 is never retried. No retry storm either way.
+  // A 4xx other than 429 is terminal for the autosave (an expired draft, an artwork quota, a rejected file): retrying it would only repeat
+  // the same refusal, and an upload retry would burn the shared upload budget. "blocked" waits for the person (Save, or a reload).
+  const terminal = (status: number) => status >= 400 && status < 500 && status !== 429 && status !== 408;
+  const uploaded = useRef(new Map<string, string>()); // `${compositionId}:${local asset id}` -> server asset id, kept across attempts so a failed PUT never re-uploads
   const limitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (limitTimer.current) clearTimeout(limitTimer.current); }, []);
   function pauseForRateLimit(failure: ApiFailure) {
@@ -213,7 +217,7 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
       if (failure.kind === "rate_limited") { notify(describeRateLimited(failure.retryAfterSeconds, "automatic")); pauseForRateLimit(failure); return null; }
       if (failure.kind === "capacity") { notify(describeGuestCapacity()); setServer(s => ({ ...s, autosave: "failed" })); return null; }
       if (failure.kind === "not_configured") { notify(describeNotConfigured("saving")); setServer(s => ({ ...s, autosave: "unavailable" })); return null; }
-      notify(created.status === 503 ? "Saving is not available in this preview. Your work stays in this tab only." : "Could not start a saved draft."); setServer(s => ({ ...s, autosave: created.status === 503 ? "unavailable" : "failed" })); return null;
+      notify(created.status === 503 ? "Saving is not available in this preview. Your work stays in this tab only." : "Could not start a saved draft."); setServer(s => ({ ...s, autosave: created.status === 503 ? "unavailable" : terminal(created.status) ? "blocked" : "failed" })); return null;
     }
     const id = created.data.draft.compositionId as string; try { sessionStorage.setItem("vynvori.byo.compositionId", id); } catch { /* optional */ }
     setServer(s => ({ ...s, compositionId: id, revision: 0, expiresAt: created.data.expiresAt ?? null, owner: created.data.draft.ownerKind === "authenticated_owner" ? "owner" : "guest" }));
@@ -225,14 +229,15 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
     let working = scene; const remap = new Map<string, EditorAsset>(assets);
     for (const asset of assets.values()) {
       if (asset.persisted || !bytes.current.has(asset.assetId)) continue;
-      const stored = bytes.current.get(asset.assetId)!, up = await api(`/api/v1/compositions/${target.id}/assets`, "POST", undefined, { bytes: stored.data, type: stored.type });
+      const cacheKey = `${target.id}:${asset.assetId}`, known = uploaded.current.get(cacheKey);
+      const stored = bytes.current.get(asset.assetId)!, up = known ? { ok: true as const, status: 200, data: { asset: { assetId: known } } } : await api(`/api/v1/compositions/${target.id}/assets`, "POST", undefined, { bytes: stored.data, type: stored.type });
       if (!up.ok) {
         const failure = classifyApiFailure(up.status, up.data);
         if (failure.kind === "rate_limited") { notify(describeRateLimited(failure.retryAfterSeconds, "automatic")); pauseForRateLimit(failure); return false; }
         if (failure.kind === "not_configured") { notify(describeNotConfigured("artwork upload")); setServer(s => ({ ...s, autosave: "unavailable" })); return false; }
       }
-      if (!up.ok) { notify(up.status === 503 ? "Artwork upload is not available in this preview; your work stays in this tab only." : up.status === 415 ? "That file type is not accepted." : "Artwork could not be saved."); setServer(s => ({ ...s, autosave: up.status === 503 ? "unavailable" : "failed" })); return false; }
-      const serverId = up.data.asset.assetId as string; remap.set(serverId, { ...asset, assetId: serverId, persisted: true, url: `/api/v1/compositions/${target.id}/assets/${serverId}` }); remap.delete(asset.assetId);
+      if (!up.ok) { notify(up.status === 503 ? "Artwork upload is not available in this preview; your work stays in this tab only." : up.status === 415 ? "That file type is not accepted." : "Artwork could not be saved."); setServer(s => ({ ...s, autosave: up.status === 503 ? "unavailable" : terminal(up.status) ? "blocked" : "failed" })); return false; }
+      const serverId = up.data.asset.assetId as string; uploaded.current.set(cacheKey, serverId); remap.set(serverId, { ...asset, assetId: serverId, persisted: true, url: `/api/v1/compositions/${target.id}/assets/${serverId}` }); remap.delete(asset.assetId);
       working = { ...working, pages: working.pages.map(p => ({ ...p, layers: p.layers.map(l => l.kind === "image" && l.sourceAssetId === asset.assetId ? { ...l, sourceAssetId: serverId } : l) })) };
     }
     const saved = await api(`/api/v1/compositions/${target.id}`, "PUT", { expectedRevision: target.revision, scene: working });
@@ -242,7 +247,7 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
       if (failure.kind === "rate_limited") { notify(describeRateLimited(failure.retryAfterSeconds, "automatic")); pauseForRateLimit(failure); return false; }
       if (failure.kind === "not_configured") { notify(describeNotConfigured("saving")); setServer(s => ({ ...s, autosave: "unavailable" })); return false; }
     }
-    if (!saved.ok) { setServer(s => ({ ...s, autosave: "failed" })); notify(saved.status === 401 ? "Your draft expired or you were signed out. Start a new draft or sign in." : "Could not save. Your edits are still here."); return false; }
+    if (!saved.ok) { setServer(s => ({ ...s, autosave: terminal(saved.status) ? "blocked" : "failed" })); notify(saved.status === 401 ? "Your draft expired or you were signed out. Start a new draft or sign in." : "Could not save. Your edits are still here."); return false; }
     setAssets(remap); setHistory(h => ({ ...h, present: working }));
     setServer(s => ({ ...s, compositionId: target.id, revision: saved.data.draft.draftRevision, autosave: "idle", lastSavedKey: sceneKey(working), expiresAt: saved.data.expiresAt ?? s.expiresAt, owner: saved.data.draft.ownerKind === "authenticated_owner" ? "owner" : "guest" }));
     notify(saved.data.draft.ownerKind === "authenticated_owner" ? "Saved to your account." : `Draft saved on this device ${describeExpiry(saved.data.expiresAt ?? server.expiresAt)}. Sign in to keep it.`); return true;
@@ -251,7 +256,7 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
   useEffect(() => { saveRef.current = saveDraft; });
   // biome-ignore lint/correctness/useExhaustiveDependencies: key is deliberate, each scene change restarts the debounce
   useEffect(() => { // debounced autosave only once a server draft exists; stale timers are cancelled by the cleanup
-    if (!server.compositionId || !dirty || server.autosave === "conflict" || server.autosave === "pending" || server.autosave === "limited" || server.autosave === "unavailable") return;
+    if (!server.compositionId || !dirty || server.autosave === "conflict" || server.autosave === "pending" || server.autosave === "limited" || server.autosave === "unavailable" || server.autosave === "blocked") return;
     const timer = setTimeout(() => { void saveRef.current(); }, 1500); return () => clearTimeout(timer);
   }, [key, dirty, server.compositionId, server.autosave]);
   async function freeze() {

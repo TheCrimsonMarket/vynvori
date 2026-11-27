@@ -31,7 +31,7 @@ export function limiterConformance(label: string, factory: () => Promise<StoreHa
 
   type Config = Partial<typeof SYNTHETIC_COMPOSITION_CONFIG>;
   /** Wires service + HTTP over a spied store. `at` pins the rate window (and the service clock) for rollover tests. */
-  async function build(over: { rate?: RatePolicies; at?: () => Date; uploads?: boolean; config?: Config } = {}) {
+  async function build(over: { rate?: RatePolicies; at?: () => Date; uploads?: boolean; config?: Config; http?: Partial<typeof SYNTHETIC_HTTP_LIMITS> } = {}) {
     const h = await factory(), calls: { operation: string; subject: string }[] = [];
     const store: CompositionStore = {
       ...h.store,
@@ -44,7 +44,7 @@ export function limiterConformance(label: string, factory: () => Promise<StoreHa
       async verify(secret) { const userId = users.get(secret); if (!userId) throw new Error("no session"); return { userId }; },
       async claimGuest(secret, draftId) { claims.push(draftId); await h.m1bClaim(draftId, users.get(secret)!); },
     };
-    const http = compositionHttpHandlers({ enabled: true, appOrigin: ORIGIN, ...SYNTHETIC_HTTP_LIMITS }, service, identity);
+    const http = compositionHttpHandlers({ enabled: true, appOrigin: ORIGIN, ...SYNTHETIC_HTTP_LIMITS, ...over.http }, service, identity);
     const newGuest = async () => {
       const created = await service.createGuest();
       return { id: created.record.id, capability: created.capability, access: { kind: "guest", capabilityHash: secretHash(created.capability) } as CompositionAccess, cookie: `${compositionCookies.guest}=${created.record.id}.${created.capability}` };
@@ -217,6 +217,20 @@ export function limiterConformance(label: string, factory: () => Promise<StoreHa
     // service level: the policy is checked, never defaulted
     await assert.rejects(ctx.service.admit("write", owner.id, owner.access), (e: unknown) => e instanceof CompositionError && e.code === "LIMITS_NOT_CONFIGURED");
     const none = await build({ rate: {} }); await assert.rejects(none.service.createGuest(), (e: unknown) => e instanceof CompositionError && e.code === "LIMITS_NOT_CONFIGURED");
+  });
+
+  t("a forged but well-formed credential learns nothing about configuration: access is proven in SQL before any 503", async () => {
+    const closed = await build({ http: { maxJsonBytes: undefined }, uploads: false }), guest = await closed.newGuest(), rows = await closed.h.bucketCount();
+    const forged = `${compositionCookies.guest}=${guest.id}.${"z".repeat(43)}`, calls = closed.calls.length;
+    const scene = { json: { expectedRevision: 0, scene: sceneWith() } };
+    assert.equal((await closed.http.save(post(forged, scene), { id: guest.id })).status, 404, "save, JSON limit unset");
+    assert.equal((await closed.http.freeze(post(forged, { json: { expectedRevision: 0 } }), { id: guest.id })).status, 404, "freeze, JSON limit unset");
+    assert.equal((await closed.http.restore(post(forged, { json: { expectedRevision: 0, versionId: "00000000-0000-4000-8000-000000000000" } }), { id: guest.id })).status, 404, "restore, JSON limit unset");
+    assert.equal((await closed.http.uploadAsset(post(forged, { raw: png(50, 50), type: "image/png" }), { id: guest.id })).status, 404, "upload, uploads disabled");
+    assert.equal(closed.calls.length, calls, "no bucket was charged for a caller without access"); assert.equal(await closed.h.bucketCount(), rows);
+    // the rightful holder still gets the honest answer
+    assert.equal((await closed.http.save(post(guest.cookie, scene), { id: guest.id })).status, 503, "save, JSON limit unset, valid caller");
+    assert.equal((await closed.http.uploadAsset(post(guest.cookie, { raw: png(50, 50), type: "image/png" }), { id: guest.id })).status, 503, "upload, uploads disabled, valid caller");
   });
 
   t("an unset live-guest cap closes guest creation, and a zero cap is never read as unlimited", async () => {

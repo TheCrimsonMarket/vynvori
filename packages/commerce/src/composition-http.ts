@@ -172,22 +172,25 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
         assets: assets.map(a => ({ assetId: a.id, sha256: a.sha256, mime: a.mime, widthPx: a.widthPx, heightPx: a.heightPx })), versions: versions.map(versionView) });
     }),
     save: wrapped(async (request, params) => {
-      const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true);
+      const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true, false); // the JSON-limit answer waits until access is proven
       await service!.admit("write", compositionId, access); // access in SQL, then charge, then (only then) the body
+      requireApiLimits();
       const data = await parseJson(request); exact(data, ["expectedRevision", "scene"]);
       const record = await service!.saveDraft(compositionId, access, revisionOf(data), data.scene);
       return json({ ...view(record, access), sceneHashSha256: record.sceneSha256 });
     }),
     freeze: wrapped(async (request, params) => {
-      const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true);
+      const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true, false); // the JSON-limit answer waits until access is proven
       await service!.admit("write", compositionId, access);
+      requireApiLimits();
       const data = await parseJson(request); exact(data, ["expectedRevision"]);
       const { version, record } = await service!.freeze(compositionId, access, revisionOf(data));
       return json({ ...view(record, access), version: versionView(version) }, 201);
     }),
     restore: wrapped(async (request, params) => {
-      const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true);
+      const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true, false); // the JSON-limit answer waits until access is proven
       await service!.admit("write", compositionId, access);
+      requireApiLimits();
       const data = await parseJson(request); exact(data, ["expectedRevision", "versionId"]);
       if (typeof data.versionId !== "string") throw new HttpError(400, "INVALID_REQUEST");
       const record = await service!.restore(compositionId, access, data.versionId, revisionOf(data));
@@ -221,11 +224,11 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
     }),
     uploadAsset: wrapped(async (request, params) => {
       const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true, false);
-      // ADR-0022 D2 / F4b order: format-check ids and credentials, flag, access verified IN SQL (a guest cookie's format proves nothing),
+      // ADR-0022 D2 / F4b order: format-check ids and credentials, access verified IN SQL (a guest cookie's format proves nothing), flag,
       // configuration, charge, and only then read the body. A caller without access therefore buffers nothing, creates no bucket row and
       // learns nothing about configuration.
-      service!.assertUploadsEnabled();
       await service!.authorize(compositionId, access);
+      service!.assertUploadsEnabled();
       service!.assertUploadsAvailable();
       requireApiLimits();
       if (cfg.maxUploadBytes === undefined) throw new CompositionError("LIMITS_NOT_CONFIGURED");

@@ -25,16 +25,19 @@ test("the closed-capability 503 and the guest cap are told apart from every othe
 test("status-line wording takes its number from the server and never invents one", () => {
   assert.match(describeRateLimited(17, "automatic"), /saving will try again in about 17 seconds/);
   assert.match(describeRateLimited(1, "automatic"), /about 1 second\./);
-  assert.match(describeRateLimited(null, "automatic"), /try again shortly/); assert.doesNotMatch(describeRateLimited(null, "automatic"), /\d/);
+  assert.match(describeRateLimited(null, "automatic"), /Press Save to try again/); assert.doesNotMatch(describeRateLimited(null, "automatic"), /\d|will try again/);
+  assert.match(describeRateLimited(null, "manual"), /Try again shortly/);
   assert.match(describeRateLimited(9, "manual"), /Try again in about 9 seconds/); assert.doesNotMatch(describeRateLimited(9, "manual"), /saving will/);
   assert.match(describeNotConfigured("saving"), /not set up yet/); assert.match(describeNotConfigured("artwork upload"), /^Artwork upload is not set up yet/);
   assert.doesNotMatch(describeGuestCapacity(), /\d/);
 });
 test("the editor never retries in a storm: a 429 pauses autosave and arms one timer, and closed or paused states skip the autosave effect", () => {
   const source = readFileSync(new URL("../src/components/editor/editor.tsx", import.meta.url), "utf8");
-  assert.match(source, /autosave: "idle" \| "pending" \| "conflict" \| "failed" \| "unavailable" \| "limited"/);
-  assert.match(source, /server\.autosave === "limited" \|\| server\.autosave === "unavailable"\) return;/, "the debounced autosave skips paused and closed states");
+  assert.match(source, /autosave: "idle" \| "pending" \| "conflict" \| "failed" \| "unavailable" \| "limited" \| "blocked"/);
+  assert.match(source, /server\.autosave === "limited" \|\| server\.autosave === "unavailable" \|\| server\.autosave === "blocked"\) return;/, "the debounced autosave skips paused and closed states");
   assert.equal((source.match(/limitTimer\.current = setTimeout/g) ?? []).length, 1, "exactly one timer is armed per limit");
   assert.doesNotMatch(source, /setInterval/);
+  assert.match(source, /const terminal = /, "a terminal 4xx closes the loop (blocked); only 5xx and network errors keep it");
+  assert.match(source, /uploaded\.current\.get\(cacheKey\)/, "an upload that succeeded is never repeated by a later save attempt");
   assert.match(source, /classifyApiFailure\(created\.status/); assert.match(source, /classifyApiFailure\(up\.status/); assert.match(source, /classifyApiFailure\(saved\.status/);
 });
