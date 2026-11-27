@@ -1,0 +1,115 @@
+name: Detect docs-only change
+# Reusable workflow (workflow_call only). It answers one question for the caller: does this pull request or push change
+# nothing but plain Markdown documentation? Callers skip their expensive jobs only when `docs_only` is exactly 'true'
+# (`if: needs.changes.outputs.docs_only != 'true'`), so an empty or missing output always means full CI.
+#
+# Why a job with `if:` rather than `paths-ignore:` on the callers: a workflow skipped by a path filter never reports its
+# checks, and a required check then waits forever. A job skipped by `if:` reports "skipped", which counts as passing.
+#
+# "Docs-only" is deliberately narrow. Every changed path (both sides of a rename) must be one of:
+#   - a Markdown file directly in the repository root (README.md, AGENTS.md, CLAUDE.md, ...), or
+#   - a Markdown file anywhere under docs/,
+# and none may be code-coupled documentation:
+#   - docs/technical/reference-contracts/**  byte-compared to design/reference by `npm run verify:reference`
+#   - docs/implementation/ADR-0022-*         parsed by packages/commerce/tests/composition-limits.test.ts
+#   - docs/implementation/ADR-0020-*         the decision record named by security/dependency-waiver-policy.json
+# Everything else (workflows, package files, security/**, scripts/**, apps/**, packages/**, non-Markdown files under docs/,
+# including M0-protected-files.json) means full CI. Protected docs (docs/technical/00-25, the acceptance matrix) stay
+# docs-only on purpose: the caller's docs-only job still runs `node scripts/integrity.mjs` on them.
+#
+# Fail closed: any doubt (unknown event, unexpected merge shape, unreachable base commit, empty diff, git error) yields
+# docs_only=false.
+on:
+  workflow_call:
+    outputs:
+      docs_only:
+        description: "'true' only when every changed path is plain documentation; anything else means run full CI"
+        value: ${{ jobs.detect.outputs.docs_only }}
+permissions:
+  contents: read
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0 # A push can span many commits, and the base of the diff must be reachable.
+          persist-credentials: false
+      - id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          allow_pattern='^(docs/.+|[^/]+)\.md$'
+          deny_pattern='^(docs/technical/reference-contracts/|docs/implementation/ADR-0020-|docs/implementation/ADR-0022-)'
+          result=false
+          reason=
+          docs=()
+          other=()
+
+          classify() {
+            local base head parents changed
+            case "$EVENT_NAME" in
+              pull_request)
+                # The checkout is GitHub's test merge of the PR head into the base. Its first parent is the base tip,
+                # so the diff below is exactly what merging would change. Any other shape: run everything.
+                parents="$(git rev-list --parents -n 1 HEAD)" || { reason='could not read the merge commit'; return 1; }
+                set -- $parents
+                if [ "$#" -ne 3 ] || [ "$3" != "$PR_HEAD_SHA" ]; then
+                  reason='checkout is not the expected merge of the pull request head'; return 1
+                fi
+                base="$2"; head="$1"
+                ;;
+              push)
+                case "$PUSH_BEFORE" in
+                  ''|*[!0-9a-f]*|0000000000000000000000000000000000000000) reason='push has no usable previous commit (new branch)'; return 1 ;;
+                esac
+                git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null || { reason='previous commit is not reachable (force push?)'; return 1; }
+                base="$PUSH_BEFORE"; head="$PUSH_AFTER"
+                ;;
+              *)
+                reason="event '$EVENT_NAME' is not classified"; return 1
+                ;;
+            esac
+
+            changed="$RUNNER_TEMP/changed-paths.z"
+            # --no-renames lists both the old and the new path of a rename, so moving code into docs/ is never hidden.
+            git diff --name-only -z --no-renames "$base" "$head" -- > "$changed" || { reason='git diff failed'; return 1; }
+            mapfile -d '' files < "$changed" || { reason='could not read the changed path list'; return 1; }
+            if [ "${#files[@]}" -eq 0 ]; then reason='no changed paths found'; return 1; fi
+
+            local f
+            for f in "${files[@]}"; do
+              if [[ "$f" =~ $allow_pattern ]] && ! [[ "$f" =~ $deny_pattern ]]; then docs+=("$f"); else other+=("$f"); fi
+            done
+            if [ "${#other[@]}" -gt 0 ]; then
+              reason="${#other[@]} of ${#files[@]} changed paths are not plain documentation"; return 1
+            fi
+            reason="all ${#files[@]} changed paths are plain documentation"
+            return 0
+          }
+
+          if classify; then result=true; fi
+
+          {
+            if [ "$result" = true ]; then echo '### Docs-only change: expensive jobs are skipped'; else echo '### Full CI will run'; fi
+            echo
+            echo "Reason: $reason"
+            if [ "${#other[@]}" -gt 0 ]; then
+              echo
+              echo 'Paths that need full CI (first 20):'
+              printf '%s\n' "${other[@]:0:20}" | sed 's/^/- `/; s/$/`/'
+            fi
+            if [ "${#docs[@]}" -gt 0 ]; then
+              echo
+              echo "Documentation paths (first 20 of ${#docs[@]}):"
+              printf '%s\n' "${docs[@]:0:20}" | sed 's/^/- `/; s/$/`/'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "docs_only=$result ($reason)"
+          echo "docs_only=$result" >> "$GITHUB_OUTPUT"
