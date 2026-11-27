@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { compositionHttpHandlers, compositionService, compositionAssetStorage, parseCompositionLimits, type CompositionConfig, resolveApiLimits, resolveGuestCreateLimits, resolveLiveGuestDraftsMax, resolveRatePolicies, resolveUploadLimits } from "@vynvori/commerce/composition";
+import { compositionHttpHandlers, compositionService, compositionAssetStorage, isScanPortConfigured, parseCompositionLimits, type CompositionConfig, resolveApiLimits, resolveGuestCreateLimits, resolveLiveGuestDraftsMax, resolveRatePolicies, resolveScanLimits, resolveUploadLimits, unconfiguredScanPort } from "@vynvori/commerce/composition";
 import { compositionStore } from "@vynvori/db/composition";
 import { getIdentityRuntime } from "./auth-runtime";
 import { identitySettings } from "./identity-settings";
@@ -19,6 +19,13 @@ export function compositionSettings(env: Env): CompositionSettings {
   return Object.freeze({ enabled: true, appOrigin: identity.appOrigin, uploads: env.M3_COMPOSITION_UPLOADS === "true" });
 }
 
+/**
+ * The malware-scan port for this deployment (ADR-0022 C5). No scanner is chosen (founder ruling QC), so this is always
+ * `unconfiguredScanPort`, which keeps uploads (`UPLOADS_DISABLED`) and rescans (`SCAN_UNAVAILABLE`) closed. Wiring a real port is a
+ * separate, founder-approved step; no environment variable can switch one on.
+ */
+export function scanPortFor(_env: Env) { return unconfiguredScanPort; }
+
 /** Upload limits for the editor, from the SAME parsed `M3_LIMIT_*` configuration the API enforces; null while any needed key is unset. */
 export function uploadLimitsFor(env: Env): Readonly<{ maxBytes: number; maxPixels: number; maxSidePx: number }> | null {
   const limits = resolveUploadLimits(parseCompositionLimits(env));
@@ -33,7 +40,8 @@ export function uploadLimitsFor(env: Env): Readonly<{ maxBytes: number; maxPixel
  */
 export function editorCapabilities(env: Env): Readonly<{ artworkUpload: boolean; uploadLimits: Readonly<{ maxBytes: number; maxPixels: number; maxSidePx: number }> | null }> {
   try {
-    const settings = compositionSettings(env), artworkUpload = settings.enabled && settings.uploads;
+    // Uploads also need a wired scanner and the scan limits (ADR-0022 D7): never looser than the API's own gate.
+    const settings = compositionSettings(env), artworkUpload = settings.enabled && settings.uploads && isScanPortConfigured(scanPortFor(env)) && resolveScanLimits(parseCompositionLimits(env)) !== null;
     return Object.freeze({ artworkUpload, uploadLimits: artworkUpload ? uploadLimitsFor(env) : null });
   } catch { return Object.freeze({ artworkUpload: false, uploadLimits: null }); }
 }
@@ -44,11 +52,12 @@ export function editorCapabilities(env: Env): Readonly<{ artworkUpload: boolean;
  * (`COMPOSITION_LIMITS_NOT_CONFIGURED`). There is no default for any of them.
  */
 export function serviceConfigFor(env: Env, uploadsEnabled: boolean): CompositionConfig {
-  const parsed = parseCompositionLimits(env), guest = resolveGuestCreateLimits(parsed), uploads = resolveUploadLimits(parsed);
+  const parsed = parseCompositionLimits(env), guest = resolveGuestCreateLimits(parsed), uploads = resolveUploadLimits(parsed), scan = resolveScanLimits(parsed);
   return Object.freeze({
     uploadsEnabled, guestTtlMs: guest ? guest.guestTtlSeconds * 1000 : undefined, imageLimits: uploads?.imageLimits,
     maxAssetsPerComposition: uploads?.maxAssetsPerComposition, maxBytesPerComposition: uploads?.maxBytesPerComposition,
     rate: resolveRatePolicies(parsed), liveGuestDraftsMax: resolveLiveGuestDraftsMax(parsed),
+    scanPort: scanPortFor(env), scanTimeoutMs: scan?.timeoutMs, scanLeaseMs: scan?.leaseMs,
   });
 }
 

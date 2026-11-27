@@ -315,7 +315,7 @@ export function compositionStore(pool: Pool): CompositionStore {
       return (await pool.query(`SELECT * FROM ${S}.composition_versions WHERE composition_id=$1 ORDER BY version_no`, [compositionId])).rows.map(version);
     },
 
-    // ---- ADR-0022 C3b primitives. Not wired into any runtime path yet (C4 to C6 consume them). ---------------------------------
+    // ---- ADR-0022 C3b primitives (C4 wires the limiter and quota, C5 the scan path, C6 the download grants). ---------------------------------
     async listScanEvents(compositionId, assetId, access, now) {
       if (!isId(compositionId) || !isId(assetId) || !(await accessibleAsset(pool, compositionId, assetId, access, now))) return null;
       return (await pool.query(`SELECT * FROM ${S}.asset_scan_events WHERE composition_id=$1 AND asset_id=$2 ORDER BY seq`, [compositionId, assetId])).rows.map(scanEvent);
@@ -368,6 +368,21 @@ export function compositionStore(pool: Pool): CompositionStore {
       return underAssetLock(compositionId, assetId, access, now, async (tx, row) => {
         if (row.scan_status !== "unknown") return rejected("illegal_transition", row);
         return { status: "recorded" as const, event: await appendEvent(tx, row, now, { toStatus: "pending", attemptId: null, reasonCode: input.reasonCode }) };
+      });
+    },
+
+    async recordLateDetection(compositionId, assetId, access, now, input) {
+      // ADR-0022 C5 late detection: scanner-side only (see the port). Lock first, re-read under it, then the born-closed attempt and the event.
+      if (!isId(input?.attemptId)) invalid("attempt id");
+      if (!isDate(now) || !isDate(input.startedAt) || !isDate(input.leaseExpiresAt) || input.leaseExpiresAt <= input.startedAt || input.startedAt > now) invalid("late detection time");
+      if (input.result?.toStatus !== "quarantined") invalid("scan result");
+      assertScanResult(input.result);
+      return underAssetLock(compositionId, assetId, access, now, async (tx, row) => {
+        if (row.scan_status !== "clean" || (await openAttempt(tx, compositionId, assetId))) return rejected("illegal_transition", row);
+        await insertOnce(() => tx.query(`INSERT INTO ${S}.asset_scan_attempts(attempt_id,asset_id,composition_id,started_at,lease_expires_at,finished_at,outcome) VALUES($1,$2,$3,$4,$5,$6,'completed')`,
+          [input.attemptId, assetId, compositionId, input.startedAt, input.leaseExpiresAt, now]));
+        const r = input.result;
+        return { status: "recorded" as const, event: await appendEvent(tx, row, now, { toStatus: "quarantined", attemptId: input.attemptId, scannerId: r.scannerId, engineVersion: r.engineVersion, definitionsVersion: r.definitionsVersion, evidenceRef: r.evidenceRef }) };
       });
     },
 

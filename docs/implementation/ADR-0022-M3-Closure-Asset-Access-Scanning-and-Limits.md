@@ -276,3 +276,81 @@ No schema change: revert the PR. The `0002` tables are untouched. With the PR re
 ### Tests and connection budget
 
 `composition-limiter-suite.ts` (service and HTTP, one list run on the in-memory port and on PostgreSQL), the C4 cases appended to `composition-store-suite.ts`, and the C4 races in `composition-0002-concurrency.test.ts` (cap, count quota, byte quota, same-bytes dedupe, lock queueing, no-access without a lock). No new database file: the D8 budget (40, five files, pool caps 18 and 4) is unchanged; the races use at most 14 concurrent store calls inside the 18-client pool and the sampler assertion still holds.
+
+## C5 — Scan boundary (fail-closed port, strict parser, lifecycle wiring)
+
+Implements D3 and the C5 half of D5 on the C3b store primitives. **No scanner vendor, binary, SDK or service is chosen, integrated or approximated** (founder ruling QC). **No migration**, no new dependency, no new environment variable (the two scan keys, rows 9 and 10, already exist), no flag change; `assets.production_uploads` stays `false`. Every number comes from the existing `M3_LIMIT_*` keys; this section supplies none.
+
+### The boundary (`packages/commerce/src/composition-scan.ts`)
+
+- **`unconfiguredScanPort` is the only `ArtifactScanPort` in the repository.** It is frozen, never answers `clean`, and every call rejects with `SCANNER_NOT_CONFIGURED`. `isScanPortConfigured` is false for it, for a copy under the same id, and for any port whose `scannerId` is empty or padded. `apps/web` wires it unconditionally (`scanPortFor`), so in every deployment of this PR uploads stay refused (`UPLOADS_DISABLED`) and rescans answer `503 COMPOSITION_SCAN_UNAVAILABLE` (`retryable: false`). A static test fails if any other file in `src` defines both `scannerId:` and `scan`.
+- **Strict parser instead of a Zod schema.** The plan named "a Zod schema in commerce". `@vynvori/commerce` does not declare `zod` and dependencies are a root lane, so the parser is hand-written and stricter than a default object schema. The port's answer is untrusted. It must be a plain or null-prototype object with exactly six own **data** properties (`verdict`, `sha256`, `engineVersion`, `definitionsVersion`, `evidenceRef`, `scannedAt`). A symbol key, an extra key, a class instance or an accessor is malformed, and getters are never invoked. A verdict of exactly `clean` or `infected` for the **same** lower-case SHA-256 maps to `clean` or `quarantined`. `error` maps to `unknown(scanner_error)`, a well-formed other hash to `unknown(scan_hash_mismatch)`, and everything else (case variants, non-strings, text outside the C3b 512-character cap, with padding or with anything but printable ASCII, a `scannedAt` that is not RFC 3339 with an offset) to `unknown(scan_result_malformed)`. The recorded `scannerId` is always the port's own, never a field of the answer.
+- **`runScan` makes one bounded call.** It uses an `AbortController` and the typed timeout. A timeout aborts the signal and returns `unknown(scan_timeout)` without waiting for the port, and an answer that arrives later is ignored. A throw maps to `unknown(scanner_threw)`, or to `unknown(scanner_not_configured)` for the default port. Nothing in the module retries (AGENTS rule 7). The module imports only the contracts types and `server-only`, and makes no network or process call (static test).
+- **Scan limits.** `resolveScanLimits` needs both keys, requires the lease to be **strictly longer** than the timeout (otherwise a lease could lapse while the one call is still running, and a second explicit request could start a second billable call), and refuses a timeout above what a JavaScript timer can hold (`2147483647` ms, a structural ceiling, not policy). Any other combination is "not configured": upload and rescan close with `LIMITS_NOT_CONFIGURED`, and the editor never offers upload. The lease is anchored when the attempt is opened, so the service checks again just before the call: if the call could no longer finish inside the lease (opening took longer than the margin), the attempt is closed as `unknown(scan_not_started)` and the scanner is not called.
+
+### Service wiring (`packages/commerce/src/composition.ts`)
+
+- **Uploads are enabled only when the flag is on, storage exists and the port is configured** (`uploadsEnabled`); `assertUploadsAvailable` also requires the scan limits. The upload route keeps the C4 order: ids and credentials, SQL access, flag, configuration, charge `*_ASSET_UPLOAD`, body. Then it inserts the row and **scans inline once** with the bytes it already holds. The upload charge covers that one call. A non-clean outcome is still a stored upload (`201`) with its status.
+- **The scan path** (`scanPending`) reads and verifies the bytes first. Bytes from storage must match the recorded size and SHA-256 (`STORAGE_UNAVAILABLE` otherwise), so a storage failure never leaves an attempt open and mismatched bytes never reach the scanner. Next it opens the attempt (the reservation commits before the call), calls `runScan`, and records the result with `completeScanAttempt` on that same attempt. Times come only from the service clock and the lease from configuration.
+- **Explicit rescan** (`POST /api/v1/compositions/:id/assets/:assetId/scan`, new route). The order is: ids and credentials, SQL access (`authorize`), `assertScanningAvailable`, configuration, charge `*_RESCAN` (the C4 bucket, `admit("rescan")`), then the body check, where **any byte at all is `413`**. The route accepts no outcome, evidence, reason or time. `clean` and `quarantined` are only reported (quarantine is terminal on this path). `unknown` goes through `requestRescan` (`reason_code = rescan_requested`) and is then scanned once; the bytes are read and verified before that edge is recorded, so a storage failure leaves the asset `unknown`. A `pending` asset with no open attempt (a pre-`0002` row, or one stranded by a crash) is scanned once. A `pending` asset whose lease is still running answers `pending` without a call. A lapsed lease is closed as `unknown(lease_expired)` by this explicit request, with **no** call in the same request. Each request makes at most one scanner call.
+- **Choke points (D5).** `readAsset` serves only `clean` and re-reads the status after the storage fetch; every other status gets the same `NOT_FOUND` as a foreign id, which answers Q6(a) with its strict default. Freeze (`ASSET_NOT_CLEAN`) and grants (`asset_not_clean`) were already enforced by C3b and are covered again by the C5 suite. Preflight reports `ASSET_NOT_SCANNED` (hard error, detail = status) for every pinned asset whose known status is not `clean` (`AssetFacts.scanStatus`, additive and optional, so callers that do not know a status are unchanged).
+
+### C3b gates, answered
+
+- **Scanner-side calls are not user-side calls (hard gate).** `completeScanAttempt` and `expireScanAttempt` are named in exactly one file of `packages/commerce/src` and `apps/web/src`: the service. There is exactly one `completeScanAttempt(` call, and its result is the `runScan` result. `composition-http.ts` names no scan primitive and no internal scan field. Static tests in `composition-scan.test.ts` enforce all of this.
+- **Whitelisted HTTP view.** `assetView` returns `assetId`, `sha256`, `mime`, `widthPx`, `heightPx` and `scanStatus` only. The rescan route returns `{ assetId, scanStatus }`. Scan history is not exposed at all, and tests assert that no scanner id, evidence reference, engine or definitions version, or reason code is serialised.
+- **Late detection (`clean -> quarantined`).** A new store primitive, `recordLateDetection`, takes `lockAsset` first (inside `underAssetLock`: access check, lock, re-read). It refuses unless the asset is `clean` with no open attempt, then writes a born-closed attempt row and the `quarantined` event in one transaction. Both stores implement it, and the conformance suite covers it. **It has no caller.** What triggers a late re-scan of a `clean` asset (new definitions, a vendor callback, a schedule), and which bucket or reservation pays for it, depends on the scanner the founder chooses. The static test fails if the service starts calling it without that decision.
+- **Guest expired or claimed during a scan.** `completeScanAttempt` runs the access predicate again. If the guest expired or was claimed while the call ran, the result is **dropped** (`NOT_FOUND` to that request). The asset stays `pending` and the attempt stays open, which is fail-closed. Once the lease passes, the rightful principal (the new owner after a claim) recovers in two explicit requests: the first closes the attempt as `unknown(lease_expired)` without a call, and the second scans. An expired guest draft is unreachable by design. Both cases are tested.
+
+### Editor (`apps/web/src/components/editor`)
+
+`EditorAsset` gains an optional `scanStatus`, and hydration reads it with `parseScanStatus`, which treats any unrecognised value as `pending`, never as clean. `previewHref` decides what the canvas draws:
+
+- Bytes this browser already holds (`data:` URLs) are drawn unchanged, per ruling QB. After an upload the local preview is kept and only the status is updated.
+- Server pixels are drawn only when the status is `clean`.
+- `pending`, `unknown` and `quarantined` server assets render a placeholder rectangle (quarantined has its own styling), so their bytes are never requested.
+
+Layer names and the canvas `aria-label` carry the state, for example "Image · Artwork (safety check pending)". The outcome of an upload or a check is announced in the polite status line. Each status has its own sentence, and none of them names a scanner, a reason or evidence. A selected uploaded layer whose status is `pending` or `unknown` offers **Check again**: one request per press, with no automatic retry. A 429 shows the server's wait. Preflight shows `ASSET_NOT_SCANNED` as "Artwork has not passed the safety check."
+
+### Limits and open items
+
+- **C1b limitation (ruling QA).** No server-backed browser journey exists. Upload, the inline scan, the placeholder states, the announcements and Check again are not reachable with every flag off, so they are covered by handler and PostgreSQL tests and by the editor helper tests. The axe sweep of these states belongs to C7b.
+- **Retention (Q6b).** Nothing deletes `pending`, `unknown` or `quarantined` objects. Storage has no delete, and that is unchanged.
+- **Open for the founder.**
+  - The late-detection trigger, and what pays for it (above).
+  - Recovery after a mid-scan claim costs two explicit requests, and two `*_RESCAN` tokens.
+  - The parser is hand-written instead of Zod (above).
+
+### Security review (C5)
+
+The `security-reviewer` pass on the diff found no CRITICAL or HIGH issue. Dispositions:
+
+- **Fixed (MEDIUM-LOW): the lease could lapse before the call started.** With a small margin between lease and timeout, a slow attempt open could leave less lease than the call needs, and a later explicit request could then expire the attempt and start a second, concurrent call. The pre-call check described above closes this. Tested with a synthetic delayed store.
+- **Fixed (LOW): a storage failure on rescan moved `unknown` to `pending`.** The bytes are now read first. Tested.
+- **Fixed (LOW): scanner text could carry control characters or newlines into append-only rows and logs.** The parser now accepts printable ASCII only. Tested.
+- **Fixed (LOW): the "only implementer" static test missed some `src` roots.** It now walks every `src` root, and it asserts that the contracts file only declares the port type.
+- **Handed to the scanner-choice step (LOW): provider state after a timeout.** `scan_timeout` aborts the signal, but a port that ignores the abort may still be running or billing. The next explicit rescan is a new call. This stays within "at most one call per explicit request", and that request is rate-limited, but AGENTS rule 7 asks for provider-state reconciliation. The real port must offer idempotency or a cancel or status call, and the founder decides whether a `scan_timeout` asset needs a human before it can be rescanned.
+- **Handed to the scanner-choice step (LOW): `scannedAt` is validated for format, not for freshness.** A replayed older `clean` for the same hash would be accepted. The port is server-side and trusted, and a freshness bound needs a chosen scanner.
+- **Accepted (INFO): an inline upload scan that loses access mid-call answers `404`.** The row and object exist, and the asset stays `pending`. This is the documented mid-scan recovery above.
+
+### Rollback
+
+No schema change: revert the PR. `recordLateDetection` is additive and has no caller. With the PR reverted, the C4 behaviour returns: uploads stay `pending` and are never scanned. Uploads must therefore stay closed in every deployment until a scanner and the limits exist. They are closed today in any case, because the only port is `unconfiguredScanPort`.
+
+### Tests and connection budget
+
+- `composition-scan-suite.ts` runs one scenario list on the in-memory port (`composition.test.ts`) and on PostgreSQL. On PostgreSQL it reuses `composition-pg.test.ts` and its single 4-client pool, under `db-integration`. Its scenarios:
+  - the full result-mapping table, including a timeout followed by a late answer
+  - four concurrent rescans give one attempt and one port call
+  - lease expiry never auto-closes, and the lapsed-lease recovery
+  - a pre-`0002` row is scanned
+  - non-clean assets cannot be read, frozen or granted
+  - scan results are not shared across compositions
+  - upload is refused with `unconfiguredScanPort`, after access
+  - mid-scan expiry and claim
+  - the rescan route's order, credentials and body refusal
+  - late detection
+- `composition-scan.test.ts` covers the parser edge cases, `runScan`, the default port, the scan limits and the static gates.
+- `apps/web/tests/editor-scan.test.ts` covers the editor helpers and the canvas binding.
+- The scan double (`syntheticScanPort`) and every number are `SYNTHETIC_*` fixtures in `tests/`.
+- No new database file: the D8 budget (40 connections, five files, pool caps 18 and 4) is unchanged.

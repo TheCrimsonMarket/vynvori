@@ -85,6 +85,14 @@ export interface CompositionStore {
   expireScanAttempt(compositionId: string, assetId: string, access: CompositionAccess, now: Date, input: { attemptId: string }): Promise<ScanTransitionOutcome>;
   /** Explicit rescan request: `unknown -> pending` with a reason code. */
   requestRescan(compositionId: string, assetId: string, access: CompositionAccess, now: Date, input: { reasonCode: string }): Promise<ScanTransitionOutcome>;
+  /**
+   * Late detection (ADR-0022 C5): records `clean -> quarantined` for a scanner result that arrived for an already-clean asset.
+   * SCANNER-SIDE ONLY: reachable solely from the server-side scan path that obtained the verdict from `ArtifactScanPort`, never
+   * from a route that accepts a verdict, evidence or a time from a client. Takes the per-asset lock first (composition lock, then
+   * asset lock), re-reads the status under it, and writes the attempt that produced the verdict (born closed) and the event in one
+   * transaction. Any other current status is `illegal_transition`; nothing is written.
+   */
+  recordLateDetection(compositionId: string, assetId: string, access: CompositionAccess, now: Date, input: { attemptId: string; startedAt: Date; leaseExpiresAt: Date; result: LateDetectionResult }): Promise<ScanTransitionOutcome>;
 
   /** Mint: stores only the token hash, bound to the caller's principal; the asset must be `clean` (checked under the asset lock). */
   createDownloadGrant(compositionId: string, assetId: string, access: CompositionAccess, now: Date, input: { grantId: string; tokenHash: string; expiresAt: Date }): Promise<CreateGrantOutcome>;
@@ -123,6 +131,8 @@ export type ScanAttemptRecord = Readonly<{
 export type ScanResultEvent =
   | Readonly<{ toStatus: "clean" | "quarantined"; scannerId: string; engineVersion: string; definitionsVersion: string; evidenceRef: string }>
   | Readonly<{ toStatus: "unknown"; reasonCode: string; scannerId?: string }>;
+/** Full scanner evidence for a late detection (`clean -> quarantined`). */
+export type LateDetectionResult = Readonly<{ toStatus: "quarantined"; scannerId: string; engineVersion: string; definitionsVersion: string; evidenceRef: string }>;
 export type OpenScanAttemptOutcome =
   | { status: "opened"; attempt: ScanAttemptRecord }
   | { status: "not_found" }
@@ -143,9 +153,10 @@ export type CreateGrantOutcome = { status: "created"; grant: DownloadGrantRecord
 
 
 /**
- * Malware-scan boundary (ADR-0022 D3). TYPES ONLY: no scanner is chosen, integrated or approximated, and nothing here is
- * implemented by M3 yet. Current status is derived from an append-only event log (added by later steps); no event means "pending".
- * Every outcome other than a well-formed clean/infected verdict for the same bytes maps to "unknown", never to "clean".
+ * Malware-scan boundary (ADR-0022 D3). TYPES ONLY here: no scanner is chosen, integrated or approximated. The only in-repo
+ * implementation is `unconfiguredScanPort` (commerce, C5), which never answers `clean`. Current status is derived from the
+ * append-only event log; no event means "pending". Every outcome other than a well-formed clean/infected verdict for the same
+ * bytes maps to "unknown", never to "clean".
  */
 export type ArtifactScanStatus = "pending" | "clean" | "quarantined" | "unknown";
 export type ArtifactScanRequest = Readonly<{ assetId: string; sha256: string; byteSize: number; mime: string; bytes: Uint8Array }>;

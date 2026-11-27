@@ -5,6 +5,7 @@ import { compositionStore } from "@vynvori/db/composition";
 import { compositionConformance } from "./composition-suite";
 import { storeConformance, type StoreHarness } from "./composition-store-suite";
 import { limiterConformance } from "./composition-limiter-suite";
+import { scanConformance } from "./composition-scan-suite";
 import { SYNTHETIC_SCAN_EVIDENCE } from "./composition-synthetic";
 import { freshComposition } from "../../db/tests/composition-fixture";
 // CI sets CI_REQUIRE_PG_TESTS=1 so a missing database fails the run instead of silently skipping.
@@ -44,3 +45,4 @@ async function pgHarness(): Promise<StoreHarness> {
 compositionConformance("composition service (PostgreSQL store)", pgHarness, { skip });
 storeConformance("composition store primitives (PostgreSQL store)", pgHarness, { skip });
 limiterConformance("composition limiter (PostgreSQL store)", pgHarness, { skip });
+scanConformance("composition scan boundary (PostgreSQL store)", pgHarness, { skip });

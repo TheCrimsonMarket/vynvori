@@ -169,12 +169,19 @@ export const PreflightIssueSchema = z.object({
   code: z.enum([
     "PROFILE_MISMATCH", "ZONE_UNKNOWN", "TOO_MANY_LAYERS", "TEXT_TOO_LONG", "LAYER_OUT_OF_BOUNDS", "LAYER_OUTSIDE_SAFE_MARGIN",
     "ASSET_MISSING", "ASSET_HASH_MISMATCH", "FONT_UNLICENSED", "LOW_EFFECTIVE_PPI", "PRINT_PROFILE_UNAPPROVED",
+    // ADR-0022 D5 (C5): an image whose server-side malware scan is not `clean` (detail = the scan status). Freeze refuses it.
+    "ASSET_NOT_SCANNED",
   ]),
   severity: z.enum(["hard_error", "warning", "info"]),
   zoneId: z.string().optional(), layerId: z.string().optional(), detail: z.string().optional(),
 }).strict();
 export type PreflightIssue = z.infer<typeof PreflightIssueSchema>;
-export type AssetFacts = Readonly<{ sha256: string; widthPx: number; heightPx: number }>;
+/**
+ * `scanStatus` (ADR-0022 C5, optional): the asset's server-side malware-scan status. Absent means the caller has no server record
+ * (for example the editor's local preview of bytes the browser already holds, ruling QB). Present and not `clean` adds the
+ * hard error `ASSET_NOT_SCANNED`; the store refuses to freeze such an asset in any case.
+ */
+export type AssetFacts = Readonly<{ sha256: string; widthPx: number; heightPx: number; scanStatus?: "pending" | "clean" | "quarantined" | "unknown" }>;
 export type PreflightResult = Readonly<{
   /** M3 can never produce `passed_pending_human_qa`: no approved profile exists. */
   state: "preview_only" | "blocked";
@@ -210,8 +217,11 @@ export function runPreviewPreflight(
         const asset = assets.get(layer.sourceAssetId);
         if (!asset) add({ code: "ASSET_MISSING", severity: "hard_error", zoneId: page.zoneId, layerId: layer.layerId });
         else if (asset.sha256 !== layer.sourceAssetSha256) add({ code: "ASSET_HASH_MISMATCH", severity: "hard_error", zoneId: page.zoneId, layerId: layer.layerId });
-        else if (effectivePpi(asset, layer) < profile.limits.provisionalMinEffectivePpi) {
-          add({ code: "LOW_EFFECTIVE_PPI", severity: "hard_error", zoneId: page.zoneId, layerId: layer.layerId, detail: `provisional minimum ${profile.limits.provisionalMinEffectivePpi} PPI` });
+        else {
+          if (asset.scanStatus !== undefined && asset.scanStatus !== "clean") add({ code: "ASSET_NOT_SCANNED", severity: "hard_error", zoneId: page.zoneId, layerId: layer.layerId, detail: asset.scanStatus });
+          if (effectivePpi(asset, layer) < profile.limits.provisionalMinEffectivePpi) {
+            add({ code: "LOW_EFFECTIVE_PPI", severity: "hard_error", zoneId: page.zoneId, layerId: layer.layerId, detail: `provisional minimum ${profile.limits.provisionalMinEffectivePpi} PPI` });
+          }
         }
       } else {
         const font = fonts.get(layer.fontAssetId);

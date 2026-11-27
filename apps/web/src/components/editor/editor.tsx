@@ -8,6 +8,7 @@ import {
   KEY_HELP, PT_TO_MM, addImageLayer, addTextLayer, commit, deleteLayer, describeLayerCount, describeMove, duplicateLayer, font, isOutside, keyStep, layerActionName, layerTitle, layersOf, moveInStack,
   neighbourAfterDelete, nudge, parseMm, profile, redo, resizeKeepingAspect, sceneKey, stackPosition, startHistory, summarizeIssues, undo, updateLayer, zoneOf,
   checkUploadDimensions, checkUploadFileSize, classifyApiFailure, describeExpiry, describeGuestCapacity, describeNotConfigured, describeRateLimited, type ApiFailure, type EditorAsset, type LayerPatch, type UploadLimits,
+  canRequestScan, describeScanOutcome, parseScanStatus, previewHref, scanLabel, type ScanStatus,
 } from "./model";
 
 type ServerState = { compositionId: string | null; revision: number; owner: "guest" | "owner" | null; autosave: "idle" | "pending" | "conflict" | "failed" | "unavailable" | "limited" | "blocked"; lastSavedKey: string | null; expiresAt: string | null; versions: VersionView[]; currentVersionId: string | null };
@@ -16,7 +17,7 @@ const ACCEPT = "image/png,image/jpeg,image/webp";
 const ISSUE_TEXT: Record<string, string> = {
   PROFILE_MISMATCH: "The composition does not match the print profile.", ZONE_UNKNOWN: "Unknown print zone.", TOO_MANY_LAYERS: "Too many layers in this zone.",
   TEXT_TOO_LONG: "Text is too long.", LAYER_OUT_OF_BOUNDS: "Layer extends outside the zone.", LAYER_OUTSIDE_SAFE_MARGIN: "Layer is inside the safety margin.",
-  ASSET_MISSING: "Artwork is missing.", ASSET_HASH_MISMATCH: "Artwork changed since it was added.", FONT_UNLICENSED: "Font is not available.",
+  ASSET_MISSING: "Artwork is missing.", ASSET_HASH_MISMATCH: "Artwork changed since it was added.", ASSET_NOT_SCANNED: "Artwork has not passed the safety check.", FONT_UNLICENSED: "Font is not available.",
   LOW_EFFECTIVE_PPI: "Artwork resolution is low at this size (provisional threshold).", PRINT_PROFILE_UNAPPROVED: "Preview only: this profile is not approved for printing.",
 };
 async function sha256Hex(bytes: ArrayBuffer): Promise<string> { return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map(b => b.toString(16).padStart(2, "0")).join(""); }
@@ -133,7 +134,7 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
       if (!loaded.ok) { if (initialId) notify(loaded.status === 503 ? "Saving and restoring are not available in this preview." : "This composition could not be opened. It may have expired or belong to another account."); return; }
       const parsed = CompositionSceneV1Schema.safeParse(loaded.data.scene); if (!parsed.success) return;
       const next = new Map<string, EditorAsset>();
-      for (const a of loaded.data.assets as { assetId: string; sha256: string; widthPx: number; heightPx: number }[]) next.set(a.assetId, { assetId: a.assetId, sha256: a.sha256, widthPx: a.widthPx, heightPx: a.heightPx, name: "Artwork", url: `/api/v1/compositions/${id}/assets/${a.assetId}`, persisted: true });
+      for (const a of loaded.data.assets as { assetId: string; sha256: string; widthPx: number; heightPx: number; scanStatus?: unknown }[]) next.set(a.assetId, { assetId: a.assetId, sha256: a.sha256, widthPx: a.widthPx, heightPx: a.heightPx, name: "Artwork", url: `/api/v1/compositions/${id}/assets/${a.assetId}`, persisted: true, scanStatus: parseScanStatus(a.scanStatus) }); // server pixels load only once clean (previewHref)
       setAssets(next); setHistory(startHistory(parsed.data));
       setServer({ compositionId: id, revision: loaded.data.draft.draftRevision, owner: loaded.data.draft.ownerKind === "authenticated_owner" ? "owner" : "guest", autosave: "idle", lastSavedKey: sceneKey(parsed.data), expiresAt: loaded.data.expiresAt ?? null, versions: loaded.data.versions, currentVersionId: loaded.data.currentVersionId });
       notify("Draft restored.");
@@ -201,7 +202,7 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
   // A 4xx other than 429 is terminal for the autosave (an expired draft, an artwork quota, a rejected file): retrying it would only repeat
   // the same refusal, and an upload retry would burn the shared upload budget. "blocked" waits for the person (Save, or a reload).
   const terminal = (status: number) => status >= 400 && status < 500 && status !== 429 && status !== 408;
-  const uploaded = useRef(new Map<string, string>()); // `${compositionId}:${local asset id}` -> server asset id, kept across attempts so a failed PUT never re-uploads
+  const uploaded = useRef(new Map<string, { assetId: string; scanStatus: ScanStatus }>()); // `${compositionId}:${local asset id}` -> server asset, kept across attempts so a failed PUT never re-uploads
   const limitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (limitTimer.current) clearTimeout(limitTimer.current); }, []);
   function pauseForRateLimit(failure: ApiFailure) {
@@ -226,18 +227,20 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
   async function saveDraft(): Promise<boolean> {
     setServer(s => ({ ...s, autosave: "pending" }));
     const target = await ensureComposition(); if (!target) return false;
-    let working = scene; const remap = new Map<string, EditorAsset>(assets);
+    let working = scene; const remap = new Map<string, EditorAsset>(assets), scanned: string[] = [];
     for (const asset of assets.values()) {
       if (asset.persisted || !bytes.current.has(asset.assetId)) continue;
       const cacheKey = `${target.id}:${asset.assetId}`, known = uploaded.current.get(cacheKey);
-      const stored = bytes.current.get(asset.assetId)!, up = known ? { ok: true as const, status: 200, data: { asset: { assetId: known } } } : await api(`/api/v1/compositions/${target.id}/assets`, "POST", undefined, { bytes: stored.data, type: stored.type });
+      const stored = bytes.current.get(asset.assetId)!, up = known ? { ok: true as const, status: 200, data: { asset: known } } : await api(`/api/v1/compositions/${target.id}/assets`, "POST", undefined, { bytes: stored.data, type: stored.type });
       if (!up.ok) {
         const failure = classifyApiFailure(up.status, up.data);
         if (failure.kind === "rate_limited") { notify(describeRateLimited(failure.retryAfterSeconds, "automatic")); pauseForRateLimit(failure); return false; }
         if (failure.kind === "not_configured") { notify(describeNotConfigured("artwork upload")); setServer(s => ({ ...s, autosave: "unavailable" })); return false; }
       }
       if (!up.ok) { notify(up.status === 503 ? "Artwork upload is not available in this preview; your work stays in this tab only." : up.status === 415 ? "That file type is not accepted." : "Artwork could not be saved."); setServer(s => ({ ...s, autosave: up.status === 503 ? "unavailable" : terminal(up.status) ? "blocked" : "failed" })); return false; }
-      const serverId = up.data.asset.assetId as string; uploaded.current.set(cacheKey, serverId); remap.set(serverId, { ...asset, assetId: serverId, persisted: true, url: `/api/v1/compositions/${target.id}/assets/${serverId}` }); remap.delete(asset.assetId);
+      const serverId = up.data.asset.assetId as string, scanStatus = parseScanStatus(up.data.asset.scanStatus); uploaded.current.set(cacheKey, { assetId: serverId, scanStatus });
+      // The local data URL stays: this browser already holds these bytes (ruling QB). Only the scan status comes from the server.
+      remap.set(serverId, { ...asset, assetId: serverId, persisted: true, scanStatus }); remap.delete(asset.assetId); if (!known) scanned.push(describeScanOutcome(asset.name, scanStatus));
       working = { ...working, pages: working.pages.map(p => ({ ...p, layers: p.layers.map(l => l.kind === "image" && l.sourceAssetId === asset.assetId ? { ...l, sourceAssetId: serverId } : l) })) };
     }
     const saved = await api(`/api/v1/compositions/${target.id}`, "PUT", { expectedRevision: target.revision, scene: working });
@@ -250,7 +253,7 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
     if (!saved.ok) { setServer(s => ({ ...s, autosave: terminal(saved.status) ? "blocked" : "failed" })); notify(saved.status === 401 ? "Your draft expired or you were signed out. Start a new draft or sign in." : "Could not save. Your edits are still here."); return false; }
     setAssets(remap); setHistory(h => ({ ...h, present: working }));
     setServer(s => ({ ...s, compositionId: target.id, revision: saved.data.draft.draftRevision, autosave: "idle", lastSavedKey: sceneKey(working), expiresAt: saved.data.expiresAt ?? s.expiresAt, owner: saved.data.draft.ownerKind === "authenticated_owner" ? "owner" : "guest" }));
-    notify(saved.data.draft.ownerKind === "authenticated_owner" ? "Saved to your account." : `Draft saved on this device ${describeExpiry(saved.data.expiresAt ?? server.expiresAt)}. Sign in to keep it.`); return true;
+    notify([saved.data.draft.ownerKind === "authenticated_owner" ? "Saved to your account." : `Draft saved on this device ${describeExpiry(saved.data.expiresAt ?? server.expiresAt)}. Sign in to keep it.`, ...scanned].join(" ")); return true;
   }
   const saveRef = useRef<() => Promise<boolean>>(async () => false);
   useEffect(() => { saveRef.current = saveDraft; });
@@ -291,13 +294,28 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
     } finally { setBusy(false); }
   }
 
+  /** One explicit safety-check request per press (no automatic retry). The server decides; the client sends no outcome. */
+  async function checkAgain(assetId: string) {
+    const asset = assets.get(assetId); if (!server.compositionId || !asset || !canRequestScan(asset)) return; setBusy(true);
+    try {
+      const response = await api(`/api/v1/compositions/${server.compositionId}/assets/${assetId}/scan`, "POST");
+      if (!response.ok) { const failure = classifyApiFailure(response.status, response.data); notify(failure.kind === "rate_limited" ? describeRateLimited(failure.retryAfterSeconds, "manual") : response.status === 503 ? "Artwork safety checks are not available yet." : "The safety check could not be requested."); return; }
+      const scanStatus = parseScanStatus(response.data?.asset?.scanStatus);
+      setAssets(previous => { const found = previous.get(assetId); if (!found) return previous; const next = new Map(previous); next.set(assetId, { ...found, scanStatus }); return next; });
+      notify(describeScanOutcome(asset.name, scanStatus));
+    } finally { setBusy(false); }
+  }
+
   // --- preflight (same pure function the server uses at freeze)
-  const facts = useMemo(() => new Map<string, AssetFacts>([...assets.values()].map(a => [a.assetId, { sha256: a.sha256, widthPx: a.widthPx, heightPx: a.heightPx }])), [assets]);
+  const facts = useMemo(() => new Map<string, AssetFacts>([...assets.values()].map(a => [a.assetId, { sha256: a.sha256, widthPx: a.widthPx, heightPx: a.heightPx, ...(a.persisted && a.scanStatus ? { scanStatus: a.scanStatus } : {}) }])), [assets]);
   const preflight = useMemo(() => runPreviewPreflight(scene, profile, facts, new Map(LICENSED_FONTS.map(f => [f.fontAssetId, f]))), [scene, facts]);
   const issues = preflight.issues.filter(issue => issue.zoneId === undefined || issue.zoneId === zoneId);
 
   const issueSummary = useDebounced(summarizeIssues(issues), ISSUE_SUMMARY_DEBOUNCE_MS);
-  const layerName = (layer: EditorLayerV1) => layerTitle(layer, layer.kind === "image" ? assets.get(layer.sourceAssetId)?.name : undefined);
+  const layerName = (layer: EditorLayerV1) => {
+    const asset = layer.kind === "image" ? assets.get(layer.sourceAssetId) : undefined, title = layerTitle(layer, asset?.name), state = scanLabel(asset?.scanStatus);
+    return state ? `${title} (${state})` : title;
+  };
   /** Applies a validated number, skips a no-op (no empty undo step), and says what changed, including side effects such as the locked aspect ratio. */
   function applyNumber(layer: EditorLayerV1, label: string, unit: string, value: number, read: (layer: EditorLayerV1) => number, apply: (n: number) => CompositionSceneV1) {
     return (n: number) => {
@@ -335,13 +353,14 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
             <rect x={zone.safeMarginMm} y={zone.safeMarginMm} width={zone.widthMm - 2 * zone.safeMarginMm} height={zone.heightMm - 2 * zone.safeMarginMm} fill="none" stroke="#939187" strokeWidth={0.3} strokeDasharray="2 2" />
             <svg x={0} y={0} width={zone.widthMm} height={zone.heightMm} viewBox={`0 0 ${zone.widthMm} ${zone.heightMm}`} overflow="hidden">
               {layers.filter(l => l.visible).map(layer => {
-                const asset = layer.kind === "image" ? assets.get(layer.sourceAssetId) : null, cx = layer.xMm + layer.widthMm / 2, cy = layer.yMm + layer.heightMm / 2, on = layer.layerId === selected;
+                const asset = layer.kind === "image" ? assets.get(layer.sourceAssetId) : null, href = asset ? previewHref(asset) : null, cx = layer.xMm + layer.widthMm / 2, cy = layer.yMm + layer.heightMm / 2, on = layer.layerId === selected;
                 return (
                   <g key={layer.layerId} data-layer-id={layer.layerId} transform={`rotate(${layer.rotationDeg} ${cx} ${cy})`} tabIndex={0} role="button" aria-pressed={on} style={{ cursor: "move", touchAction: "none" }}
-                    aria-describedby="ed-key-help" aria-label={`${layer.kind === "text" ? `Text layer: ${layer.text}` : `Image layer: ${asset?.name ?? "missing"}`}, x ${layer.xMm} y ${layer.yMm} millimetres`}
+                    aria-describedby="ed-key-help" aria-label={`${layer.kind === "text" ? `Text layer: ${layer.text}` : `Image layer: ${asset?.name ?? "missing"}${scanLabel(asset?.scanStatus) ? `, ${scanLabel(asset?.scanStatus)}` : ""}`}, x ${layer.xMm} y ${layer.yMm} millimetres`}
                     onPointerDown={e => onPointerDown(e, layer)} onFocus={() => setSelected(layer.layerId)} onKeyDown={e => onKeyDown(e, layer)}>
                     {layer.kind === "image"
-                      ? (asset ? <image href={asset.url} x={layer.xMm} y={layer.yMm} width={layer.widthMm} height={layer.heightMm} preserveAspectRatio="none" /> : <rect x={layer.xMm} y={layer.yMm} width={layer.widthMm} height={layer.heightMm} fill="#49483f" />)
+                      ? (href ? <image href={href} x={layer.xMm} y={layer.yMm} width={layer.widthMm} height={layer.heightMm} preserveAspectRatio="none" />
+                        : <rect data-scan={asset?.scanStatus ?? "missing"} x={layer.xMm} y={layer.yMm} width={layer.widthMm} height={layer.heightMm} fill={asset?.scanStatus === "quarantined" ? "#3a1f1b" : "#49483f"} stroke={asset?.scanStatus === "quarantined" ? "#c9614f" : "none"} strokeWidth={0.4} strokeDasharray="4 2" />)
                       : <text x={layer.xMm} y={layer.yMm} fontSize={layer.fontSizePt * PT_TO_MM} fill={layer.color} style={{ fontFamily: "var(--font-archivo), Archivo, sans-serif" }} dominantBaseline="hanging" aria-hidden="true">{layer.text}</text>}
                     <rect x={layer.xMm} y={layer.yMm} width={layer.widthMm} height={layer.heightMm} fill="transparent" stroke={on ? "#f1efe9" : "transparent"} strokeWidth={0.5} strokeDasharray={on ? "3 2" : undefined} />
                   </g>);
@@ -387,6 +406,10 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
               {numeric(current, "Height", current.heightMm, l => l.heightMm, n => (current.kind === "image" && aspectLock ? resizeKeepingAspect(scene, zoneId, current.layerId, "heightMm", n) : updateLayer(scene, zoneId, current.layerId, { heightMm: n })))}
               {numeric(current, "Rotation", current.rotationDeg, l => l.rotationDeg, n => updateLayer(scene, zoneId, current.layerId, { rotationDeg: n }), "°")}
               {current.kind === "image" && <label className="ed-check"><input type="checkbox" checked={aspectLock} onChange={e => setAspectLock(e.currentTarget.checked)} /> Lock aspect ratio</label>}
+              {current.kind === "image" && scanLabel(assets.get(current.sourceAssetId)?.scanStatus) && (
+                <p className="muted ed-caption" id="ed-scan-state">Artwork {scanLabel(assets.get(current.sourceAssetId)?.scanStatus)}. Server copies are shown only after they pass.</p>)}
+              {current.kind === "image" && canRequestScan(assets.get(current.sourceAssetId)) && (
+                <Button variant="outline" disabled={busy} aria-describedby="ed-scan-state" onClick={() => void checkAgain(current.sourceAssetId)}>Check again</Button>)}
               {current.kind === "text" && (<>
                 <label className="ed-field"><span>Text</span><input value={current.text} maxLength={profile.limits.maxTextChars} onChange={e => patch(current, { text: e.currentTarget.value })} aria-label="Text content" /></label>
                 {numeric(current, "Size", current.fontSizePt, l => (l.kind === "text" ? l.fontSizePt : 0), n => updateLayer(scene, zoneId, current.layerId, { fontSizePt: n }), "pt")}
