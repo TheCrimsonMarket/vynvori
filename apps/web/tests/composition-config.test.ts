@@ -71,3 +71,11 @@ test("C5: no scanner is chosen, so the runtime always wires unconfiguredScanPort
   assert.deepEqual([inverted.scanTimeoutMs, inverted.scanLeaseMs], [undefined, undefined], "a lease that does not outlive the timeout closes scanning");
   assert.equal(publicConfig.features["assets.production_uploads"], false);
 });
+
+test("C6: the download-grant TTL comes only from M3_LIMIT_DOWNLOAD_GRANT_TTL_SECONDS; unset or invalid closes minting, with no default", () => {
+  // SYNTHETIC value, not policy.
+  assert.equal(serviceConfigFor({ M3_LIMIT_DOWNLOAD_GRANT_TTL_SECONDS: "21" }, false).downloadGrantTtlMs, 21_000);
+  for (const env of [{}, { M3_LIMIT_DOWNLOAD_GRANT_TTL_SECONDS: "0" }, { M3_LIMIT_DOWNLOAD_GRANT_TTL_SECONDS: "-1" }, { M3_LIMIT_DOWNLOAD_GRANT_TTL_SECONDS: "2.5" }]) {
+    assert.equal(serviceConfigFor(env, true).downloadGrantTtlMs, undefined, JSON.stringify(env));
+  }
+});
