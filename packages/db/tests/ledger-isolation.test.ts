@@ -12,6 +12,7 @@ import * as ledgerReservations from "../src/ledger-reservations";
 import * as ledgerEntitlements from "../src/ledger-entitlements";
 import * as ledgerSettlement from "../src/ledger-settlement";
 import * as ledgerEvidence from "../src/ledger-evidence";
+import * as ledgerInvariants from "../src/ledger-invariants";
 import { holdReservation, settleReservation } from "../src/ledger-settlement";
 import { authorizeQuote, recordWorkflowRef, releaseReservation } from "../src/ledger-reservations";
 import { issueQuote, renewQuote } from "../src/ledger-quotes";
@@ -29,7 +30,7 @@ function walk(dir: string, out: string[] = []): string[] {
   }
   return out;
 }
-const ledgerSources = new Set(["packages/db/src/ledger-core.ts", "packages/db/src/ledger-migrations.ts", "packages/db/src/ledger-quotes.ts", "packages/db/src/ledger-promo.ts", "packages/db/src/ledger-reservations.ts", "packages/db/src/ledger-settlement.ts", "packages/db/src/ledger-evidence.ts", "packages/db/src/ledger-entitlements.ts"]);
+const ledgerSources = new Set(["packages/db/src/ledger-core.ts", "packages/db/src/ledger-migrations.ts", "packages/db/src/ledger-quotes.ts", "packages/db/src/ledger-promo.ts", "packages/db/src/ledger-reservations.ts", "packages/db/src/ledger-settlement.ts", "packages/db/src/ledger-evidence.ts", "packages/db/src/ledger-entitlements.ts", "packages/db/src/ledger-invariants.ts"]);
 const files = ["apps", "packages", "services", "scripts"].flatMap(dir => { try { return walk(join(root, dir)); } catch { return []; } });
 
 test("no app or non-test module imports the ledger (D13)", () => {
@@ -44,7 +45,7 @@ test("no app or non-test module imports the ledger (D13)", () => {
 });
 
 test("packages/db/src exports no numeric constants and nothing that mints or registers credits", () => {
-  for (const [name, module] of Object.entries({ ledgerCore, ledgerMigrations, ledgerQuotes, ledgerPromo, ledgerReservations, ledgerSettlement, ledgerEvidence, ledgerEntitlements })) {
+  for (const [name, module] of Object.entries({ ledgerCore, ledgerMigrations, ledgerQuotes, ledgerPromo, ledgerReservations, ledgerSettlement, ledgerEvidence, ledgerEntitlements, ledgerInvariants })) {
     for (const [key, value] of Object.entries(module)) {
       assert.ok(typeof value !== "number" && typeof value !== "bigint", `${name}.${key} must not be a numeric constant`);
       assert.doesNotMatch(key, /mint|synthetic|testing|register.*source|price|rate|package/i, `${name}.${key}`);
@@ -74,6 +75,10 @@ test("ledger-entitlements exposes exactly the reviewed API (S7: slot and bundle-
   assert.deepEqual(Object.keys(ledgerEntitlements).sort(), ["beginBundleClosure", "closeBundleWithForfeiture", "consumeRefinementSlot", "getBundleState", "markRefinementPending", "markRefinementUnknown", "openRefinements", "recordBundleDelivery", "reopenBundleAfterUnchargedFinal", "restoreRefinementSlot", "skipRefinementSlot"]);
 });
 
+test("ledger-invariants exposes exactly the reviewed API (S8: two read-only checks; no repair, release or resolve export)", () => {
+  assert.deepEqual(Object.keys(ledgerInvariants).sort(), ["checkWalletInvariants", "findOrphanedReservations"]);
+});
+
 test("ledger-settlement and ledger-evidence expose exactly the reviewed API (S6; nothing resolves a hold, grants, or reads vendor cost)", () => {
   assert.deepEqual(Object.keys(ledgerSettlement).sort(), ["holdReservation", "settleReservation"]);
   assert.deepEqual(Object.keys(ledgerEvidence).sort(), ["recordVendorCostEvidence"]);
@@ -89,17 +94,38 @@ test("S6 vendor-cost isolation (static): only ledger-evidence.ts writes or reads
       assert.doesNotMatch(code, /runLedgerCommand|FOR\s+UPDATE|\bBEGIN\b|UPDATE\s|DELETE\s/i, "evidence code takes no wallet lock, opens no command and never updates or deletes");
       continue;
     }
-    assert.doesNotMatch(code, /vendor_cost/i, `${file} never touches vendor-cost evidence`);
+    // S8: the read-only checker names the table exactly once, in its trigger manifest (it verifies the append-only guards exist), and never selects from it.
+    assert.doesNotMatch(file === "ledger-invariants.ts" ? code.replace('...immutable("vendor_cost_evidence"),', "") : code, /vendor_cost/i, `${file} never touches vendor-cost evidence`);
   }
 });
 
 test("S6: settle and hold entries are written only by ledger-settlement.ts, and no TypeScript names reconciliation_hold as a source state", () => {
   for (const file of dbSrcFiles()) {
     const code = stripComments(readFileSync(join(root, "packages/db/src", file), "utf8"));
+    // S8: ledger-invariants.ts is the one READ-ONLY module that must NAME these states and entry kinds (D14: held bucket and hold-state orphans).
+    // It is exempt from the two patterns below only because it is proven write-free by the next test; every other file is unchanged.
+    if (file === "ledger-invariants.ts") continue;
     if (file !== "ledger-settlement.ts") assert.doesNotMatch(code, /'(settle|hold)'\s*,/, `${file} writes no settle or hold entry`);
     assert.doesNotMatch(code, /reconciliation_hold/, `${file}: no code path reads or leaves reconciliation_hold (W1 has no remedy; the database guard has no edge out)`);
   }
   for (const key of Object.keys(ledgerSettlement)) assert.doesNotMatch(key, /resolve|unhold|remedy|refund|release/i, key);
+});
+
+test("S8: ledger-invariants.ts is write-free (static): no DML, DDL, lock, advisory lock or command, and every SQL statement starts with SELECT or WITH", () => {
+  const code = stripComments(readFileSync(join(root, "packages/db/src/ledger-invariants.ts"), "utf8"));
+  assert.doesNotMatch(code, /\b(INSERT|UPDATE|DELETE|TRUNCATE|CREATE|ALTER|DROP|GRANT|REVOKE|COPY|VACUUM|ANALYZE|REINDEX|REFRESH|CALL|DO|LISTEN|NOTIFY|DISCARD|RESET|SET\s+(LOCAL|SESSION|ROLE)|COMMIT)\b(?=\s+[A-Za-z_"'(])(?!\s+(?:of|from)\b)/, "no write verb followed by an operand");
+  // The duplicate-key re-derivation groups by the idempotency key to COUNT duplicates; that one fragment is allowed and nothing ever selects the key.
+  const withoutCount = code.replace("GROUP BY scope, idempotency_key HAVING count(*) > 1", "");
+  assert.doesNotMatch(withoutCount, /FOR\s+(UPDATE|SHARE|NO\s+KEY)|pg_advisory|pg_sleep|set_config\('(?:role|session_authorization|session_replication_role|default_transaction_read_only|transaction_read_only)|runLedgerCommand|appendGrantEntry|idempotency_key|workflow_ref\s*(?:=|,)/i);
+  const direct = [...code.matchAll(/\.query\(\s*"([^"]*)"/g)].map(m => m[1]!.trim());
+  for (const statement of direct) assert.match(statement, /^(SELECT |BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY$|ROLLBACK$)/, statement.slice(0, 60));
+  const templates = [...code.matchAll(/`([^`]*)`/g)].map(m => m[1]!.trim()).filter(t => /\b(SELECT|INSERT|UPDATE|DELETE|WITH)\b/.test(t));
+  assert.ok(templates.length >= 12 && direct.length >= 3, "scanner found the statements");
+  for (const statement of templates) assert.match(statement, /^(SELECT|WITH)\b/, statement.slice(0, 60));
+  // Case-insensitive on every SQL statement (direct strings and templates), so lowercase DML or a data-modifying CTE cannot hide.
+  for (const statement of [...direct, ...templates]) assert.doesNotMatch(statement.replace(/'[^']*'/g, "''"), /\b(insert|update|delete|truncate|create|alter|drop|grant|revoke|copy|call|do|commit|lock|merge|vacuum|reindex|refresh|discard|listen|notify)\b/i, statement.slice(0, 60));
+  assert.match(code, /BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY/);
+  for (const key of Object.keys(ledgerInvariants)) assert.doesNotMatch(key, /repair|fix|release|resolve|settle|hold|grant|write|mutate/i, key);
 });
 
 // ADR-0021 S3 addendum A4: BINDING for every future step. All command kinds implemented anywhere under packages/db/src.
@@ -245,7 +271,9 @@ test("no source module can register a grant source or write the grant-source reg
   for (const file of readdirSync(src).filter(f => f.endsWith(".ts"))) {
     const text = readFileSync(join(src, file), "utf8");
     assert.doesNotMatch(text, /(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+\S*ledger_grant_sources/i, file);
-    assert.doesNotMatch(text, /session_replication_role|DISABLE\s+TRIGGER|SECURITY\s+DEFINER/i, file);
+    // S8: the read-only checker DETECTS a role/database override of this setting; its single detection pattern is the only permitted mention anywhere in src/.
+    const scanned = file === "ledger-invariants.ts" ? text.replace("'^(session_replication_role|row_security)='", "") : text;
+    assert.doesNotMatch(scanned, /session_replication_role|DISABLE\s+TRIGGER|SECURITY\s+DEFINER/i, file);
   }
   assert.ok(!Object.keys(ledgerCore).some(key => /registerGrantSource|addGrantSource/i.test(key)));
 });
