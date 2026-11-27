@@ -329,6 +329,8 @@ export function downloadConformance(label: string, factory: () => Promise<StoreH
       assert.equal(limited.status, 429); assert.ok(Number(limited.headers.get("retry-after")) >= 1);
       assert.equal((await limited.text()).includes(held.token), false);
       await stillSpendable(ctx2, w2, w2.asset.id, held.token);
+      // A malformed token is refused by shape before the charge, so it costs nothing (the budget above is already spent: still 404, not 429).
+      assert.equal((await redeem(ctx2, w2, w2.id, w2.asset.id, `/api/v1/compositions/${w2.id}/assets/${w2.asset.id}/download?grant=short`)).status, 404);
       // Callers without access are never charged.
       const stranger = await ctx2.guest(), before = await ctx2.h.bucketCount();
       assert.equal((await redeem(ctx2, { cookie: `${compositionCookies.guest}=${w2.id}.${stranger.capability}` }, w2.id, w2.asset.id, held.path)).status, 404);

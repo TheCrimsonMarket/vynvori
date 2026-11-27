@@ -443,6 +443,15 @@ A person rarely downloads the same original more than a few times, so these valu
 - Because the request needs a custom header, it can only come from a same-origin script. A cross-origin page cannot send it without a CORS preflight that the app never grants. `Sec-Fetch-Site: none` (address bar) is now refused as well, since such a request could not carry the header anyway.
 - `Referrer-Policy: no-referrer` and `no-store` are unchanged.
 
+### Security re-review (C6 follow-up)
+
+The `security-reviewer` pass on this change found no CRITICAL, HIGH or MEDIUM issue. Dispositions:
+
+- **Fixed (LOW): a malformed token was charged.** The token's shape (43 base64url characters) is now checked before the charge, using no stored data, so it is no oracle. A well-formed but wrong token is still charged, which bounds guessing. Tested.
+- **Accepted (LOW): one shared budget.** Failed redeems (wrong, expired or repeated tokens) use the same bucket as mints. For an owner the bucket covers all of their compositions; for a guest, the one draft. A client stuck in a retry loop can therefore lock itself out of minting for the window. Only the entitled principal can do this, so a third party cannot. The editor never retries automatically, and the values above leave room for many retries.
+- **Operational note (LOW):** standard access logs record neither headers nor bodies. If a platform, APM or error tool is ever set to capture them, add the `x-vynvori-download-grant` header and the `grantToken` field to its redaction list.
+- The C6 finding "N concurrent redeems each fetch the object" is now bounded by the per-redeem charge.
+
 ### Rollback
 
 Revert the PR. The C6 behaviour returns: redeem is no longer charged, and the token travels in `?grant=`. No data changes.

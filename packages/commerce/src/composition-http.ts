@@ -307,7 +307,8 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
       if (site !== null && site !== "same-origin") throw new HttpError(403, "FORBIDDEN");
       const assetId = id(params, "assetId"), token = request.headers.get(DOWNLOAD_GRANT_HEADER);
       // A prefetch never spends a grant; a token anywhere in the URL is refused outright (a repeated header arrives comma-joined and fails the token check).
-      if (isSpeculative(request) || new URL(request.url).search !== "" || token === null) throw new CompositionError("NOT_FOUND");
+      // A malformed token (by shape alone, no stored data) is refused before the charge, so a broken client cannot drain its own budget.
+      if (isSpeculative(request) || new URL(request.url).search !== "" || token === null || !opaque.test(token)) throw new CompositionError("NOT_FOUND");
       await service!.authorize(compositionId, access);
       service!.assertDownloadsAvailable();
       await service!.admit("downloadGrant", compositionId, access); // charged after access; an unset policy closes redeem too (503)
