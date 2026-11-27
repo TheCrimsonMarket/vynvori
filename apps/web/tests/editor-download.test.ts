@@ -6,10 +6,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { canDownloadOriginal, describeDownloadFailure, describeDownloadStarted, downloadFileName, downloadPathFrom, type ScanStatus } from "../src/components/editor/model";
+import { canDownloadOriginal, describeDownloadFailure, describeDownloadStarted, downloadFileName, downloadTargetFrom, type ScanStatus } from "../src/components/editor/model";
 
 const C = "0b6c6f2e-4f4a-4c1e-9d0e-1a2b3c4d5e6f", A = "5a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d", TOKEN = "T".repeat(43);
-const path = `/api/v1/compositions/${C}/assets/${A}/download?grant=${TOKEN}`;
+const path = `/api/v1/compositions/${C}/assets/${A}/download`;
 
 test("offered only for an uploaded asset the server reports clean", () => {
   assert.equal(canDownloadOriginal({ persisted: true, scanStatus: "clean" }), true);
@@ -19,13 +19,14 @@ test("offered only for an uploaded asset the server reports clean", () => {
   assert.equal(canDownloadOriginal(undefined), false);
 });
 
-test("the navigation target must be exactly this composition's and asset's download route with one well-formed grant", () => {
-  assert.equal(downloadPathFrom({ downloadUrl: path, expiresAt: "x" }, C, A), path);
+test("the redeem target must be exactly this composition's and asset's download route with no query, plus one well-formed token", () => {
+  assert.deepEqual(downloadTargetFrom({ downloadUrl: path, grantToken: TOKEN, expiresAt: "x" }, C, A), { path, token: TOKEN });
   for (const url of [
-    `https://evil.test${path}`, `//evil.test${path}`, `/api/v1/compositions/${A}/assets/${A}/download?grant=${TOKEN}`, `/api/v1/compositions/${C}/assets/${C}/download?grant=${TOKEN}`,
-    `${path}&next=//evil.test`, `/api/v1/compositions/${C}/assets/${A}/download?grant=${TOKEN.slice(1)}`, `/api/v1/compositions/${C}/assets/${A}/download?grant=${"T".repeat(42)}%`, "javascript:alert(1)", "",
-  ]) assert.equal(downloadPathFrom({ downloadUrl: url }, C, A), null, url);
-  for (const data of [null, undefined, "x", 1, {}, { downloadUrl: 1 }, { url: path }]) assert.equal(downloadPathFrom(data, C, A), null, JSON.stringify(data));
+    `https://evil.test${path}`, `//evil.test${path}`, `/api/v1/compositions/${A}/assets/${A}/download`, `/api/v1/compositions/${C}/assets/${C}/download`,
+    `${path}?grant=${TOKEN}`, `${path}?`, `${path}/`, "javascript:alert(1)", "",
+  ]) assert.equal(downloadTargetFrom({ downloadUrl: url, grantToken: TOKEN }, C, A), null, url);
+  for (const grantToken of [TOKEN.slice(1), `${TOKEN}=`, `${"T".repeat(42)}%`, "", 1, null, undefined]) assert.equal(downloadTargetFrom({ downloadUrl: path, grantToken }, C, A), null, String(grantToken));
+  for (const data of [null, undefined, "x", 1, {}, { downloadUrl: path }, { grantToken: TOKEN }]) assert.equal(downloadTargetFrom(data, C, A), null, JSON.stringify(data));
 });
 
 test("failure and success sentences: each case has its own text, and none names a token, grant or internal reason", () => {
@@ -53,14 +54,14 @@ test("the saved filename is taken only from the server's exact attachment header
 test("static: the control mints with one POST and no body, fetches the grant without navigating, and renders no link to the download route", () => {
   const source = readFileSync(new URL("../src/components/editor/editor.tsx", import.meta.url), "utf8");
   assert.match(source, /api\(`\/api\/v1\/compositions\/\$\{compositionId\}\/assets\/\$\{assetId\}\/download-grants`, "POST"\)/);
-  assert.match(source, /const path = downloadPathFrom\(response\.data, compositionId, assetId\);/);
-  assert.match(source, /await fetch\(path, \{ cache: "no-store", credentials: "same-origin" \}\)/, "the grant is redeemed by the editor's own request");
+  assert.match(source, /const target = downloadTargetFrom\(response\.data, compositionId, assetId\);/);
+  assert.match(source, /await fetch\(target\.path, \{ cache: "no-store", credentials: "same-origin", headers: \{ "x-vynvori-download-grant": target\.token \} \}\)/, "the grant is redeemed by the editor's own request, token in a header");
   assert.match(source, /const name = downloadFileName\(file\.headers\.get\("content-disposition"\)\);/);
   assert.match(source, /URL\.revokeObjectURL\(url\)/);
   assert.match(source, /canDownloadOriginal\(assets\.get\(current\.sourceAssetId\)\) && \(/, "offered only for a clean server asset");
   assert.doesNotMatch(source, /window\.location|location\.(assign|href|replace)/, "the editor tab never navigates to a grant");
   assert.doesNotMatch(source, /href=\{[^}]*download/i, "no rendered link to a grant");
   assert.doesNotMatch(source, /<Link[^>]*download/i);
-  assert.doesNotMatch(source, /\/download\?grant=/, "the client never builds a grant URL itself");
+  assert.doesNotMatch(source, /\?grant=|grant=\$\{/, "no token is ever put in a URL");
   assert.doesNotMatch(readFileSync(new URL("../src/components/editor/review.tsx", import.meta.url), "utf8"), /download-grants|\/download/);
 });

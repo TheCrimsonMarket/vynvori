@@ -60,3 +60,10 @@ test("static: each new route file forwards exactly one method to the composition
   assert.match(download, /invokeCompositionRoute\("downloadAsset"/);
   for (const file of [mint, download]) assert.match(file, /export const dynamic = "force-dynamic"/);
 });
+
+test("static (founder decision 2026-11-27, logs never carry the link code): no token is ever placed in a URL", () => {
+  const http = read("packages/commerce/src/composition-http.ts");
+  assert.doesNotMatch(http, /\?grant=|grant=\$\{/, "the mint response builds no URL with a token");
+  assert.match(http, /downloadUrl: `\/api\/v1\/compositions\/\$\{compositionId\}\/assets\/\$\{assetId\}\/download`, grantToken: token/);
+  assert.match(http, /new URL\(request\.url\)\.search !== ""/, "redeem refuses any query string");
+});

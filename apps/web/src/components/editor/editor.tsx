@@ -9,7 +9,7 @@ import {
   neighbourAfterDelete, nudge, parseMm, profile, redo, resizeKeepingAspect, sceneKey, stackPosition, startHistory, summarizeIssues, undo, updateLayer, zoneOf,
   checkUploadDimensions, checkUploadFileSize, classifyApiFailure, describeExpiry, describeGuestCapacity, describeNotConfigured, describeRateLimited, type ApiFailure, type EditorAsset, type LayerPatch, type UploadLimits,
   canRequestScan, describeScanOutcome, parseScanStatus, previewHref, scanLabel, type ScanStatus,
-  canDownloadOriginal, describeDownloadFailure, describeDownloadStarted, downloadFileName, downloadPathFrom,
+  canDownloadOriginal, describeDownloadFailure, describeDownloadStarted, downloadFileName, downloadTargetFrom,
 } from "./model";
 
 type ServerState = { compositionId: string | null; revision: number; owner: "guest" | "owner" | null; autosave: "idle" | "pending" | "conflict" | "failed" | "unavailable" | "limited" | "blocked"; lastSavedKey: string | null; expiresAt: string | null; versions: VersionView[]; currentVersionId: string | null };
@@ -318,9 +318,10 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
     try {
       const response = await api(`/api/v1/compositions/${compositionId}/assets/${assetId}/download-grants`, "POST");
       if (!response.ok) { notify(describeDownloadFailure(response.status, response.data)); return; }
-      const path = downloadPathFrom(response.data, compositionId, assetId);
-      if (!path) { notify(describeDownloadFailure(response.status, null)); return; }
-      const file = await fetch(path, { cache: "no-store", credentials: "same-origin" }).catch(() => null);
+      const target = downloadTargetFrom(response.data, compositionId, assetId);
+      if (!target) { notify(describeDownloadFailure(response.status, null)); return; }
+      // The link code travels in a header, never in the URL, so no log or history entry can hold it.
+      const file = await fetch(target.path, { cache: "no-store", credentials: "same-origin", headers: { "x-vynvori-download-grant": target.token } }).catch(() => null);
       if (!file?.ok) { let data: unknown = null; try { data = await file?.json(); } catch { /* not JSON */ } notify(describeDownloadFailure(file?.status ?? 0, data)); return; }
       const name = downloadFileName(file.headers.get("content-disposition"));
       if (!name) { notify(describeDownloadFailure(file.status, null)); return; }
