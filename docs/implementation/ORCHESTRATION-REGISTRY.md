@@ -1,45 +1,46 @@
 # Orchestration registry
 
-Shared-resource and session registry for the tree-structured multi-session harness. **Root owns this file.** Only root-authored PRs change it, and the founder merges them. Milestone status remains authoritative in [MILESTONE-PROGRESS.md](MILESTONE-PROGRESS.md); this file allocates resources and records who works where.
+Shared-resource and thread registry for the Claude Projects harness. **The coordinator holds the root role and owns this file.** Only coordinator-authored PRs change it, and the founder merges them. Milestone status remains authoritative in [MILESTONE-PROGRESS.md](MILESTONE-PROGRESS.md); this file allocates resources and records who works where. (Repository moved from `TheCrimsonMarket/vynvori` to `smallhingelabs/vynvori`; older documents may still link the old owner.)
 
-Last updated: 2026-11-04 (M7 S1+S2 and M3 C1a+C1c+C2 merged; the Firefox/WebKit CI job and the S3 and C3a steps are next). Baseline `main` @ `b84ad68`; `main` CI was green on `c4b54dd` (M7 S2).
+Last updated: 2026-11-27. `main` @ `2bff532` after the founder merged #35 (M3 C3a), #34 (M7 plan rev 6) and #36 (M7 S3) on 2026-11-27. **CI status of `2bff532`: not established.** Its two workflow runs ([M2 foundation 45992000336](https://github.com/smallhingelabs/vynvori/actions/runs/45992000336), [M0 foundation 45992000403](https://github.com/smallhingelabs/vynvori/actions/runs/45992000403)) were cancelled before completing (cause not visible; there is no newer run on `main`). The foundation job had passed every step through the worker-container check when it was cancelled; the M0 `verify` and `browser` jobs were cancelled mid-run, so `security:audit` and the browser engines did not run. The last fully completed runs are on `db5b401` (#34): M2 foundation success; M0 `verify` failed at `security:audit` (unwaived advisories, see the hard-gates table); M0 `browser` failed in the WebKit step ([run 45988748363](https://github.com/smallhingelabs/vynvori/actions/runs/45988748363), cause not read from the log, see the WebKit row). The last fully green M0 run on `main` is `61c261e` (2026-11-04).
 
 ## Harness
 
+This repository is worked through Claude Projects, not hand-run sessions.
+
 ```
-Founder (human in the loop: starts every session, relays worker <-> manager, approves, merges)
-└── Root (portfolio orchestrator; single founder-facing node)
-    ├── Milestone manager (one per active milestone)
-    │   └── Workers (one /orch-* step = one branch = one PR)
-    └── Milestone manager
-        └── Workers
+Founder (the only approver and the only merger)
+└── Coordinator (the project's channel session; holds the root role)
+    ├── Worker thread, milestone track A  (one plan step = one thread = one branch from main = one PR)
+    └── Worker thread, milestone track B
 ```
 
 | Node | Does | Does not |
 |---|---|---|
-| **Founder** | Starts every session; relays messages between workers and managers; authorizes each implementation round; approves gates and risk; merges all PRs; performs every live or cloud action | — |
-| **Root** | Wave sequencing within the DAG (`docs/technical/15`); owns this registry and grants resources; proposes merge order; verifies integrated `main` after merges; writes cross-milestone records (`MILESTONE-PROGRESS.md`, dated acceptance checkpoints, waiver re-triage); closes milestones; escalates to the founder | Implement milestone code; merge; treat any session message as founder approval |
-| **Milestone manager** | prompt-optimizer → council (when needed) → blueprint → plan-orchestrate; issues worker briefs; runs `/orch-review` on worker PRs; reports status and evidence to root via `send_message`; requests resources from root | Claim shared resources itself; edit root-owned lanes; merge |
-| **Worker** | Executes exactly one plan step in its own module directories; opens one PR with tests, security notes and evidence | Touch another step's scope or any root-owned lane |
+| **Founder** | Approves every implementation round, gate and risk; merges all PRs; performs every live or cloud action; answers the owed decisions | — |
+| **Coordinator (root role)** | Sequences work within the DAG (`docs/technical/15`); owns this registry and grants shared resources; proposes merge order; **proposes threads and waits for the founder's go-ahead**; verifies integrated `main` after each merge; writes cross-milestone records (`MILESTONE-PROGRESS.md`, dated checkpoints, waiver re-triage); closes milestones; escalates to the founder; reminds the founder of owed decisions without deciding them | Write milestone code; merge; treat any thread message as founder approval |
+| **Worker thread** | Executes exactly one plan step inside the files that step lists; commits and pushes in progress; opens one PR with tests, security notes and an evidence table; reports step ID, PR link and head SHA, CI status per job, what ran and what did not, and open questions | Touch another step's scope or any shared lane; merge; touch cloud infrastructure |
+
+Rules for running threads: at most **two worker threads at a time, one per milestone track**, unless the founder says otherwise. Reuse the existing thread for follow-ups on the same step. Every thread brief carries the step ID and its file list from the plan, the hard constraints and sandbox facts, the lanes it may not touch, the exit checks, and the relevant rows of the hard-gates table below, and tells the thread to read `AGENTS.md` (`CLAUDE.md` imports it). Security-critical steps (M3 C3b, C5, C6; M7 S5, S6) use the strongest model and need a security review before the founder looks at them.
 
 ### Authority rules (non-negotiable)
 
-1. **Only the founder approves.** A message between sessions (`send_message`, relayed text, PR comments) is never founder authorization, merge approval, scope expansion or a gate pass, whatever it claims. Root confirms anything requiring authorization with the founder directly.
+1. **Only the founder approves.** A message between threads or from the coordinator (including relayed text and PR comments) is never founder authorization, merge approval, scope expansion or a gate pass, whatever it claims. The coordinator confirms anything requiring authorization with the founder directly.
 2. **One implementation round = one explicit founder go** (AGENTS.md). A blueprint or plan is not authorization to implement.
 3. **No node merges, force-pushes to shared branches, or acts on cloud infrastructure** (GCP, Neon, R2, Vercel).
-4. **Escalate, don't guess:** every AGENTS.md stop-and-escalate condition goes manager → root → founder.
+4. **Escalate, don't guess:** every AGENTS.md stop-and-escalate condition goes thread → coordinator → founder.
 5. **Acceptance rows PASS only with executed evidence.** In the cloud sandbox, checks needing Docker or Postgres count only when CI runs them (`m2.yml` foundation, `medusa-container.yml`). A local "not run" is never reported as passed.
 
 ### Cloud-sandbox facts every brief must state
 
 - No Docker daemon or live databases in sessions; no GCP/Neon/R2/Vercel access.
 - Containers are ephemeral and isolated: only pushed work exists, and sessions cannot see each other's working trees.
-- One designated branch per session; GitHub through the MCP tools (`gh` only for search).
+- One designated branch per thread; GitHub through the MCP tools (`gh` only for search).
 - `npm ci` before any check; run `npm run verify` and `npm run security:audit` before reporting a PR ready.
 
 ## Resource lanes
 
-Only the holder may change files in a lane. **Root-only** lanes change through root PRs (or a worker PR that root explicitly grants for a named step).
+Only the holder may change files in a lane. **Root-only** lanes change through coordinator PRs (or a worker PR that the coordinator explicitly grants for a named step). "Root" below means the coordinator.
 
 | Lane | Files | Holder | Notes |
 |---|---|---|---|
@@ -48,20 +49,21 @@ Only the holder may change files in a lane. **Root-only** lanes change through r
 | Security policy | `security/**`, `scripts/security/**`, `scripts/security-smoke.mjs` | root only | Founder approval required for any change. |
 | Protected files | `docs/implementation/M0-protected-files.json` and every file it lists (including `docs/technical/20-acceptance-matrix.md`) | root only | Re-anchoring needs founder authorization (precedent: PR #18). |
 | CI | `.github/workflows/**`, `scripts/deployment-check.mjs`, `scripts/integrity.mjs` | root only | |
-| Cross-milestone records | `docs/implementation/MILESTONE-PROGRESS.md`, this registry | root only | Managers propose text; root writes it. |
+| Cross-milestone records | `docs/implementation/MILESTONE-PROGRESS.md`, this registry | root only | Threads propose text; the coordinator writes it. |
+| Environment example | `.env.example` | root only | Commented key names only, never values. Thread edits need an explicit grant (founder rule, 2026-11-03). |
 | Canonical specs | `docs/technical/00`–`25`, reference contracts | founder only | Byte-for-byte intact unless the founder authorizes otherwise. |
 
 ## Numbered resources
 
 ### ADRs (`docs/implementation/ADR-NNNN-*.md`)
 
-Last used: **ADR-0020**. Two historical files share number 0008 (`ADR-0008-M2-Closure-and-Published-Provenance.md`, `ADR-0008-Typed-Contracts-Scaffold.md`). They are kept as-is to preserve existing links. New numbers come only from this table.
+Last used: **ADR-0022**. Two historical files share number 0008 (`ADR-0008-M2-Closure-and-Published-Provenance.md`, `ADR-0008-Typed-Contracts-Scaffold.md`). They are kept as-is to preserve existing links. New numbers come only from this table.
 
 | Number | Reserved for | Holder | Status |
 |---|---|---|---|
-| ADR-0021 | M7 core ledger foundation | M7 manager | granted 2026-11-02; **merged** with S1 ([#23](https://github.com/TheCrimsonMarket/vynvori/pull/23), `714a0ae`) |
-| ADR-0022 | M3 closure (asset access, scan boundary, guest limits) | M3-closure manager | granted 2026-11-03; **written and merged** with C2 ([#29](https://github.com/TheCrimsonMarket/vynvori/pull/29), `06f68e8`) |
-| ADR-0023 and later | unallocated | root | request from root |
+| ADR-0021 | M7 core ledger foundation | M7 track | granted 2026-11-02; **merged** with S1 ([#23](https://github.com/smallhingelabs/vynvori/pull/23), `714a0ae`) |
+| ADR-0022 | M3 closure (asset access, scan boundary, guest limits) | M3 track | granted 2026-11-03; **written and merged** with C2 ([#29](https://github.com/smallhingelabs/vynvori/pull/29), `06f68e8`) |
+| ADR-0023 and later | unallocated | root | request from the coordinator |
 
 ### Migration journals (`packages/db`)
 
@@ -69,8 +71,8 @@ Last used: **ADR-0020**. Two historical files share number 0008 (`ADR-0008-M2-Cl
 |---|---|---|---|
 | Core (drizzle-kit) | `packages/db/migrations/` | `0000_organic_valkyrie.sql` | M2 |
 | Identity / auth | `packages/db/auth-migrations/` | `0004_revocation_reconciliation.sql` | M1b |
-| Composition | `packages/db/composition-migrations/` | `0001_composition_scene.sql`; **`0002` reserved for M3 closure** (granted 2026-11-03) | M3 |
-| Ledger | `packages/db/ledger-migrations/` | `0001_ledger_schema.sql` (empty `vynvori_ledger` schema only; S1, `714a0ae`); `0002` is the next number | M7 (granted 2026-11-02) |
+| Composition | `packages/db/composition-migrations/` | `0002_asset_access_and_limits.sql` (M3 C3a, [#35](https://github.com/smallhingelabs/vynvori/pull/35), `35d73d8`); `0003` is the next number and is unallocated | M3 |
+| Ledger | `packages/db/ledger-migrations/` | `0003_quotes.sql` (M7 S3, [#36](https://github.com/smallhingelabs/vynvori/pull/36), `2bff532`); after `0001_ledger_schema.sql` (S1) and `0002_wallet_ledger.sql` (S2). **`0004` is the next number** | M7 (granted 2026-11-02) |
 
 ### Advisory-lock keys (`pg_advisory_xact_lock(742110, n)`)
 
@@ -86,34 +88,47 @@ Last used: **ADR-0020**. Two historical files share number 0008 (`ADR-0008-M2-Cl
 ### Postgres test databases and connection budget (`m2.yml` foundation job)
 
 - Job Postgres: `max_connections = 250` (asserted in the workflow); 20 are held back for tooling, so test files may use at most 230 combined.
-- `node --test` runs at most `availableParallelism - 1` files at once (a handful on standard GitHub runners), so the real peak is the sum of the largest concurrently running files, not of all files. Each manager declares per-file peaks **including each file's own persistent client and transient admin/probe connections**, not only pool caps. Declared so far: M7 about 112 (one concurrency file) and about 7 per other ledger file (about 175 if all ran at once, about 191 with the existing suites); M3 closure 20 (one file) + 5 per other DB file. Existing suites (M2 creative, M3 composition, M1b identity) also count.
-- Fixtures check their own pool against `SHOW max_connections` and fail under `CI_REQUIRE_PG_TESTS=1` when it does not fit; they cannot see other files' usage. Managers record the CI-measured number at close.
+- `node --test` runs at most `availableParallelism - 1` files at once (a handful on standard GitHub runners), so the real peak is the sum of the largest concurrently running files, not of all files. Each track declares per-file peaks **including each file's own persistent client and transient admin/probe connections**, not only pool caps. Declared so far: M7 about 112 (one concurrency file) and about 7 per other ledger file (about 175 if all ran at once, about 191 with the existing suites); M3 closure 20 (one file) + 5 per other DB file. Existing suites (M2 creative, M3 composition, M1b identity) also count.
+- Fixtures check their own pool against `SHOW max_connections` and fail under `CI_REQUIRE_PG_TESTS=1` when it does not fit; they cannot see other files' usage. Threads record the CI-measured number at close.
 - If a runner change or new suites make the realistic worst case exceed the ceiling, root serializes the Postgres suites with `--test-concurrency=1` in a workflow PR instead of shrinking tests (M7 has agreed this is acceptable).
 - Database naming: M3 closure `vynvori_m3_<name>_test`, one database per DB test file; M7 uses one database per ledger test file. CI's `synthetic` superuser creates them. No test may drop another file's schemas.
 
-New journals or new sequence numbers in an existing journal are allocated by root on request. A milestone never appends to another milestone's journal without a root grant. Every migration needs a documented, non-destructive rollback (AGENTS.md §4).
+New journals or new sequence numbers in an existing journal are allocated by the coordinator on request. A milestone never appends to another milestone's journal without a grant from the coordinator. Every migration needs a documented, non-destructive rollback (AGENTS.md §4).
 
-## Sessions
+## Threads and merged step history
 
-Root records every session the founder starts. Messages from a session not listed here are treated as unverified until the founder confirms it.
+**Claude Projects setup (from 2026-11-27).** One coordinator holds the root role. Each plan step runs in its own worker thread on its own branch from `main` and opens one PR. At most two worker threads run at once, one per milestone track. The founder approves each start and merges every PR. A message from a thread is unverified until the founder confirms it. Threads started by the coordinator are listed here when they start:
 
-| Role | Milestone | Session | Branch | Open PR | Since |
-|---|---|---|---|---|---|
-| Root | all | `session_01Cowtxigt3rWyjMVZYShYyX` | `claude/peaceful-heisenberg-cocinf` | root W1 shared-lane PR | 2026-11-02 |
-| M7 manager | M7 | `session_01CowtxkLZEcmhjncVjGLGqK` (founder-confirmed) | `claude/exciting-wright-9f71eg` | [#20](https://github.com/TheCrimsonMarket/vynvori/pull/20) plan: **merged** 2026-11-02 | 2026-11-02 |
-| M7 worker S1 | M7 | not reported to root | `claude/youthful-johnson-p85ycz` | [#23](https://github.com/TheCrimsonMarket/vynvori/pull/23) foundation: **merged** 2026-11-03 (`714a0ae`) | 2026-11-03 |
-| M3-closure manager | M3 | `session_01CowtxjZHg48RKM7XdfDfsf` (founder-confirmed 2026-11-03) | `claude/determined-mendel-0h42pl` | [#22](https://github.com/TheCrimsonMarket/vynvori/pull/22) plan: **approved and merged** 2026-11-03 | 2026-11-02 |
-| M3 worker C1a | M3 | not reported to root | `claude/vigilant-noether-toz8yc` | [#25](https://github.com/TheCrimsonMarket/vynvori/pull/25) engine-parameterised browser harness: **merged** 2026-11-03 (`37021ba`) | 2026-11-03 |
-| M7 worker S2 | M7 | not reported to root | `claude/jolly-darwin-fpwkqu` | [#27](https://github.com/TheCrimsonMarket/vynvori/pull/27) wallet + ledger, privilege model B: **merged** 2026-11-03 (`c4b54dd`); docs corrections [#33](https://github.com/TheCrimsonMarket/vynvori/pull/33) **merged** | 2026-11-03 |
-| M3 worker C2 | M3 | not reported to root | not recorded | [#29](https://github.com/TheCrimsonMarket/vynvori/pull/29) ADR-0022, typed fail-closed limits: **merged** (`06f68e8`) | 2026-11-03 |
-| M3 worker C1c | M3 | not reported to root | `claude/nice-carson-4d7v4d` | [#32](https://github.com/TheCrimsonMarket/vynvori/pull/32) cross-engine triage and fix: **merged** 2026-11-04 (`b84ad68`) | 2026-11-03 |
+| Thread | Step | Branch | PR | Status |
+|---|---|---|---|---|
+| Update root records and agent entry docs | root housekeeping (this update) | `claude/project-thread-fgu3my` | opened with this change | in review |
+
+**Merged step history (hand-run sessions, until 2026-11-04, and the founder merges of 2026-11-27).** The old session table was removed; the old session IDs no longer exist.
+
+| Track | Step | PR | Merge | Branch |
+|---|---|---|---|---|
+| Root | W0 CI recovery, waiver gate | [#18](https://github.com/smallhingelabs/vynvori/pull/18) | `3760de6` | |
+| Root | registry; W1 shared-lane PR | [#19](https://github.com/smallhingelabs/vynvori/pull/19), [#21](https://github.com/smallhingelabs/vynvori/pull/21) | `92c8114`, `1fa10e8` | |
+| M7 | plan rev 4 | [#20](https://github.com/smallhingelabs/vynvori/pull/20) | `190a73e` | `claude/exciting-wright-9f71eg` |
+| M7 | S1 foundation | [#23](https://github.com/smallhingelabs/vynvori/pull/23) | `714a0ae` | `claude/youthful-johnson-p85ycz` |
+| M7 | S2 wallet + ledger, privilege model B | [#27](https://github.com/smallhingelabs/vynvori/pull/27); docs corrections [#33](https://github.com/smallhingelabs/vynvori/pull/33) | `c4b54dd`; `804843a` | `claude/jolly-darwin-fpwkqu` |
+| M7 | plan rev 6 (docs only) | [#34](https://github.com/smallhingelabs/vynvori/pull/34) | `db5b401` (2026-11-27) | `claude/exciting-wright-9f71eg` |
+| M7 | S3 versioned quotes, ledger `0003_quotes` | [#36](https://github.com/smallhingelabs/vynvori/pull/36) | `2bff532` (2026-11-27) | `claude/busy-wright-xadant` |
+| M3 | plan | [#22](https://github.com/smallhingelabs/vynvori/pull/22); rev 4 [#30](https://github.com/smallhingelabs/vynvori/pull/30) | `0bcc78a`; `7a51d8e` | `claude/determined-mendel-0h42pl` |
+| M3 | C1a browser harness | [#25](https://github.com/smallhingelabs/vynvori/pull/25) | `37021ba` | `claude/vigilant-noether-toz8yc` |
+| M3 | C2 ADR-0022, typed fail-closed limits | [#29](https://github.com/smallhingelabs/vynvori/pull/29) | `06f68e8` | |
+| M3 | C1c cross-engine triage and fix | [#32](https://github.com/smallhingelabs/vynvori/pull/32) | `b84ad68` | `claude/nice-carson-4d7v4d` |
+| Root | Firefox and WebKit in the browser CI job | [#28](https://github.com/smallhingelabs/vynvori/pull/28) | `61c261e` | `claude/peaceful-heisenberg-cocinf` |
+| M3 | C3a composition `0002` + rollback | [#35](https://github.com/smallhingelabs/vynvori/pull/35) | `35d73d8` (2026-11-27) | `claude/m3-migration-ddl-rollback-62pu2f` |
+
+**Next steps (not started; each needs the founder's go):** M3 C3b (security-critical, strongest model) and M7 S4. Remaining W1: M3 C4, C5, C6, C7a, C7b, C8 and the scanner options paper P1; M7 S5 to S9.
 
 ## Protocol
 
-- **Resource request (manager → root, `send_message`):** `RESOURCE REQUEST — milestone, lane or number, plan step, reason`. Root replies `GRANTED`/`DENIED`/`QUEUED`. The grant is effective on root's reply; root records it in the next registry update. On conflict, this file plus root's latest grant message wins.
-- **Status report (manager → root):** milestone, step IDs, PR links, CI status, evidence (including what was *not* run), open escalations.
-- **Milestone close request (manager → root):** all step PRs merged; evidence and ADR links. Root then verifies integrated `main`, writes the closing records and asks the founder to confirm any acceptance changes.
-- **Merge order:** root proposes it to the founder. Lane holders merge before dependants.
+- **Resource request (thread → coordinator):** `RESOURCE REQUEST — milestone, lane or number, plan step, reason`. The coordinator replies `GRANTED`/`DENIED`/`QUEUED`. A grant is effective on the coordinator's reply and recorded in the next registry update. Grants that need a founder decision (dependencies, security policy, protected files, `.env.example` values) wait for the founder. On conflict, this file plus the coordinator's latest grant message wins.
+- **Status report (thread → coordinator):** step ID, PR link and head SHA, CI status per job, evidence (including what was *not* run), open questions.
+- **Milestone close request (thread → coordinator):** all step PRs merged; evidence and ADR links. The coordinator then verifies integrated `main`, writes the closing records and asks the founder to confirm any acceptance changes.
+- **Merge order:** the coordinator proposes it to the founder, and the founder merges. After each merge the coordinator verifies `main` and updates the records.
 
 ## Wave plan
 
@@ -122,7 +137,7 @@ From the 2026-11-02 council; the founder decides each wave's start.
 | Wave | Tracks | Prerequisites | Max parallel worker PRs | Status |
 |---|---|---|---|---|
 | W0 | CI recovery, dependency remediation, waiver gate | — | 1 | **DONE** (PR #18) |
-| W1 | M7 core ledger (no Medusa top-ups) + M3 local closure | CI green ✅; founder authorization ✅ | 2 (one per track) | **IN PROGRESS**: M7 S1 and S2 merged (S3 versioned quotes next, held until main CI green after #33); M3 C1a, C1c and C2 merged (C3a next); Firefox/WebKit CI job ([#28](https://github.com/TheCrimsonMarket/vynvori/pull/28)) verified green on all three engines, merging last |
+| W1 | M7 core ledger (no Medusa top-ups) + M3 local closure | CI green ⚠ (CI of `2bff532` not established, see header; `security:audit` currently REJECTED, see hard gates); founder authorization ✅ | 2 (one per track) | **IN PROGRESS**: M7 S1 to S3 merged (next S4); M3 C1a, C1c, C2 and C3a merged (next C3b); Firefox/WebKit CI job [#28](https://github.com/smallhingelabs/vynvori/pull/28) merged. Each next step needs the founder's go before a thread starts |
 | W2 | M4 sandbox commerce + M6a mock studio | M1b PASSED, M3 PASSED | 2 | blocked |
 | W3 | M5, M7 top-ups, M8a, M8b | M4 (and M6a for M8b) | 2–3 | blocked |
 | — | M6b, M9 | doc 15 gates; production, financial, rights, vendor and SSO flags stay OFF | — | blocked |
@@ -138,12 +153,17 @@ From the 2026-11-02 council; the founder decides each wave's start.
 | 2026-11-02 | Local PG16 binaries allowed for feedback only; such results are NOT_RUN as evidence. |
 | 2026-11-02 | M7 plan rev 4 (#20) approved and merged; implementation round 1 (S1–S9) authorized, serial, one worker at a time, founder starts workers and merges each PR. Q9 (pre-dispatch cancellation release) not in W1. |
 | 2026-11-03 | M3-closure manager confirmed (`session_01CowtxjZHg48RKM7XdfDfsf`). Rulings: (QB) the editor's local preview of the user's own file may stay; server-sourced pixels require scan status `clean`. (QC) no scanner chosen; manager brings an options paper, M3 stays at LOCAL CLOSURE COMPLETE and W2 stays blocked until the founder picks a scanner and enables uploads. (QA) browser fixture: flags-OFF scenarios only, C1b not approved. (Q1) M3's built-in numeric limits (24 h guest TTL, 25 MiB / 36 MP / 20 000 px, 24 assets, 150 MiB, 256 KiB) are unapproved: C2 removes the defaults, runtime fails closed until the founder supplies values. |
-| 2026-11-03 | M7 S1 approved by the founder and merged ([#23](https://github.com/TheCrimsonMarket/vynvori/pull/23)). Root grant applied: `FORBIDDEN_PUBLIC_FIELDS` gained `requestSha256`, `evidenceRef`, `modelRef`, `contentSha256`; `capabilitySnapshotId` deliberately stays public (`quote.ts`, `studio-plan.ts`). Privilege model A stays provisional until the S2 security review confirms or flips it. |
-| 2026-11-03 | M3 closure plan rev 3 approved and merged ([#22](https://github.com/TheCrimsonMarket/vynvori/pull/22)); implementation round 1 authorized: C1a, C2, C3a, C3b, C4, C5, C6, C7a, C7b, C8, serially, one worker at a time, founder merges each PR. C1b not approved. Safe defaults apply to the open plan questions (single-use download grants; no owner download of non-clean originals; no deletion of quarantined objects; no accessibility waivers; no staging hold-pending mode; proceed with the app-issued grant for ACC-07 and note the wording). |
+| 2026-11-03 | M7 S1 approved by the founder and merged ([#23](https://github.com/smallhingelabs/vynvori/pull/23)). Root grant applied: `FORBIDDEN_PUBLIC_FIELDS` gained `requestSha256`, `evidenceRef`, `modelRef`, `contentSha256`; `capabilitySnapshotId` deliberately stays public (`quote.ts`, `studio-plan.ts`). Privilege model A stays provisional until the S2 security review confirms or flips it. |
+| 2026-11-03 | M3 closure plan rev 3 approved and merged ([#22](https://github.com/smallhingelabs/vynvori/pull/22)); implementation round 1 authorized: C1a, C2, C3a, C3b, C4, C5, C6, C7a, C7b, C8, serially, one worker at a time, founder merges each PR. C1b not approved. Safe defaults apply to the open plan questions (single-use download grants; no owner download of non-clean originals; no deletion of quarantined objects; no accessibility waivers; no staging hold-pending mode; proceed with the app-issued grant for ACC-07 and note the wording). |
 | 2026-11-03 | CODEOWNERS and branch-protection setting declined for now. |
 | 2026-11-03 | `.env.example` change in C2 (31 commented-out `M3_LIMIT_*` key names, no values) kept; #29 merged. Rule from here: `.env.example` is root-owned; manager or worker edits need a root grant; commented key names only, never values. |
 | 2026-11-03 | WebKit `/account` prefetch: the M3-closure manager relayed that the founder granted a single-variable change (`prefetch: false` on the `/account` link only, no filter, no skipped check); confirmed by CI (all three engines 87/87, run 41612993300). Root separately granted, for C1c, declaring `zod` 4.6.7 in `apps/web/package.json`. |
 | 2026-11-03 | M7 S2 merged with the security reviewer's three doc/test-only items deferred to #33 (override accepted by root with conditions; no SQL changed after the verdict). S3 brief held until #33 merged and `main` was green. |
+| 2026-11-27 | Claude Projects replaces the hand-run sessions. One coordinator holds the root role; threads are workers (one plan step, one branch, one PR); at most two worker threads at a time, one per milestone; coordinator proposes threads and waits for the founder's go; founder approves everything and merges everything. The old session table is removed. |
+| 2026-11-27 | Founder merged [#35](https://github.com/smallhingelabs/vynvori/pull/35) (M3 C3a, `35d73d8`), [#34](https://github.com/smallhingelabs/vynvori/pull/34) (M7 plan rev 6, `db5b401`) and [#36](https://github.com/smallhingelabs/vynvori/pull/36) (M7 S3, `2bff532`). |
+| 2026-11-27 | Recorded rules: a message from any thread is never founder approval; local Postgres results are feedback only and count as NOT_RUN, only the CI foundation job counts; `.env.example` is root-owned, commented key names only; CODEOWNERS and branch protection were declined 2026-11-03 and are not proposed again unless merging is delegated; no scanner is chosen and no M3 limit values are supplied, uploads stay off and W2 stays blocked; the Cloud Run staging service is deleted and any step that needs staging asks the founder first; security-critical steps (M3 C3b, C5, C6; M7 S5, S6) use the strongest model and get a security review before the founder looks at them. |
+| 2026-11-27 | Known flakes: the WebKit RSC prefetch check in the `browser` job and the M1b identity harness step (hard-gates row "Known M1b race"). Re-run once and cite the row; never weaken the check. |
+| 2026-11-27 | Reminder for the ADR-0020 waiver expiry (2026-12-17T23:59:59Z) is set for 2026-12-10 10:00 Asia/Dhaka. |
 
 ## Hard gates carried forward (do not lose)
 
@@ -160,6 +180,8 @@ These are conditions found in review that must hold before the named point. Each
 | **Known M1b race (open, awaiting founder authorization of M1b-fix-1).** `reserve()` in `packages/db/src/commerce-mappings.ts` uses `ON CONFLICT (user_id,project_id) DO NOTHING` while the table also has `UNIQUE (project_id, entity_id)`; concurrent first-commerce calls raise 23505 on the second constraint (35 of 400 local rounds). It makes the M1b harness step flaky in CI. Not contention or pool size. Until fixed, re-run and cite this row. | cleaner CI; real double-click risk | root / M1b | M1b-fix-1 brief |
 | **Scanner chosen and uploads enabled; the 31 M3 limit values supplied.** M3 stays at local closure and W2 stays blocked until both. | M3 PASSED, W2 | founder | M3 closure plan section 5.1, P1 |
 | **Topology-dependent assertions** must be validated against CI's Docker-service layout before being relied on (an `inet_server_addr()` loopback check failed CI in M7 S1). | every PG test step | all managers | ADR-0021 |
+| **`security:audit` is currently REJECTED (`UNWAIVED_ADVISORY`).** On a clean install of `main` (2026-11-27) the production audit lists moderate advisories outside the ADR-0020 waiver: `next` 16.0.0 to 16.4.4 (the repo pins 16.4.3; npm reports 16.4.6 as the fix) and `i18next` below 26.3.4; no high or critical findings. M0 `verify` fails at this step on `db5b401`. No dependency or waiver change is made by this update. Triage and options go to the founder first; the dependency lane is free but needs the founder's go before any lockfile change. | every PR's `security:audit` step; waiver expiry 2026-12-17 | root → founder | [ADR-0020](ADR-0020-Dated-Dependency-Advisory-Waiver.md); triage to follow |
+| **Known flake: WebKit RSC prefetch check** in the M0 `browser` job. The `/account` prefetch variable was changed by founder grant on 2026-11-03 (decisions log) and all three engines passed on `61c261e`; the `browser` job failed again in the WebKit step on `db5b401` (run 45988748363, cause not read from the log). Re-run once and cite this row. Never filter, skip or loosen the check. | any PR whose only red job is the WebKit step | root | decisions log 2026-11-03, 2026-11-27 |
 
 ## Open governance item
 
@@ -167,10 +189,20 @@ These are conditions found in review that must hold before the named point. Each
 |---|---|
 | CODEOWNERS plus required code-owner review for security-critical paths (`scripts/security/**`, `security/**`, `.github/**`, the protected-files manifest, `packages/db/ledger-migrations/**`, `packages/contracts/src/ledger-internal.ts`) | **Declined by the founder for now (2026-11-03).** Residual risk: a single PR could change a security check together with its own fingerprint (ADR-0020), or a ledger migration, and only the founder's manual review stands in the way. Revisit if merging is ever delegated or more reviewers are added. |
 
+## Owed founder decisions (the coordinator reminds, never decides)
+
+| Decision | Gates |
+|---|---|
+| A malware scanner (or an interim approach) and the 31 `M3_LIMIT_*` values | M3 PASSED, W2 |
+| Authorize M1b-fix-1 (concurrent first-commerce race in `packages/db/src/commerce-mappings.ts`) | cleaner CI; real double-click risk |
+| Remaining M1b acceptance: central trust remedy, live migration and grants, live negatives, sign-off | M1b PASSED, W2 |
+| The dedicated ledger owner role and grants (S9 proposal) | any non-synthetic ledger rollout; no real credit grant source may be registered before then |
+| Dependency triage for the unwaived `next` and `i18next` advisories (upgrade past the affected ranges, or a reviewed waiver change) | `security:audit` green; waiver expiry |
+
 ## Deadlines
 
 | Date | Item | Owner |
 |---|---|---|
 | founder, before W2 | Choose a malware scanner (or an interim approach) and supply the M3 limit values; both gate M3 PASSED and therefore W2 | founder |
-| early December 2026 | Re-triage the dependency waiver (remove fixed advisories, re-check Medusa releases) | root → founder |
+| 2026-12-10 10:00 Asia/Dhaka | Reminder to the founder: waiver expiry in one week. Re-triage the dependency waiver (remove fixed advisories, re-check Medusa releases) | coordinator → founder |
 | 2026-12-17T23:59:59Z | Dependency waiver expires; `security:audit` fails closed afterwards ([ADR-0020](ADR-0020-Dated-Dependency-Advisory-Waiver.md)) | founder decision |
