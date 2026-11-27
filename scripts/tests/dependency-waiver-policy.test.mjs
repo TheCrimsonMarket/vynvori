@@ -4,7 +4,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { digest } from "../security/audit-policy.mjs";
-import { evaluateWaivers, collectWaiverState, inspectWaivedNodes, validateWaiverPolicy, WAIVER_POLICY_SHA256, WAIVER_CEILING } from "../security/dependency-waiver-policy.mjs";
+import { evaluateWaivers, collectWaiverState, inspectWaivedNodes, validateWaiverPolicy, checkWaiverShape, waiverExpiry, activeWaivers,
+  WAIVER_POLICY_SHA256, WAIVER_CEILING } from "../security/dependency-waiver-policy.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const policy = JSON.parse(await fs.readFile(new URL("../../security/dependency-waiver-policy.json", import.meta.url), "utf8"));
@@ -77,11 +78,88 @@ test("policy or metadata edits cannot bless themselves, and expiry cannot exceed
   assert.throws(() => validateWaiverPolicy({ ...policy, waivers: [] }), /WAIVER_POLICY_FINGERPRINT_MISMATCH/);
 });
 
-test("waiver window is absolute and the boundary instant is rejected", () => {
-  assert.equal(call({ now: new Date("2026-12-17T23:59:58Z") }).accepted, true);
-  for (const value of ["2026-12-17T23:59:59Z", "2026-12-18T00:00:00Z", "2026-11-01T23:59:59Z", "invalid"]) {
+const EXTENDED = "2027-02-28T23:59:59Z";
+
+test("waiver window is absolute: the esbuild per-entry extension ends at its own boundary instant", () => {
+  for (const value of ["2026-11-02T00:00:00Z", "2026-12-17T23:59:58Z", "2026-12-17T23:59:59Z", "2026-12-18T00:00:00Z", "2027-02-27T12:00:00Z", "2027-02-28T23:59:58Z"]) {
+    const result = call({ now: new Date(value) });
+    assert.equal(result.accepted, true, `${value}: ${result.code}`);
+    assert.deepEqual(result.waiverExpiries, { [ESBUILD]: EXTENDED });
+    assert.equal(result.expiresAt, EXTENDED);
+  }
+  for (const value of [EXTENDED, "2027-03-01T00:00:00Z", "2026-11-01T23:59:59Z", "invalid"]) {
     rejected(call({ now: new Date(value) }), "WAIVER_EXPIRED_OR_INVALID_TIME");
   }
+});
+
+test("the esbuild extension is flagged for re-triage from 2027-02-15 without changing the verdict", () => {
+  assert.deepEqual(call({ now: new Date("2027-02-14T23:59:59Z") }).retriageDue, []);
+  for (const value of ["2027-02-15T00:00:00Z", "2027-02-28T23:59:58Z"]) {
+    const result = call({ now: new Date(value) });
+    assert.equal(result.accepted, true);
+    assert.deepEqual(result.retriageDue, [ESBUILD]);
+  }
+});
+
+test("past the global ceiling the extension covers only esbuild: every other advisory is still rejected", () => {
+  for (const value of ["2026-12-17T23:59:59Z", "2027-01-15T00:00:00Z"]) {
+    const later = new Date(value);
+    rejected(call({ now: later, production: run(withProductionRecord(fixture.production)) }), "UNWAIVED_ADVISORY");
+    rejected(call({ now: later, all: run(addOrigin(fixture.all, "esbuild", { url: "https://github.com/advisories/GHSA-1111-2222-3333" })) }), "UNWAIVED_ADVISORY");
+    // The extension does not relax the reviewed node, severity or graph rules either.
+    const changed = structuredClone(fixture.all);
+    changed.vulnerabilities.esbuild.severity = "high";
+    rejected(call({ now: later, all: run(changed) }), "UNWAIVABLE_SEVERITY");
+  }
+});
+
+test("per-entry expiry follows the code-listed extension only; any other entry keeps the global ceiling", () => {
+  const esbuild = policy.waivers[0];
+  assert.equal(esbuild.expiresAt, EXTENDED);
+  assert.equal(esbuild.retriageBy, "2027-02-15");
+  assert.equal(waiverExpiry(esbuild), EXTENDED);
+  const { expiresAt: _drop, ...unextended } = esbuild;
+  assert.equal(waiverExpiry(unextended), WAIVER_CEILING);
+  assert.equal(waiverExpiry({ ...esbuild, expiresAt: "2027-12-31T23:59:59Z" }), WAIVER_CEILING);
+  const other = { ...esbuild, ghsa: "GHSA-1111-2222-3333", package: "other" };
+  assert.equal(waiverExpiry(other), WAIVER_CEILING);
+  // A synthetic two-entry set: before the global ceiling both are active, after it only the extended esbuild entry.
+  const both = [esbuild, other];
+  assert.deepEqual(activeWaivers(both, new Date("2026-12-17T23:59:58Z")).map(entry => entry.ghsa), [ESBUILD, "GHSA-1111-2222-3333"]);
+  assert.deepEqual(activeWaivers(both, new Date(WAIVER_CEILING)).map(entry => entry.ghsa), [ESBUILD]);
+  assert.deepEqual(activeWaivers(both, new Date(EXTENDED)), []);
+  assert.deepEqual(activeWaivers([unextended], new Date(WAIVER_CEILING)), []);
+});
+
+test("JSON edits cannot add, move or widen a per-entry extension", () => {
+  checkWaiverShape(policy);
+  // Through the real gate every edit is a fingerprint mismatch first.
+  const moved = structuredClone(policy);
+  moved.waivers[0].expiresAt = "2027-06-30T23:59:59Z";
+  rejected(call({ policy: moved, now: new Date("2027-03-01T00:00:00Z") }), "WAIVER_POLICY_FINGERPRINT_MISMATCH");
+  // Behind the anchor, the shape rules reject each edit on their own.
+  const edits = [
+    changed => { changed.waivers[0].expiresAt = "2027-06-30T23:59:59Z"; },
+    changed => { changed.waivers[0].expiresAt = "2027-01-31T23:59:59Z"; },
+    changed => { changed.waivers[0].retriageBy = "2027-02-27"; },
+    changed => { delete changed.waivers[0].retriageBy; },
+    changed => { delete changed.waivers[0].expiresAt; },
+    changed => { changed.waivers[0].nodes[0].context = "production"; },
+    changed => { changed.waivers[0].nodes.push({ ...changed.waivers[0].nodes[0], path: "node_modules/esbuild" }); },
+    changed => { changed.waivers[0].nodes.push({ ...changed.waivers[0].nodes[0] }); },
+    changed => { changed.waivers[0].nodes[0].path = "node_modules/esbuild"; },
+    changed => { changed.waivers.push({ ...structuredClone(changed.waivers[0]), ghsa: "GHSA-1111-2222-3333" }); },
+  ];
+  for (const edit of edits) {
+    const changed = structuredClone(policy);
+    edit(changed);
+    assert.throws(() => checkWaiverShape(changed), /WAIVER_EXTENSION_INVALID/, String(edit));
+  }
+  // An entry without an extension stays valid, and the policy-level window still cannot move.
+  const plain = structuredClone(policy);
+  delete plain.waivers[0].expiresAt; delete plain.waivers[0].retriageBy;
+  checkWaiverShape(plain);
+  for (const value of [EXTENDED, "2027-01-31T23:59:59Z"]) assert.throws(() => checkWaiverShape({ ...policy, expiresAt: value }), /WAIVER_METADATA_MISMATCH/);
 });
 
 for (const severity of ["low", "moderate"]) test(`a new ${severity} advisory is rejected without severity filtering, in either audit`, () => {
@@ -216,6 +294,10 @@ test("a full audit that silently dropped development or production findings is r
 test("an empty audit cannot pass while reviewed vulnerable nodes are still installed", () => {
   const clean = audit => ({ ...audit, vulnerabilities: {}, metadata: { ...audit.metadata, vulnerabilities: { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 } } });
   rejected(call({ production: run(clean(fixture.production)), all: run(clean(fixture.all)) }), "AUDIT_GRAPH_INCOMPLETE");
+  // Once every entry has expired the gate rejects even clean audits, exactly as the whole-policy window did before.
+  for (const value of [EXTENDED, "2027-03-01T00:00:00Z"]) {
+    rejected(call({ now: new Date(value), production: run(clean(fixture.production)), all: run(clean(fixture.all)) }), "WAIVER_EXPIRED_OR_INVALID_TIME");
+  }
   // A full audit that silently lost the reviewed development-only esbuild origin and everything that depends on it.
   const missing = structuredClone(fixture.all);
   const gone = new Set(["esbuild"]);
@@ -254,7 +336,7 @@ test("installed-tree collection fails closed on changed versions or contexts", a
   await assert.rejects(inspectWaivedNodes(root, context), /WAIVED_NODE_CONTEXT_CHANGED/);
 });
 
-test("ADR-0024 reduction: the reviewed waiver set is exactly esbuild, and the ceiling is unchanged", () => {
+test("ADR-0024 reduction: the reviewed waiver set is exactly esbuild, and the global ceiling is unchanged", () => {
   assert.deepEqual(policy.waivers.map(waiver => [waiver.package, waiver.ghsa]), [["esbuild", ESBUILD]]);
   assert.deepEqual(policy.waivers[0].nodes.map(node => [node.path, node.version, node.context]), [["node_modules/@esbuild-kit/core-utils/node_modules/esbuild", "0.18.20", "development"]]);
   assert.equal(policy.expiresAt, "2026-12-17T23:59:59Z");

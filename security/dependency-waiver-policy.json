@@ -21,8 +21,10 @@
         { "path": "node_modules/@esbuild-kit/core-utils/node_modules/esbuild", "version": "0.18.20", "context": "development", "resolved": "https://registry.npmjs.org/esbuild/-/esbuild-0.18.20.tgz", "integrity": "sha512-ceqxoedUrcayh7Y7ZX6NdbbDzGROiyVBgC4PriJThBKSVPWnnFHZAkfI1lJT8QFkOwH4qOS2SJkS4wvpGl8BpA==" }
       ],
       "owner": "VYNVORI founder",
-      "rationale": "Development-only, via drizzle-kit's @esbuild-kit loader. The advisory affects esbuild's dev server, which this repository never starts or exposes.",
-      "recheck": "On drizzle-kit upgrades and before waiver expiry."
+      "rationale": "Development-only, via drizzle-kit's @esbuild-kit loader, used only by drizzle-kit generate and check. The advisory affects esbuild's dev server, which this repository never starts or exposes. No stable drizzle-kit release drops @esbuild-kit yet.",
+      "expiresAt": "2027-02-28T23:59:59Z",
+      "retriageBy": "2027-02-15",
+      "recheck": "On drizzle-kit upgrades, and re-triage by 2027-02-15 before the 2027-02-28 per-entry expiry (ADR-0024)."
     }
   ]
 }
