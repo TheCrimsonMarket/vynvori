@@ -27,6 +27,8 @@ const statuses: Record<CompositionError["code"], [number, string, boolean]> = {
   DOWNLOAD_UNAVAILABLE: [503, "Artwork download is not available yet.", false],
   ASSET_NOT_AVAILABLE: [409, "This artwork cannot be downloaded until it passes its safety check.", false],
 };
+/** The request header that carries a download-grant token. A token never appears in a URL (founder decision 2026-11-27). */
+export const DOWNLOAD_GRANT_HEADER = "x-vynvori-download-grant";
 /** Server-generated download filename extension per stored (sniffed) MIME type. The original filename is never stored or echoed. */
 const DOWNLOAD_EXTENSION: Readonly<Record<string, string>> = Object.freeze({ "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" });
 /**
@@ -285,24 +287,32 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
       await service!.admit("downloadGrant", compositionId, access);
       if (request.body) await readBody(request, 0);
       const { token, expiresAt } = await service!.mintDownloadGrant(compositionId, assetId, access);
-      return json({ downloadUrl: `/api/v1/compositions/${compositionId}/assets/${assetId}/download?grant=${token}`, expiresAt: expiresAt.toISOString() }, 201);
+      // The token is returned in the JSON body only, never in a URL (founder decision 2026-11-27, "logs strip code"): no access log,
+      // proxy, history entry or Referer can ever carry it. The editor sends it back in the `x-vynvori-download-grant` header.
+      return json({ downloadUrl: `/api/v1/compositions/${compositionId}/assets/${assetId}/download`, grantToken: token, expiresAt: expiresAt.toISOString() }, 201);
     }),
     /**
-     * GET /api/v1/compositions/:id/assets/:assetId/download?grant=<token> (ADR-0022 D4, C6). Unauthenticated callers get 401 before
-     * any lookup. A cross-site or same-site (not same-origin) request is refused (403) before any lookup. Every authenticated but not
-     * entitled case (absent, foreign, expired, redeemed, wrong principal, claimed, non-clean, malformed or repeated token, a
-     * speculative request) gets the same NOT_FOUND. The bytes are the unchanged original, sent as an attachment.
+     * GET /api/v1/compositions/:id/assets/:assetId/download with the token in the `x-vynvori-download-grant` header (ADR-0022 D4, C6
+     * and its follow-up). Unauthenticated callers get 401 before any lookup. A request that is not same-origin is refused (403) before
+     * any lookup. A token in the query string (the earlier grant query form) is refused, so a URL never carries one. Every authenticated
+     * but not entitled case (absent, foreign, expired, redeemed, wrong principal, claimed, non-clean, malformed, missing or repeated
+     * token, a speculative or non-GET request) gets the same NOT_FOUND. Each redeem attempt by an entitled caller is charged to the
+     * same `*_DOWNLOAD_GRANT` bucket as the mint, after access and before any grant lookup or object fetch. The bytes are the
+     * unchanged original, sent as an attachment.
      */
     downloadAsset: wrapped(async (request, params) => {
       const compositionId = id(params, "id"), { access } = await actor(request, compositionId, false, false); // no JSON body on this route
       if (request.method !== "GET") throw new CompositionError("NOT_FOUND"); // a HEAD (link checker, proxy pre-flight) never spends a grant
       const site = request.headers.get("sec-fetch-site");
-      if (site !== null && site !== "same-origin" && site !== "none") throw new HttpError(403, "FORBIDDEN");
-      const assetId = id(params, "assetId"), tokens = new URL(request.url).searchParams.getAll("grant");
-      if (isSpeculative(request) || tokens.length !== 1) throw new CompositionError("NOT_FOUND"); // a prefetch never spends a grant
+      if (site !== null && site !== "same-origin") throw new HttpError(403, "FORBIDDEN");
+      const assetId = id(params, "assetId"), token = request.headers.get(DOWNLOAD_GRANT_HEADER);
+      // A prefetch never spends a grant; a token anywhere in the URL is refused outright (a repeated header arrives comma-joined and fails the token check).
+      // A malformed token (by shape alone, no stored data) is refused before the charge, so a broken client cannot drain its own budget.
+      if (isSpeculative(request) || new URL(request.url).search !== "" || token === null || !opaque.test(token)) throw new CompositionError("NOT_FOUND");
       await service!.authorize(compositionId, access);
       service!.assertDownloadsAvailable();
-      const { asset, bytes } = await service!.redeemDownloadGrant(compositionId, assetId, access, tokens[0]!);
+      await service!.admit("downloadGrant", compositionId, access); // charged after access; an unset policy closes redeem too (503)
+      const { asset, bytes } = await service!.redeemDownloadGrant(compositionId, assetId, access, token);
       const extension = DOWNLOAD_EXTENSION[asset.mime];
       if (!extension) throw new CompositionError("NOT_FOUND"); // unreachable for stored assets (inspectImage sniffs these three only)
       const headers = baseHeaders();

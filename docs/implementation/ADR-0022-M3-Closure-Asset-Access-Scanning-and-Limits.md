@@ -409,3 +409,63 @@ No schema change: revert the PR. Grants already minted stay in `asset_download_g
 - `composition-download.test.ts`: the TTL resolver and the static gates (no payment coupling, only the service names grant primitives, consume after fetch, no logging, route files).
 - `apps/web/tests/editor-download.test.ts` (helpers and static checks) and the C6 case in `composition-config.test.ts`.
 - Every number is a `SYNTHETIC_*` fixture in `tests/`. No new database file: the D8 budget (40 connections, five files, pool caps 18 and 4) is unchanged.
+
+## C6 follow-up — Download rate limit and link-code log stripping (founder decisions 2026-11-27)
+
+The founder answered the two C6 open questions on 2026-11-27: downloads should be rate limited, configurable so the limit can scale later ("at the beginning traffic would be small so we can be generous while making sure nobody can spam the system"), and logs should strip the link code. **No migration, no new environment variable, no contracts change, no flag change.**
+
+### Rate limit: every redeem attempt is charged to the existing `*_DOWNLOAD_GRANT` bucket
+
+- A separate redeem operation would need a new operation name. The `0002` CHECK on `rate_limit_buckets.bucket_key` lists the ten operations by name, so a new one needs migration `0003` (a registry allocation), two new `M3_LIMIT_*` keys in the `.env.example` shared lane, and an edit to `RateLimitOperation` in `packages/contracts`. All of that sits outside this step's lanes.
+- Instead, **redeem charges the same `GUEST_DOWNLOAD_GRANT` / `OWNER_DOWNLOAD_GRANT` bucket as mint**, through the C4 `admit("downloadGrant")` path. A download therefore costs two tokens, one for the mint and one for the redeem. The limit scales with the four existing keys (rows 20, 21, 28 and 29 of the values table) and needs no code change.
+- Order on redeem: ids and credentials (`401`), method, `Sec-Fetch-Site`, speculative request, no query string and a token header present (uniform `404`), **access in SQL**, availability, **charge**, then the grant lookup, the object fetch and the consume. A caller without access is never charged and creates no bucket row. Every redeem attempt by an entitled caller is charged, including one with a wrong token, so guessing is bounded too. A limited redeem answers `429` with `Retry-After` and does not touch the grant. An unset policy closes redeem (`503 LIMITS_NOT_CONFIGURED`), just as it closes mint.
+- Separate redeem keys remain possible later through a coordinator-owned PR (migration `0003` plus `.env.example`) if the founder wants mint and redeem to be tuned independently.
+
+### Values chosen under the founder's delegation (2026-11-27)
+
+The founder delegated the numbers ("Configure the values based on that"). These are the values to set in each deployment's environment. They are **not** code defaults: production code still has no default, and an unset key still closes downloads. `.env.example` keeps commented key names only.
+
+| Key | Value | Why |
+|---|---|---|
+| `M3_LIMIT_DOWNLOAD_GRANT_TTL_SECONDS` | `120` | The editor redeems in the same click, so two minutes covers a slow connection. A leaked grant dies quickly. |
+| `M3_LIMIT_RATE_GUEST_DOWNLOAD_GRANT_WINDOW_SECONDS` | `3600` | A one-hour window. |
+| `M3_LIMIT_RATE_GUEST_DOWNLOAD_GRANT_MAX` | `120` | 60 downloads per hour per guest draft (each download is a mint plus a redeem). |
+| `M3_LIMIT_RATE_OWNER_DOWNLOAD_GRANT_WINDOW_SECONDS` | `3600` | A one-hour window. |
+| `M3_LIMIT_RATE_OWNER_DOWNLOAD_GRANT_MAX` | `240` | 120 downloads per hour per signed-in account. |
+
+A person rarely downloads the same original more than a few times, so these values are generous. A script is held to 60 or 120 downloads an hour per subject. More guest subjects cost a guest creation each, which `GUEST_CREATE_GLOBAL` and the live-draft cap bound. Egress per subject is at most that count times the image size limit. To scale, raise the `_MAX` values or shorten the window in the environment; no code change is needed. The other 26 limit values are still unsupplied, so uploads, and with them downloads, stay closed.
+
+### The link code never appears in a URL
+
+- In-repository code logs nothing on this path (C6 static test). The remaining exposure was the platform's own request logs, proxies and browser history, which record query strings and which no thread may configure (cloud infrastructure).
+- So the token **no longer travels in a URL at all**. The mint answers `201 { downloadUrl, grantToken, expiresAt }`, where `downloadUrl` is the bare `/api/v1/compositions/:id/assets/:assetId/download`. The editor already redeems with its own same-origin `fetch` (C6), so it sends the token in the `x-vynvori-download-grant` request header.
+- Redeem **refuses any query string** with the uniform `404` and does not charge or spend anything, so the earlier `?grant=` form can never redeem. A repeated header arrives comma-joined and fails the token check.
+- Because the request needs a custom header, it can only come from a same-origin script. A cross-origin page cannot send it without a CORS preflight that the app never grants. `Sec-Fetch-Site: none` (address bar) is now refused as well, since such a request could not carry the header anyway.
+- `Referrer-Policy: no-referrer` and `no-store` are unchanged.
+
+### Security re-review (C6 follow-up)
+
+The `security-reviewer` pass on this change found no CRITICAL, HIGH or MEDIUM issue. Dispositions:
+
+- **Fixed (LOW): a malformed token was charged.** The token's shape (43 base64url characters) is now checked before the charge, using no stored data, so it is no oracle. A well-formed but wrong token is still charged, which bounds guessing. Tested.
+- **Accepted (LOW): one shared budget.** Failed redeems (wrong, expired or repeated tokens) use the same bucket as mints. For an owner the bucket covers all of their compositions; for a guest, the one draft. A client stuck in a retry loop can therefore lock itself out of minting for the window. Only the entitled principal can do this, so a third party cannot. The editor never retries automatically, and the values above leave room for many retries.
+- **Operational note (LOW):** standard access logs record neither headers nor bodies. If a platform, APM or error tool is ever set to capture them, add the `x-vynvori-download-grant` header and the `grantToken` field to its redaction list.
+- The C6 finding "N concurrent redeems each fetch the object" is now bounded by the per-redeem charge.
+
+### Rollback
+
+Revert the PR. The C6 behaviour returns: redeem is no longer charged, and the token travels in `?grant=`. No data changes.
+
+### Tests
+
+- `composition-download-suite.ts` (in-memory and PostgreSQL):
+  - every redeem goes through the header;
+  - a token in the query string, or any other query, is refused and leaves the grant spendable;
+  - guest and owner redeems charge `*_DOWNLOAD_GRANT`, including wrong tokens; mint and redeem share one budget;
+  - a limited redeem answers `429` and leaves the grant spendable;
+  - callers without access are never charged;
+  - an unset policy closes redeem;
+  - `Sec-Fetch-Site: none` is `403`.
+- `composition-download.test.ts`: static, no token is ever put in a URL.
+- `editor-download.test.ts`: `downloadTargetFrom` accepts only the bare route plus a well-formed token, and the editor sends the token in the header and never in a URL.
+- No new database file: the D8 budget is unchanged.
