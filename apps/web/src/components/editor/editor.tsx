@@ -9,7 +9,7 @@ import {
   neighbourAfterDelete, nudge, parseMm, profile, redo, resizeKeepingAspect, sceneKey, stackPosition, startHistory, summarizeIssues, undo, updateLayer, zoneOf,
   checkUploadDimensions, checkUploadFileSize, classifyApiFailure, describeExpiry, describeGuestCapacity, describeNotConfigured, describeRateLimited, type ApiFailure, type EditorAsset, type LayerPatch, type UploadLimits,
   canRequestScan, describeScanOutcome, parseScanStatus, previewHref, scanLabel, type ScanStatus,
-  canDownloadOriginal, describeDownloadFailure, describeDownloadStarted, downloadPathFrom,
+  canDownloadOriginal, describeDownloadFailure, describeDownloadStarted, downloadFileName, downloadPathFrom,
 } from "./model";
 
 type ServerState = { compositionId: string | null; revision: number; owner: "guest" | "owner" | null; autosave: "idle" | "pending" | "conflict" | "failed" | "unavailable" | "limited" | "blocked"; lastSavedKey: string | null; expiresAt: string | null; versions: VersionView[]; currentVersionId: string | null };
@@ -308,8 +308,10 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
   }
 
   /**
-   * Download the unchanged original (ADR-0022 D4, C6): one explicit press mints one single-use grant, then the browser navigates to
-   * it programmatically. There is no rendered link, so nothing can prefetch it. The server re-checks ownership and `clean`.
+   * Download the unchanged original (ADR-0022 D4, C6): one explicit press mints one single-use grant, and the editor then fetches that
+   * grant itself and hands the bytes to the browser as a file. The editor tab never navigates, so a refused or failed redeem (an
+   * expired grant, a late safety block, a storage fault) is announced here and no unsaved edit is lost. There is no rendered link,
+   * so nothing can prefetch a grant. The server re-checks ownership and `clean` on both requests.
    */
   async function downloadOriginal(assetId: string) {
     const asset = assets.get(assetId), compositionId = server.compositionId; if (!compositionId || !asset || !canDownloadOriginal(asset)) return; setBusy(true);
@@ -318,7 +320,13 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
       if (!response.ok) { notify(describeDownloadFailure(response.status, response.data)); return; }
       const path = downloadPathFrom(response.data, compositionId, assetId);
       if (!path) { notify(describeDownloadFailure(response.status, null)); return; }
-      window.location.assign(path);
+      const file = await fetch(path, { cache: "no-store", credentials: "same-origin" }).catch(() => null);
+      if (!file?.ok) { let data: unknown = null; try { data = await file?.json(); } catch { /* not JSON */ } notify(describeDownloadFailure(file?.status ?? 0, data)); return; }
+      const name = downloadFileName(file.headers.get("content-disposition"));
+      if (!name) { notify(describeDownloadFailure(file.status, null)); return; }
+      const url = URL.createObjectURL(await file.blob()), link = document.createElement("a");
+      link.href = url; link.download = name; link.rel = "noopener"; link.click(); // detached and never rendered
+      setTimeout(() => URL.revokeObjectURL(url), 0);
       notify(describeDownloadStarted(asset.name));
     } finally { setBusy(false); }
   }

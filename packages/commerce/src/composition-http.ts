@@ -295,6 +295,7 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
      */
     downloadAsset: wrapped(async (request, params) => {
       const compositionId = id(params, "id"), { access } = await actor(request, compositionId, false, false); // no JSON body on this route
+      if (request.method !== "GET") throw new CompositionError("NOT_FOUND"); // a HEAD (link checker, proxy pre-flight) never spends a grant
       const site = request.headers.get("sec-fetch-site");
       if (site !== null && site !== "same-origin" && site !== "none") throw new HttpError(403, "FORBIDDEN");
       const assetId = id(params, "assetId"), tokens = new URL(request.url).searchParams.getAll("grant");
@@ -308,7 +309,7 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
       headers.set("content-type", asset.mime); headers.set("content-length", String(bytes.byteLength));
       headers.set("content-disposition", `attachment; filename="original-${asset.sha256.slice(0, 12)}.${extension}"`);
       headers.set("content-security-policy", "default-src 'none'; sandbox"); headers.set("cross-origin-resource-policy", "same-origin");
-      return new Response(Buffer.from(bytes), { status: 200, headers });
+      return new Response(bytes as Uint8Array<ArrayBuffer>, { status: 200, headers }); // no second copy of the original
     }),
     readAsset: wrapped(async (request, params) => {
       const compositionId = id(params, "id"), { access } = await actor(request, compositionId, false);

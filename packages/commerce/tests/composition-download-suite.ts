@@ -208,13 +208,15 @@ export function downloadConformance(label: string, factory: () => Promise<StoreH
     const anonymous = await redeem(ctx, { cookie: null }, g.id, g.asset.id, minted.path);
     assert.equal(anonymous.status, 401); assert.equal((await anonymous.json()).error.code, "COMPOSITION_AUTH_REQUIRED");
     assert.equal((await redeem(ctx, { cookie: `${compositionCookies.session}=${"x".repeat(43)}` }, g.id, g.asset.id, minted.path)).status, 401, "an invalid session is never downgraded");
-    for (const headers of [{ "sec-purpose": "prefetch" }, { "sec-purpose": "prefetch;prerender" }, { purpose: "prefetch" }, { "x-moz": "prefetch" }]) {
+    for (const headers of [{ "sec-purpose": "prefetch" }, { "sec-purpose": "prefetch;prerender" }, { "sec-purpose": "prefetch;anonymous-client-ip" }, { purpose: "prefetch" }, { "x-moz": "prefetch" }]) {
       await uniform404(await redeem(ctx, g, g.id, g.asset.id, minted.path, headers), minted.token, JSON.stringify(headers));
     }
     for (const site of ["cross-site", "same-site"]) {
       const response = await redeem(ctx, g, g.id, g.asset.id, minted.path, { "sec-fetch-site": site });
       assert.equal(response.status, 403, site); assert.equal((await response.text()).includes(minted.token), false);
     }
+    const head = await ctx.http.downloadAsset(new Request(`${ORIGIN}${minted.path}`, { method: "HEAD", headers: { "sec-fetch-site": "same-origin", cookie: g.cookie } }), { id: g.id, assetId: g.asset.id });
+    assert.equal(head.status, 404, "a HEAD (link checker, proxy pre-flight) never spends a grant");
     await stillSpendable(ctx, g, g.asset.id, minted.token);
     assert.equal((await redeem(ctx, g, g.id, g.asset.id, minted.path, { "sec-fetch-site": "none" })).status, 200, "a typed or pasted URL (no initiator) still works for its owner");
   });

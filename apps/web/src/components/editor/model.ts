@@ -254,4 +254,9 @@ export function describeDownloadFailure(status: number, data: unknown): string {
   if (failure.kind === "not_configured" || code === "COMPOSITION_DOWNLOAD_UNAVAILABLE") return "Downloading originals is not set up yet.";
   return "The download could not be started. Try again.";
 }
-export const describeDownloadStarted = (name: string) => `${name}: download started. The link works once and only for you.`;
+export const describeDownloadStarted = (name: string) => `${name}: download started.`;
+/** The server-generated filename from the download response, accepted only in its exact shape (`original-<sha12>.<ext>`), else null. */
+export function downloadFileName(disposition: string | null): string | null {
+  const match = /^attachment; filename="(original-[0-9a-f]{12}\.(?:png|jpg|webp))"$/.exec(disposition ?? "");
+  return match ? match[1]! : null;
+}
