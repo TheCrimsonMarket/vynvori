@@ -4,7 +4,8 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { LICENSED_FONTS, SYNTHETIC_PREVIEW_PROFILE } from "@vynvori/contracts";
 import { publicConfig } from "@vynvori/shared/public";
-import { compositionSettings, editorCapabilities, serviceConfigFor, uploadLimitsFor } from "../src/server/composition-runtime";
+import { unconfiguredScanPort } from "@vynvori/commerce/composition";
+import { compositionSettings, editorCapabilities, scanPortFor, serviceConfigFor, uploadLimitsFor } from "../src/server/composition-runtime";
 
 test("licensed font registry pins the exact bundled Archivo file", () => {
   const bytes = readFileSync(new URL("../src/fonts/archivo.ttf", import.meta.url));
@@ -51,4 +52,22 @@ test("C4 service configuration: rate policies and the live-guest cap come only f
   assert.equal(config.liveGuestDraftsMax, 13); assert.equal(config.guestTtlMs, 12_000); assert.equal(config.uploadsEnabled, false);
   assert.equal(serviceConfigFor(SYNTHETIC_ENV, true).uploadsEnabled, true);
   assert.equal(serviceConfigFor({ ...SYNTHETIC_ENV, M3_LIMIT_LIVE_GUEST_DRAFTS_MAX: "0" }, false).liveGuestDraftsMax, undefined, "zero is invalid, not unlimited");
+});
+
+test("C5: no scanner is chosen, so the runtime always wires unconfiguredScanPort and the editor never offers upload, whatever the environment says", () => {
+  // SYNTHETIC values, not policy. Every limit an upload needs, the scan limits, and both opt-ins: still closed, because no scanner exists.
+  const SYNTHETIC_FULL_ENV: Record<string, string> = { M3_LIMIT_JSON_MAX_BYTES: "11", M3_LIMIT_IMAGE_MAX_BYTES: "13", M3_LIMIT_IMAGE_MAX_PIXELS: "14", M3_LIMIT_IMAGE_MAX_SIDE_PX: "15",
+    M3_LIMIT_MAX_ASSETS_PER_COMPOSITION: "16", M3_LIMIT_MAX_BYTES_PER_COMPOSITION: "17", M3_LIMIT_SCAN_TIMEOUT_SECONDS: "18", M3_LIMIT_SCAN_LEASE_SECONDS: "19",
+    M3_COMPOSITION_ENABLED: "true", M3_COMPOSITION_UPLOADS: "true", M3_SCANNER: "anything", M3_SCAN_PORT: "synthetic" };
+  for (const env of [{}, SYNTHETIC_FULL_ENV]) {
+    assert.equal(scanPortFor(env), unconfiguredScanPort);
+    assert.equal(serviceConfigFor(env, true).scanPort, unconfiguredScanPort);
+    assert.equal(editorCapabilities(env).artworkUpload, false);
+  }
+  const config = serviceConfigFor(SYNTHETIC_FULL_ENV, true);
+  assert.deepEqual([config.scanTimeoutMs, config.scanLeaseMs], [18_000, 19_000]);
+  assert.deepEqual([serviceConfigFor({}, true).scanTimeoutMs, serviceConfigFor({}, true).scanLeaseMs], [undefined, undefined], "unset closes scanning; no default");
+  const inverted = serviceConfigFor({ ...SYNTHETIC_FULL_ENV, M3_LIMIT_SCAN_LEASE_SECONDS: "18" }, true);
+  assert.deepEqual([inverted.scanTimeoutMs, inverted.scanLeaseMs], [undefined, undefined], "a lease that does not outlive the timeout closes scanning");
+  assert.equal(publicConfig.features["assets.production_uploads"], false);
 });

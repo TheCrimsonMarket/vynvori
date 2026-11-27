@@ -78,3 +78,17 @@ test("source hashes pin images and fonts, de-duplicated and sorted", () => {
   assert.deepEqual(hashes.assets, [sha("0"), sha("a")]);
   assert.deepEqual(hashes.fonts, [font.fileSha256]);
 });
+test("preflight (ADR-0022 C5): a server asset that is not clean is the hard error ASSET_NOT_SCANNED; clean or no server record adds nothing", () => {
+  for (const status of ["pending", "unknown", "quarantined"] as const) {
+    const result = runPreviewPreflight(scene(), SYNTHETIC_PREVIEW_PROFILE, new Map([["asset_1", { ...assets.get("asset_1")!, scanStatus: status }]]), fonts);
+    assert.equal(result.state, "blocked", status);
+    assert.deepEqual(result.issues.filter(i => i.code === "ASSET_NOT_SCANNED"), [{ code: "ASSET_NOT_SCANNED", severity: "hard_error", zoneId: "front", layerId: "l1", detail: status }]);
+  }
+  for (const facts of [{ ...assets.get("asset_1")!, scanStatus: "clean" as const }, assets.get("asset_1")!]) {
+    const result = runPreviewPreflight(scene(), SYNTHETIC_PREVIEW_PROFILE, new Map([["asset_1", facts]]), fonts);
+    assert.equal(result.issues.some(i => i.code === "ASSET_NOT_SCANNED"), false); assert.equal(result.state, "preview_only");
+  }
+  // hidden layers are not checked, as for every other image check
+  const hidden = runPreviewPreflight(scene([image("l1", { visible: false })]), SYNTHETIC_PREVIEW_PROFILE, new Map([["asset_1", { ...assets.get("asset_1")!, scanStatus: "pending" as const }]]), fonts);
+  assert.equal(hidden.issues.some(i => i.code === "ASSET_NOT_SCANNED"), false);
+});

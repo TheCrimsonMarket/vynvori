@@ -241,13 +241,13 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
       await service!.admit("assetUpload", compositionId, access);
       const bytes = await readBody(request, cfg.maxUploadBytes);
       const asset = await service!.uploadAsset(compositionId, access, bytes, request.headers.get("content-type"));
-      // ADR-0022 D3: scanned inline, once, after the row exists. The verdict comes only from the server's scan port; nothing from this
+      // ADR-0022 D3: scanned inline, once, after the row exists. The scan outcome comes only from the server scan port; nothing from this
       // request (no header, no field) can influence it. A non-clean result is still a stored upload (201) with its status.
       const scanStatus = await service!.scanAsset(compositionId, asset.id, access, bytes);
       return json({ asset: assetView({ ...asset, scanStatus }) }, 201);
     }),
     /**
-     * POST /api/v1/compositions/:id/assets/:assetId/scan: an explicit rescan request (ADR-0022 C5). It accepts NO body: no verdict,
+     * POST /api/v1/compositions/:id/assets/:assetId/scan: an explicit rescan request (ADR-0022 C5). It accepts NO body: no scan outcome,
      * evidence, reason or time can come from the client (C3b hard gate). Order: ids and credentials, access in SQL, scanner and
      * configuration, charge `*_RESCAN`, then the empty-body check. Answers only the coarse status.
      */
