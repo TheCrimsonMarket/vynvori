@@ -11,21 +11,22 @@ import { assertDisposableTarget, assertServerIsDisposableSynthetic, databaseFor,
 const planDir = new URL("../ledger-migrations", import.meta.url).pathname;
 const code = (c: string) => (e: unknown) => e instanceof LedgerMigrationError && e.code === c;
 
-test("ledger plan loads, pins the reviewed SQL and lists 0001 (schema only), 0002 (wallet + ledger), 0003 (quotes), 0004 (promo claims) then 0005 (reservations)", () => {
+test("ledger plan loads, pins the reviewed SQL and lists 0001 (schema only), 0002 (wallet + ledger), 0003 (quotes), 0004 (promo claims), 0005 (reservations) then 0007 (refinement slots)", () => {
   const plan = ledgerMigrationPlan();
-  assert.deepEqual(plan.migrations.map(m => m.file), ["0001_ledger_schema.sql", "0002_wallet_ledger.sql", "0003_quotes.sql", "0004_promo_claims.sql", "0005_reservations.sql"]);
+  assert.deepEqual(plan.migrations.map(m => m.file), ["0001_ledger_schema.sql", "0002_wallet_ledger.sql", "0003_quotes.sql", "0004_promo_claims.sql", "0005_reservations.sql", "0007_refinement_slots.sql"]);
   assert.match(plan.digest, /^[a-f0-9]{64}$/); assert.deepEqual(plan.plan.requires, ["vynvori_identity"]);
 });
 
 // Golden digests: ANY change to plan.json or the pinned SQL forces a visible edit here (the planSha256 argument alone is circular).
-const GOLDEN_PLAN_JSON_SHA256 = "f2510aa7a9f4b02933e412c87ac8db57591af9d184a28b0929dca8f581956c28";
+const GOLDEN_PLAN_JSON_SHA256 = "5a4147f9f2ffffcc9bcb4cc08ec420742e324e328932eec5f598bc174beaad3b";
 const GOLDEN_0001_SQL_SHA256 = "a8273f3fac59de2d0c2f1a661a852d22b9a360c9d9c83e672bd7f0d25d74ef4e";
 const GOLDEN_0002_SQL_SHA256 = "28a6d0e3727bf8c8cd20d98586d2f2564cb57df31412cd655c150e720ea2ea82";
 const GOLDEN_0003_SQL_SHA256 = "f32217a8a099728e5956a2166cf6ecc163cb2ea12af4511879fd0e282ba46159";
 const GOLDEN_0004_SQL_SHA256 = "0ceee68eb748af0ed0ddb86558bb652900c15f64fe6a8185a6de358e31dba397";
 const GOLDEN_0005_SQL_SHA256 = "07948d4f934cdee709da3b7cded3d36919185075991594f6f3e112f2eb8e1ddf";
+const GOLDEN_0007_SQL_SHA256 = "cae7ef748a7f12e8d04b0bbb67c5e9bcf1cae2ac1bf716cbc2062395190f41b7";
 const sha = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
-test("golden digests pin plan.json, 0001, 0002, 0003, 0004 and 0005 independently of the loader", () => {
+test("golden digests pin plan.json, 0001, 0002, 0003, 0004, 0005 and 0007 independently of the loader", () => {
   assert.equal(sha(join(planDir, "plan.json")), GOLDEN_PLAN_JSON_SHA256);
   assert.equal(sha(join(planDir, "0001_ledger_schema.sql")), GOLDEN_0001_SQL_SHA256);
   assert.equal(ledgerMigrationPlan().digest, GOLDEN_PLAN_JSON_SHA256);
@@ -38,6 +39,8 @@ test("golden digests pin plan.json, 0001, 0002, 0003, 0004 and 0005 independentl
   assert.equal(ledgerMigrationPlan().migrations[3]!.sha256, GOLDEN_0004_SQL_SHA256);
   assert.equal(sha(join(planDir, "0005_reservations.sql")), GOLDEN_0005_SQL_SHA256);
   assert.equal(ledgerMigrationPlan().migrations[4]!.sha256, GOLDEN_0005_SQL_SHA256);
+  assert.equal(sha(join(planDir, "0007_refinement_slots.sql")), GOLDEN_0007_SQL_SHA256);
+  assert.equal(ledgerMigrationPlan().migrations.find(m => m.file === "0007_refinement_slots.sql")!.sha256, GOLDEN_0007_SQL_SHA256, "found by name: S6's 0006 may sit before it");
 });
 
 test("plan validation: requires must be exactly the identity schema; files unique and strictly increasing", () => {
@@ -130,6 +133,37 @@ test("0003 is additive: ledger-schema objects only; no SECURITY DEFINER; only fu
   for (const match of sql.matchAll(/REFERENCES\s+(\S+?)\s*\(/g)) assert.match(match[1]!, /^vynvori_(ledger|identity)\./);
   assert.equal([...original.matchAll(/fired from an unexpected context/g)].length, 2, "both new trigger functions verify what fired them");
   assert.doesNotMatch(readFileSync(join(planDir, "rollback/0003_quotes.down.sql"), "utf8").replace(/--.*$/gm, ""), /\b(CASCADE|TRUNCATE|DELETE\s+FROM\s+vynvori_ledger\.)/i);
+});
+
+test("0007 is additive: ledger-schema objects only; exactly two new SECURITY DEFINER apply functions; the only DROP is S5's package-immutable trigger; function-level REVOKE only; no grants, roles, owners, ALTERs, identity alteration or Medusa", () => {
+  const original = readFileSync(join(planDir, "0007_refinement_slots.sql"), "utf8").replace(/--.*$/gm, "");
+  const sql = original.replace(/'[^']*'/g, "''");
+  const pure = ["vynvori_ledger.ledger_package_edge_allowed(text,text)", "vynvori_ledger.refinement_slot_edge_allowed(text,text)"];
+  const revokes = [...sql.matchAll(/REVOKE\s+ALL\s+ON\s+FUNCTION\s+(vynvori_ledger\.\w+)\(([a-z, ]*)\)\s+FROM\s+PUBLIC\s*;/gi)].map(m => m[1]! + "(" + m[2]!.replace(/\s+/g, "") + ")");
+  const functions = [...sql.matchAll(/CREATE\s+FUNCTION\s+(vynvori_ledger\.\w+)\(([^)]*)\)/gi)].map(m => m[1]! + "(" + m[2]!.split(",").map(a => a.trim().split(/\s+/).pop()).filter(Boolean).join(",") + ")");
+  assert.equal(functions.length, 11, "0007 adds exactly eleven functions (two pure edge functions, nine trigger functions)");
+  assert.deepEqual([...revokes].sort(), functions.filter(f => !pure.includes(f)).sort(), "every trigger function is revoked from PUBLIC, nothing else is; the pure edge functions are the documented exception (a CHECK calls them as the invoker)");
+  const rest = sql.replace(/REVOKE\s+ALL\s+ON\s+FUNCTION\s+vynvori_ledger\.\w+\([a-z, ]*\)\s+FROM\s+PUBLIC\s*;/gi, "");
+  assert.doesNotMatch(rest, /\b(GRANT|REVOKE|ALTER|OWNER\s+TO|CREATE\s+(SCHEMA|ROLE|EXTENSION|USER)|DELETE\s+FROM|medusa|CASCADE)\b/i, "no grant, role, owner, ALTER, delete or Medusa reference in a migration");
+  assert.doesNotMatch(rest, /^\s*TRUNCATE\b/im, "TRUNCATE appears only as a trigger event");
+  assert.deepEqual([...rest.matchAll(/\bDROP\b[^;]*;/gi)].map(m => m[0].replace(/\s+/g, " ")), ["DROP TRIGGER ledger_packages_immutable ON vynvori_ledger.ledger_packages;"], "the single DROP replaces S5's every-UPDATE-rejected package trigger");
+  assert.deepEqual([...rest.matchAll(/INSERT\s+INTO\s+([\w.]+)/gi)].map(m => m[1]), ["vynvori_ledger.refinement_slots"], "the only INSERT is the package-open definer creating the two slots; no ledger entry, no seed row");
+  const definers = [...rest.matchAll(/CREATE\s+FUNCTION\s+(vynvori_ledger\.\w+)\(\)[^$]*SECURITY\s+DEFINER/gi)].map(m => m[1]);
+  assert.deepEqual(definers.sort(), ["vynvori_ledger.ledger_package_events_apply", "vynvori_ledger.refinement_slot_events_apply"], "exactly the two apply functions are SECURITY DEFINER");
+  assert.equal([...rest.matchAll(/SECURITY\s+DEFINER/gi)].length, 2);
+  for (const fn of rest.matchAll(/CREATE\s+FUNCTION[^$]*?AS\s+\$fn\$/gi)) assert.match(fn[0], /SET\s+search_path\s*=\s*pg_catalog,\s*pg_temp\s+AS/i, "every function pins search_path, pg_temp last");
+  assert.doesNotMatch(rest, /\bEXECUTE\s+(format|'|\$)/i, "no dynamic SQL");
+  assert.doesNotMatch(original, /regrole/i, "no identifier-parsing role cast");
+  for (const match of sql.matchAll(/CREATE\s+(?:TABLE|FUNCTION|(?:UNIQUE\s+)?INDEX)\s+([\w.]+)/gi)) assert.match(match[1]!, /^vynvori_ledger\.|^refinement_slots_(operation|delivered)_unique$/, "every created object lives in vynvori_ledger");
+  assert.doesNotMatch(sql, /vynvori_identity/, "0007 does not reference the identity schema at all");
+  for (const match of sql.matchAll(/REFERENCES\s+(\S+?)\s*\(/g)) assert.match(match[1]!, /^vynvori_ledger\./);
+  assert.equal([...original.matchAll(/fired from an unexpected context/g)].length, 9, "every trigger function verifies what fired it");
+  for (const apply of ["ledger_package_events_apply", "refinement_slot_events_apply"]) assert.match(original, new RegExp("pg_get_userbyid\\(\\(SELECT p\\.proowner FROM pg_catalog\\.pg_proc p WHERE p\\.oid = pg_catalog\\.to_regprocedure\\('vynvori_ledger\\." + apply + "\\(\\)'\\)\\)\\)"), `a guard follows the owner of ${apply}(), compared by name`);
+  assert.doesNotMatch(original, /approved_expiry/, "no expiry cause");
+  const down = readFileSync(join(planDir, "rollback/0007_refinement_slots.down.sql"), "utf8").replace(/--.*$/gm, "");
+  assert.doesNotMatch(down.replace(/'[^']*'/g, "''"), /\b(CASCADE|TRUNCATE|GRANT|DELETE\s+FROM\s+vynvori_ledger\.)/i);
+  assert.match(down, /CREATE TRIGGER ledger_packages_immutable BEFORE UPDATE OR DELETE ON vynvori_ledger\.ledger_packages FOR EACH ROW EXECUTE FUNCTION vynvori_ledger\.reject_mutation\(\)/, "the rollback restores S5's trigger");
+  assert.doesNotMatch(down, /DROP FUNCTION vynvori_ledger\.reject_mutation/, "0002's reject_mutation() is owned by 0002 and never dropped here");
 });
 
 test("0005 is additive: ledger-schema objects only; exactly one new SECURITY DEFINER (owner-checked guard); the only ALTERs swap S2's temporary kind constraint and add the reservation FK; no grants, roles, owners, rows, identity alteration or Medusa", () => {
@@ -226,6 +260,7 @@ test("ledger migration journal: apply, replay, drift, rollback guards, up-down-u
   const down3 = readFileSync(join(planDir, "rollback/0003_quotes.down.sql"), "utf8");
   const down4 = readFileSync(join(planDir, "rollback/0004_promo_claims.down.sql"), "utf8");
   const down5 = readFileSync(join(planDir, "rollback/0005_reservations.down.sql"), "utf8");
+  const down7 = readFileSync(join(planDir, "rollback/0007_refinement_slots.down.sql"), "utf8");
   const schemas = async () => (await client.query("SELECT nspname FROM pg_namespace WHERE nspname LIKE 'vynvori_ledger%' ORDER BY 1")).rows.map(r => r.nspname);
   const relations = async () => (await client.query("SELECT count(*)::int AS n FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='vynvori_ledger'")).rows[0].n as number;
   const functions = async () => (await client.query("SELECT count(*)::int AS n FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='vynvori_ledger'")).rows[0].n as number;
@@ -241,6 +276,43 @@ test("ledger migration journal: apply, replay, drift, rollback guards, up-down-u
       await client.query("UPDATE vynvori_ledger_migrations.applied SET sha256='0'||substr(sha256,2) WHERE file='0002_wallet_ledger.sql'");
       await assert.rejects(applyLedgerMigrations(client, expected), code("HISTORY_OR_SCHEMA_DRIFT"));
       await client.query("UPDATE vynvori_ledger_migrations.applied SET sha256=$1 WHERE file='0002_wallet_ledger.sql'", [plan.migrations[1]!.sha256]);
+    });
+    await t.test("0007 rollback refuses while any event or slot row exists, while a package has moved off authorized, and while a later migration is journaled", async () => {
+      // As for 0005: replica mode disables triggers and FK checks inside each rolled-back transaction so one probe row can exist;
+      // the rollback's own guard (a DO block) must still refuse. CHECK constraints stay active, so each probe row is shape-valid.
+      const u = "00000000-0000-4000-8000-000000000007", a = "00000000-0000-4000-8000-0000000007a1", p = "00000000-0000-4000-8000-0000000007b1", c = "00000000-0000-4000-8000-0000000007c1", sl = "00000000-0000-4000-8000-0000000007d1";
+      const seed: Record<string, string> = {
+        ledger_package_events: `INSERT INTO vynvori_ledger.ledger_package_events(package_event_id,user_id,package_id,command_id,from_state,to_state,artifact_count,evidence_ref) VALUES('${a}','${u}','${p}','${c}','authorized','partial',1,'probe')`,
+        refinement_slots: `INSERT INTO vynvori_ledger.refinement_slots(slot_id,user_id,package_id,ordinal,state) VALUES('${sl}','${u}','${p}',1,'available')`,
+        refinement_slot_events: `INSERT INTO vynvori_ledger.refinement_slot_events(slot_event_id,user_id,slot_id,package_id,command_id,from_state,to_state) VALUES('${a}','${u}','${sl}','${p}','${c}','available','skipped')`,
+        moved_package: `INSERT INTO vynvori_ledger.ledger_packages(package_id,user_id,authorization_id,state) VALUES('${p}','${u}','${a}','partial')`,
+      };
+      for (const [label, sql] of Object.entries(seed)) {
+        await client.query("BEGIN");
+        try { await client.query("SET LOCAL session_replication_role = replica"); await client.query(sql); await assert.rejects(client.query(down7), /refusing rollback: package events, refinement slots or moved packages exist/, label); } finally { await client.query("ROLLBACK"); }
+      }
+      for (const table of ["ledger_package_events", "refinement_slots", "refinement_slot_events"]) assert.equal((await client.query(`SELECT to_regclass('vynvori_ledger.${table}') IS NULL AS gone`)).rows[0].gone, false, "refused rollbacks leave the tables intact");
+      await client.query("INSERT INTO vynvori_ledger_migrations.applied(file,sha256) VALUES('0008_future_step.sql', repeat('b',64))");
+      await assert.rejects(client.query(down7), /later ledger migration is applied/);
+      await client.query("DELETE FROM vynvori_ledger_migrations.applied WHERE file='0008_future_step.sql'");
+    });
+    await t.test("0007 down removes its tables and functions and restores S5's package-immutable trigger; 0005's objects are untouched; up again re-applies exactly it; the final state is rolled back for the older steps", async () => {
+      const gone = async () => (await Promise.all(["ledger_package_events", "refinement_slots", "refinement_slot_events"].map(async table => (await client.query(`SELECT to_regclass('vynvori_ledger.${table}') IS NULL AS gone`)).rows[0].gone as boolean)));
+      const fns = ["ledger_package_edge_allowed(text, text)", "refinement_slot_edge_allowed(text, text)", "ledger_packages_update_guard()", "ledger_package_events_bind()", "ledger_package_events_apply()", "ledger_package_events_check_complete()", "refinement_slots_insert_guard()", "refinement_slots_update_guard()", "refinement_slot_events_bind()", "refinement_slot_events_apply()", "refinement_slot_events_check_complete()"];
+      const triggers = async () => (await client.query("SELECT tgname FROM pg_trigger WHERE tgrelid='vynvori_ledger.ledger_packages'::regclass AND NOT tgisinternal ORDER BY 1")).rows.map(r => r.tgname);
+      assert.deepEqual(await triggers(), ["ledger_packages_check_insert", "ledger_packages_no_delete", "ledger_packages_no_truncate", "ledger_packages_update_guard"]);
+      await client.query(down7);
+      assert.deepEqual(await gone(), [true, true, true]);
+      for (const fn of fns) assert.equal((await client.query("SELECT to_regprocedure($1) IS NULL AS gone", [`vynvori_ledger.${fn}`])).rows[0].gone, true, fn);
+      assert.deepEqual(await triggers(), ["ledger_packages_check_insert", "ledger_packages_immutable", "ledger_packages_no_truncate"], "S5's trigger is back");
+      for (const fn of ["reject_mutation()", "ledger_entries_apply_to_reservation()", "credit_reservations_update_guard()"]) assert.equal((await client.query("SELECT to_regprocedure($1) IS NULL AS gone", [`vynvori_ledger.${fn}`])).rows[0].gone, false, fn + " (0002/0005) remains");
+      assert.deepEqual((await client.query("SELECT file FROM vynvori_ledger_migrations.applied ORDER BY file")).rows.map(r => r.file), ["0001_ledger_schema.sql", "0002_wallet_ledger.sql", "0003_quotes.sql", "0004_promo_claims.sql", "0005_reservations.sql"]);
+      await assert.rejects(client.query(down7), /not applied/);
+      assert.equal((await applyLedgerMigrations(client, expected)).applied, 1, "up again applies exactly 0007");
+      assert.deepEqual(await gone(), [false, false, false]);
+      assert.deepEqual(await triggers(), ["ledger_packages_check_insert", "ledger_packages_no_delete", "ledger_packages_no_truncate", "ledger_packages_update_guard"]);
+      assert.equal((await applyLedgerMigrations(client, expected)).applied, 0, "replay applies nothing");
+      await client.query(down7); // the older rollback steps below assume 0005 is the newest applied migration
     });
     await t.test("0005 rollback refuses while any reservation table holds a row or a non-grant entry exists, and while a later migration is journaled", async () => {
       // session_replication_role = replica disables ordinary triggers and FK checks INSIDE this rolled-back transaction only, so
@@ -305,8 +377,8 @@ test("ledger migration journal: apply, replay, drift, rollback guards, up-down-u
       assert.equal((await client.query("SELECT to_regclass('vynvori_ledger.ledger_quotes') IS NULL AS gone")).rows[0].gone, false, "0003's objects remain");
       assert.deepEqual((await client.query("SELECT file FROM vynvori_ledger_migrations.applied ORDER BY file")).rows.map(r => r.file), ["0001_ledger_schema.sql", "0002_wallet_ledger.sql", "0003_quotes.sql"]);
       await assert.rejects(client.query(down4), /not applied/);
-      assert.equal((await applyLedgerMigrations(client, expected)).applied, 2, "up again applies exactly the pending tail, 0004 then 0005");
-      await client.query(down5); await client.query(down4);
+      assert.equal((await applyLedgerMigrations(client, expected)).applied, 3, "up again applies exactly the pending tail, 0004, 0005 then 0007");
+      await client.query(down7); await client.query(down5); await client.query(down4);
     });
     await t.test("0003 rollback refuses while any quote table holds a row, and while a later migration is journaled", async () => {
       const quoteProfile = "INSERT INTO vynvori_identity.profiles(id,issuer,subject) VALUES('00000000-0000-4000-8000-000000000002','https://synthetic.invalid','rollback-probe-quotes')";
@@ -363,10 +435,10 @@ test("ledger migration journal: apply, replay, drift, rollback guards, up-down-u
       await client.query("DROP TABLE vynvori_ledger.synthetic_probe");
       await client.query(down1);
       assert.deepEqual(await schemas(), []);
-      assert.equal((await applyLedgerMigrations(client, expected)).applied, 5);
+      assert.equal((await applyLedgerMigrations(client, expected)).applied, 6);
       assert.deepEqual(await schemas(), ["vynvori_ledger", "vynvori_ledger_migrations"]);
-      await client.query(down5); await client.query(down4); await client.query(down3); await client.query(down2); await client.query(down1); await assert.rejects(client.query(down1), /schema not present/);
-      assert.equal((await applyLedgerMigrations(client, expected)).applied, 5);
+      await client.query(down7); await client.query(down5); await client.query(down4); await client.query(down3); await client.query(down2); await client.query(down1); await assert.rejects(client.query(down1), /schema not present/);
+      assert.equal((await applyLedgerMigrations(client, expected)).applied, 6);
     });
     await t.test("the in-transaction identity check rejects a different database or role than expected", async () => {
       await assert.rejects(applyLedgerMigrations(client, { ...expected, database: databaseFor("fixture") }), code("TARGET_REJECTED"));
@@ -387,7 +459,7 @@ test("ledger migration journal: apply, replay, drift, rollback guards, up-down-u
       await client.end(); client = await freshLedger("migrations");
     });
     await t.test("the identity prerequisite is enforced and the pool honours the D15 cap", async () => {
-      await client.query(down5); await client.query(down4); await client.query(down3); await client.query(down2); await client.query(down1); await client.query("DROP SCHEMA vynvori_identity CASCADE");
+      await client.query(down7); await client.query(down5); await client.query(down4); await client.query(down3); await client.query(down2); await client.query(down1); await client.query("DROP SCHEMA vynvori_identity CASCADE");
       await assert.rejects(applyLedgerMigrations(client, expected), code("PREREQUISITE_MISSING"));
       const { pool, max, serverMax, degraded } = await ledgerPool("migrations", "standard");
       try { assert.ok(max <= POOL_CAPS.standard); assert.equal(degraded, serverMax - 3 < POOL_CAPS.standard); } finally { await pool.end(); }
