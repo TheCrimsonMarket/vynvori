@@ -397,12 +397,27 @@ Revoke each login's membership first (`REVOKE <ledger role> FROM <login>`), or `
 removes the column privileges. Restoring `TEMPORARY` to `PUBLIC` is only right if nothing else in the database was relying on its
 absence; skip that line if in doubt.
 
-**Migration rollback after the re-own.** The `rollback/000N_*.down.sql` scripts run as the executor and `DROP FUNCTION` or
-`CREATE OR REPLACE FUNCTION` the definer functions, which needs the owner. While the four functions are re-owned, `0007.down` fails
-with `must be owner of function ...` and, because each script is one `DO` block, changes nothing (fails closed). The documented order is:
-run `reown_back` above, then the down scripts in reverse order (0007 to 0001), then, if the schema is re-applied, this proposal again
-from step 1. Tested as up → re-own → down (refused) → re-own back → down → up. The same applies to any later migration that replaces a
-definer function: it must re-own back first and re-own afterwards (ADR-0021 S6 caveat), and must update this proposal in the same PR.
+**Migration rollback after the re-own** (corrected by test). The `rollback/000N_*.down.sql` scripts run as the executor. What they
+need differs by statement:
+
+- `DROP FUNCTION` needs ownership of the function **or of its schema**. The executor owns `vynvori_ledger`, so `0007.down`, `0005.down`
+  and `0002.down` succeed even while their definer functions are re-owned. `0007.down` then drops `ledger_package_events_apply()` and
+  `refinement_slot_events_apply()` with everything else of 0007; the package and slot definer roles are left owning nothing.
+- `CREATE OR REPLACE FUNCTION` needs the function owner. `0006.down` restores the S5 body of `ledger_entries_apply_to_reservation()`,
+  so while that function is re-owned it fails with `must be owner of function ...` and, because each script is one `DO` block, changes
+  nothing (fails closed).
+- Re-applying a migration after a down (for example `0007` up again) creates its tables with no grants and its definer functions owned
+  by the executor, i.e. back on the old "definer = table owner" model. Step 6 reports both. Re-running steps 3, 4 and 5 restores the
+  exact end state: `GRANT` of a privilege already held is a no-op, and `ALTER FUNCTION ... OWNER TO` the role that already owns it is a
+  no-op.
+
+The documented order is therefore: run `reown_back` above, then the down scripts in reverse order (0007 to 0001); to remove the roles
+as well, run `drop_roles` **before** the downs (it needs the schema to exist). After any up, run step 6 and, if it reports rows, steps 3
+to 5 again (partial) or the whole proposal from step 1 (after `drop_roles`). Tested as up → re-own → `0007.down` (succeeds) →
+`0006.down` (refused, nothing changed) → `0007` up → steps 3 to 6 → `reown_back` → `drop_roles` → down 0007 to 0001 → up → the whole
+proposal again → undo. The same applies to any later migration that replaces a definer function: it must re-own back first and
+re-own afterwards (ADR-0021 S6 caveat), and must update this proposal in the same PR. A migration that only drops one does not need
+the re-own back; step 6 then reports the missing function.
 
 ## 6. Break-glass (corrected note)
 
@@ -471,5 +486,5 @@ There is no code bypass and none is added. After step 5:
   rows; the real library runs every runtime command kind as the runtime role, the checker report is clean as the checker role, and
   vendor-cost evidence is recorded as the reconciliation role; each privilege removed one at a time makes its path fail with `42501`;
   no role can act as a definer (catalog and a real `LOGIN` that tries `SET ROLE`, also with `pg_write_all_data`); the re-own was done
-  without a superuser; the migration rollback is refused while re-owned and succeeds after `reown_back`; and `drop_roles` returns the
+  without a superuser; a down that replaces a re-owned definer is refused and changes nothing, a down that only drops succeeds, step 6 reports what an up leaves ungranted, and the full down/up/proposal cycle works after `reown_back`; and `drop_roles` returns the
   database to its pre-proposal privileges.

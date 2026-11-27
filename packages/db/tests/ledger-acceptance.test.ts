@@ -157,7 +157,7 @@ test("S9-TRACE: every plan §9 row and binding S9 item names tests that exist, a
     if (row.w1 !== "no") assert.ok(row.tests.length > 0, `${row.id} is in W1 and names at least one test`);
     for (const [file, name] of row.tests) {
       const source = read(file);
-      assert.ok(file === ACC ? new RegExp(`t\\.test\\("${row.id}[ :(]`).test(source) : source.includes(name), `${row.id}: ${file} has a test named "${name}"`);
+      assert.ok(file === ACC ? new RegExp(`t\\.test\\("[^"]*\\b${row.id}[ :(]`).test(source) : source.includes(name), `${row.id}: ${file} has a test named "${name}"`);
     }
     assert.match(evidence, new RegExp(`\\| ${row.id} \\|`), `M7-Evidence.md has a row for ${row.id}`);
   }
@@ -772,4 +772,72 @@ test("S9 grants proposal: applied verbatim by a non-superuser executor; exact en
       assert.deepEqual(rows(await admin.query("SELECT rolname FROM pg_roles WHERE rolname = ANY($1)", [ROLE_VARIABLES.map(v => vars[v])])), []);
     });
   } finally { await teardown(env, pools); }
+});
+
+test("S9-B3: migration rollback after the re-own: up -> re-own -> down (DROP works as schema owner; CREATE OR REPLACE is refused and fails closed) -> steps 3-6 again -> re-own back -> full down -> up -> proposal from step 1", { skip: ledgerTarget.skip }, async t => {
+  assert.ok(ledgerTarget.url, "CI_REQUIRE_PG_TESTS=1 requires M7_TEST_POSTGRES_URL or M2_CREATIVE_DATABASE_URL");
+  let env: Env | undefined;
+  try {
+    env = await setup();
+    const { admin, exec } = env;
+    const migrations = ledgerMigrationPlan().migrations;
+    const down = (n: number) => readFileSync(new URL(`../ledger-migrations/rollback/${migrations[n - 1]!.file.replace(/\.sql$/, ".down.sql")}`, import.meta.url), "utf8");
+    const up = (n: number) => env!.asExec(migrations[n - 1]!.sql + `;\nINSERT INTO vynvori_ledger_migrations.applied(file, sha256) VALUES ('${migrations[n - 1]!.file}', '${migrations[n - 1]!.sha256}')`);
+    const owners = async () => (await admin.query("SELECT p.proname::text AS f, pg_get_userbyid(p.proowner)::text AS o FROM pg_proc p WHERE p.pronamespace = 'vynvori_ledger'::regnamespace AND p.prosecdef ORDER BY 1")).rows.map(r => `${r.f}:${r.o === exec ? "executor" : r.o.replace("_" + env!.suffix, "")}`);
+    const tablesOf0007 = async () => (await admin.query("SELECT count(*)::int AS n FROM unnest(ARRAY['ledger_package_events', 'refinement_slots', 'refinement_slot_events']) t WHERE to_regclass('vynvori_ledger.' || t) IS NOT NULL")).rows[0].n as number;
+    const journal = async () => (await admin.query("SELECT file FROM vynvori_ledger_migrations.applied ORDER BY file")).rows.map(r => r.file as string);
+    const endRows = async () => (await env!.block("end_state")).rows;
+    const before = (await admin.query(PRIVILEGE_SNAPSHOT)).rows;
+    assert.deepEqual((await env.block("preconditions")).rows, []);
+    for (const name of ["roles", "runtime", "privileges", "reown"] as const) await env.block(name);
+    assert.deepEqual(await endRows(), []);
+
+    await t.test("S9-B3 (down while re-owned): 0007.down succeeds because the executor owns the schema (DROP FUNCTION needs schema or function ownership); 0006.down, which REPLACES a re-owned definer, fails with 'must be owner of function' and changes nothing", async () => {
+      await env!.asExec(down(7));
+      assert.equal(await tablesOf0007(), 0);
+      assert.deepEqual(await owners(), ["ledger_entries_apply_to_reservation:m7s9_reservation_def", "ledger_entries_apply_to_wallet:m7s9_wallet_def"], "the two 0007 definers were dropped with it");
+      assert.ok((await endRows()).length > 0, "step 6 reports the missing tables and definers");
+      await assert.rejects(env!.asExec(down(6)), sqlstate("42501", /must be owner of function ledger_entries_apply_to_reservation/));
+      assert.equal((await admin.query("SELECT to_regclass('vynvori_ledger.vendor_cost_evidence') IS NOT NULL AS x")).rows[0].x, true, "0006 objects remain: one DO block, fails closed");
+      assert.deepEqual(await journal(), migrations.slice(0, 6).map(m => m.file));
+    });
+
+    await t.test("S9-B3 (up again): 0007 up as the executor leaves its new tables ungranted and its two definers owned by the executor, and step 6 says so; steps 3, 4 and 5 again (idempotent; an already re-owned function is a no-op) make the end state exact", async () => {
+      await up(7);
+      const found = (await endRows()).map(r => `${r.check_name}: ${r.detail}`);
+      assert.ok(found.some(x => x.startsWith("missing privilege")) && found.some(x => /owner|definer/i.test(x)), JSON.stringify(found));
+      for (const name of ["runtime", "privileges", "reown"] as const) await env!.block(name);
+      assert.deepEqual(await endRows(), []);
+      assert.deepEqual(await owners(), ["ledger_entries_apply_to_reservation:m7s9_reservation_def", "ledger_entries_apply_to_wallet:m7s9_wallet_def", "ledger_package_events_apply:m7s9_package_def", "refinement_slot_events_apply:m7s9_slot_def"]);
+    });
+
+    await t.test("S9-B3 (re-own back): reown_back returns the four functions to the executor, leaves no usable membership, and even as their owner the executor cannot UPDATE a bucket directly (depth guard)", async () => {
+      await env!.block("reown_back");
+      assert.deepEqual(await owners(), ["ledger_entries_apply_to_reservation:executor", "ledger_entries_apply_to_wallet:executor", "ledger_package_events_apply:executor", "refinement_slot_events_apply:executor"]);
+      const usable = (await admin.query(`SELECT count(*)::int AS n FROM pg_auth_members a JOIN pg_roles g ON g.oid = a.roleid WHERE g.rolname = ANY($1) AND (a.inherit_option OR a.set_option)`, [ROLE_VARIABLES.map(v => env!.vars[v])])).rows[0].n;
+      assert.equal(usable, 0, "the transient INHERIT membership was revoked in the same transaction");
+      await admin.query("BEGIN");
+      try {
+        const id = randomUUID();
+        await admin.query("INSERT INTO vynvori_identity.profiles(id, issuer, subject) VALUES ($1, 'https://synthetic.invalid', $2)", [id, "s9-b3-" + id]);
+        await ensureWallet(admin, id);
+        await admin.query(`SET LOCAL ROLE ${q(exec)}`);
+        await assert.rejects(admin.query("UPDATE vynvori_ledger.wallets SET available_units = 1 WHERE user_id = $1", [id]), sqlstate("23000"));
+      } finally { await admin.query("ROLLBACK"); }
+    });
+
+    await t.test("S9-B3 (full): drop_roles, every down 0007 to 0001, every up, then the proposal from step 1: zero rows at steps 1 and 6; undo returns the pre-proposal snapshot", async () => {
+      await env!.block("drop_roles");
+      for (let n = 7; n >= 1; n--) await env!.asExec(down(n));
+      assert.equal((await admin.query("SELECT count(*)::int AS n FROM pg_namespace WHERE nspname LIKE 'vynvori_ledger%'")).rows[0].n, 0, "the ledger schemas are gone");
+      await applyMigrationsAsExecutor(env!.asExec);
+      assert.deepEqual((await admin.query(PRIVILEGE_SNAPSHOT)).rows, before, "up again: the same privileges and owners as the first up");
+      assert.deepEqual((await env!.block("preconditions")).rows, []);
+      for (const name of ["roles", "runtime", "privileges", "reown"] as const) await env!.block(name);
+      assert.deepEqual(await endRows(), []);
+      await env!.block("reown_back");
+      await env!.block("drop_roles");
+      assert.deepEqual((await admin.query(PRIVILEGE_SNAPSHOT)).rows, before);
+    });
+  } finally { await teardown(env, new Set()); }
 });
