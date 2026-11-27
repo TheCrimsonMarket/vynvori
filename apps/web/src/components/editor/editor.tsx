@@ -28,7 +28,8 @@ async function csrfHeaders(): Promise<Record<string, string>> {
     if (response.ok && data && typeof data === "object" && "csrfToken" in data && typeof data.csrfToken === "string") return { "x-vynvori-csrf": data.csrfToken }; } catch { /* guest or auth unavailable */ }
   return {};
 }
-async function api(path: string, method: string, body?: unknown, raw?: { bytes: ArrayBuffer; type: string }): Promise<{ ok: boolean; status: number; data: any }> { // eslint-disable-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: response payloads are validated by the caller's schema
+async function api(path: string, method: string, body?: unknown, raw?: { bytes: ArrayBuffer; type: string }): Promise<{ ok: boolean; status: number; data: any }> {
   const headers: Record<string, string> = method === "GET" ? {} : await csrfHeaders();
   if (body !== undefined) headers["content-type"] = "application/json"; if (raw) headers["content-type"] = raw.type;
   const response = await fetch(path, { method, cache: "no-store", credentials: "same-origin", headers, ...(raw ? { body: raw.bytes } : body === undefined ? {} : { body: JSON.stringify(body) }) });
@@ -52,6 +53,7 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
   const notify = (text: string) => setMessage(text);
 
   // --- hydrate: owned route, or resume the last guest draft of this tab (the id is not a secret; the capability is an HttpOnly cookie)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: hydrate runs once per route id; notify only sets a message
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -151,6 +153,7 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
   }
   const saveRef = useRef<() => Promise<boolean>>(async () => false);
   useEffect(() => { saveRef.current = saveDraft; });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: key is deliberate, each scene change restarts the debounce
   useEffect(() => { // debounced autosave only once a server draft exists; stale timers are cancelled by the cleanup
     if (!server.compositionId || !dirty || server.autosave === "conflict" || server.autosave === "pending") return;
     const timer = setTimeout(() => { void saveRef.current(); }, 1500); return () => clearTimeout(timer);

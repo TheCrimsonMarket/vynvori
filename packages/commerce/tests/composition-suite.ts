@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- in-memory test double mirrors loosely-typed SQL rows */
+/** biome-ignore-all lint/suspicious/noExplicitAny: in-memory test double mirrors loosely-typed SQL rows */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";

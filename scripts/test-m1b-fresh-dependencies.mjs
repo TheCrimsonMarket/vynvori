@@ -25,7 +25,7 @@ for (const entry of Object.values(lock.packages)) {
   if (entry.link) assert.ok(workspaces.has(entry.resolved));
   else if (entry.resolved) { const url = new URL(entry.resolved); assert.equal(url.origin, "https://registry.npmjs.org"); assert.equal(url.username + url.password, ""); }
 }
-for (const name of ["package.json", "package-lock.json", "eslint.config.mjs"]) await cp(join(root, name), join(workspace, name));
+for (const name of ["package.json", "package-lock.json", "biome.json"]) await cp(join(root, name), join(workspace, name));
 const excluded = new Set(["node_modules", ".next", ".medusa", ".git", "dist", "output", "coverage", ".cache", ".npmrc"]);
 for (const directory of ["apps", "packages", "services", "design/reference", "scripts", "deploy"])
   await cp(join(root, directory), join(workspace, directory), { recursive: true, filter: path => !excluded.has(basename(path)) && !basename(path).startsWith(".env") && !basename(path).endsWith(".log") });

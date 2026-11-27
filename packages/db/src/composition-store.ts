@@ -4,7 +4,8 @@ import { CompositionSceneV1Schema, type PreflightIssue, type PrintProfileV1 } fr
 import type { AssetRecord, CompositionAccess, CompositionRecord, CompositionStore, VersionRecord } from "@vynvori/contracts/composition-port";
 
 const S = "vynvori_composition", I = "vynvori_identity";
-type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: rows come back from loosely typed SQL results
+type Row = Record<string, any>;
 
 /**
  * Access predicate used verbatim in every statement so authorisation happens in SQL, never after the fact.
