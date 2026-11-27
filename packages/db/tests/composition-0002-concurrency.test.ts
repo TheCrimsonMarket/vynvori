@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { connectionString, freshCompositionDatabase, compositionPool, POOL_CAPS } from "./composition-fixture";
 import { EMPTY_SYNTHETIC_SCENE, SYNTHETIC_PREVIEW_PROFILE } from "@vynvori/contracts";
-import { compositionStore, lockAsset, lockComposition, withCompositionTransaction, type CompositionTx } from "../src/composition-store";
+import { compositionStore, lockAsset, lockComposition, lockLiveGuestCap, withCompositionTransaction, type CompositionTx } from "../src/composition-store";
 
 // CI sets CI_REQUIRE_PG_TESTS=1 so a missing database fails the run instead of silently skipping.
 const requirePg = process.env.CI_REQUIRE_PG_TESTS === "1";
@@ -229,7 +229,7 @@ test("M3 0002 concurrency: scan-event, attempt, grant and rate-bucket races; loc
       const profile = SYNTHETIC_PREVIEW_PROFILE, profileSha = createHash("sha256").update(JSON.stringify(profile)).digest("hex");
       await store.ensurePrintProfile(profile, profileSha);
       const scene = EMPTY_SYNTHETIC_SCENE(), sceneSha = hashOf("freeze-order:scene");
-      await store.createGuest({ id, capabilityHash, guestExpiresAt: new Date(Date.now() + 3_600_000), scene, sceneSha256: sceneSha, state: "guest_draft" });
+      await store.createGuest({ id, capabilityHash, guestExpiresAt: new Date(Date.now() + 3_600_000), scene, sceneSha256: sceneSha, state: "guest_draft", now: new Date(), liveGuestDraftsMax: 1000 });
       const writer = hold(tx => lockComposition(tx, id));
       try {
         await writer.acquired;
@@ -281,6 +281,81 @@ test("M3 0002 concurrency: scan-event, attempt, grant and rate-bucket races; loc
         const second = withCompositionTransaction(pool, async tx => { await lockAsset(tx, compositionId, assetId); await later(20); await lockComposition(tx, compositionId); });
         assert.equal(await Promise.race([Promise.all([first, second]).then(() => "done" as const), later(5000)]), "done", "no deadlock and no hang");
       }
+    });
+
+    // ---- ADR-0022 C4: the live-guest cap and the per-composition quota are decided in SQL under class-4 locks.
+    const c4Profile = SYNTHETIC_PREVIEW_PROFILE;
+    const newGuest = async (label: string, max = 1_000_000) => {
+      await store.ensurePrintProfile(c4Profile, createHash("sha256").update(JSON.stringify(c4Profile)).digest("hex"));
+      const id = randomUUID(), capabilityHash = hashOf(`${label}:${id}:cap`), scene = EMPTY_SYNTHETIC_SCENE();
+      const out = await store.createGuest({ id, capabilityHash, guestExpiresAt: new Date(Date.now() + 3_600_000), scene, sceneSha256: hashOf(`${label}:${id}:scene`), state: "guest_draft", now: new Date(), liveGuestDraftsMax: max });
+      if (out.status !== "created") throw new Error("guest not created");
+      return { id, access: { kind: "guest" as const, capabilityHash } };
+    };
+    const assetFor = (compositionId: string, byteSize: number, sha = hashOf(randomUUID())) => ({ id: randomUUID(), sha256: sha, mime: "image/png", byteSize, widthPx: 4, heightPx: 4, objectKey: `private/composition/v1/${compositionId}/${sha}` });
+
+    await t.test("C4 createGuest: SYNTHETIC_CONCURRENCY concurrent creators against a cap of SYNTHETIC_ROOM admit exactly SYNTHETIC_ROOM", async () => {
+      const SYNTHETIC_CONCURRENCY = 14, SYNTHETIC_ROOM = 5;
+      await newGuest("cap-warmup"); // ensures the print profile
+      const now = new Date(), cap = (await store.countLiveGuestDrafts(now)) + SYNTHETIC_ROOM;
+      const outcomes = await Promise.all(Array.from({ length: SYNTHETIC_CONCURRENCY }, () => {
+        const id = randomUUID(), scene = EMPTY_SYNTHETIC_SCENE();
+        return store.createGuest({ id, capabilityHash: hashOf(id), guestExpiresAt: new Date(Date.now() + 3_600_000), scene, sceneSha256: hashOf(id + "s"), state: "guest_draft", now, liveGuestDraftsMax: cap });
+      }));
+      assert.equal(outcomes.filter(o => o.status === "created").length, SYNTHETIC_ROOM);
+      assert.equal(outcomes.filter(o => o.status === "cap_reached").length, SYNTHETIC_CONCURRENCY - SYNTHETIC_ROOM);
+      assert.equal(await store.countLiveGuestDrafts(now), cap, "the cap was reached exactly, never exceeded");
+    });
+
+    await t.test("C4 insertAsset: concurrent distinct uploads admit exactly the count maximum and exactly the byte maximum; the same bytes insert once", async () => {
+      const SYNTHETIC_CONCURRENCY = 14, SYNTHETIC_MAX_ASSETS = 4, SYNTHETIC_ASSET_BYTES = 10, SYNTHETIC_MAX_BYTES = 50;
+      const byCount = await newGuest("quota-count"), now = new Date();
+      const counted = await Promise.all(Array.from({ length: SYNTHETIC_CONCURRENCY }, () => store.insertAsset(byCount.id, byCount.access, now, assetFor(byCount.id, SYNTHETIC_ASSET_BYTES), { maxAssets: SYNTHETIC_MAX_ASSETS, maxBytes: 1_000_000 })));
+      assert.equal(counted.filter(o => o.status === "inserted").length, SYNTHETIC_MAX_ASSETS); assert.equal(counted.filter(o => o.status === "quota_exceeded").length, SYNTHETIC_CONCURRENCY - SYNTHETIC_MAX_ASSETS);
+      assert.equal((await q("SELECT count(*)::int AS n FROM vynvori_composition.assets WHERE composition_id=$1", [byCount.id])).rows[0].n, SYNTHETIC_MAX_ASSETS);
+      const byBytes = await newGuest("quota-bytes");
+      const sized = await Promise.all(Array.from({ length: SYNTHETIC_CONCURRENCY }, () => store.insertAsset(byBytes.id, byBytes.access, now, assetFor(byBytes.id, SYNTHETIC_ASSET_BYTES), { maxAssets: 1_000, maxBytes: SYNTHETIC_MAX_BYTES })));
+      assert.equal(sized.filter(o => o.status === "inserted").length, SYNTHETIC_MAX_BYTES / SYNTHETIC_ASSET_BYTES);
+      assert.equal((await q("SELECT COALESCE(sum(byte_size),0)::int AS n FROM vynvori_composition.assets WHERE composition_id=$1", [byBytes.id])).rows[0].n, SYNTHETIC_MAX_BYTES, "the byte maximum is exact");
+      const same = await newGuest("quota-dup"), sha = hashOf("same-bytes");
+      const dup = await Promise.all(Array.from({ length: SYNTHETIC_CONCURRENCY }, () => store.insertAsset(same.id, same.access, now, assetFor(same.id, SYNTHETIC_ASSET_BYTES, sha), { maxAssets: 1, maxBytes: SYNTHETIC_MAX_BYTES })));
+      assert.equal(dup.filter(o => o.status === "inserted").length, 1); assert.equal(dup.filter(o => o.status === "existing").length, SYNTHETIC_CONCURRENCY - 1, "an idempotent retry is never charged to the quota");
+    });
+
+    await t.test("C4 insertAsset: queues on the composition advisory lock; a caller without access takes no lock; freeze and insert released together never deadlock", async () => {
+      const g = await newGuest("quota-lock"), now = new Date(), quota = { maxAssets: 5, maxBytes: 1_000_000 };
+      const holder = hold(tx => lockComposition(tx, g.id));
+      try {
+        await holder.acquired;
+        const pending = store.insertAsset(g.id, g.access, now, assetFor(g.id, 10), quota);
+        assert.equal(await Promise.race([pending.then(() => "done" as const), later(300)]), "pending", "the quota writer waits for the composition lock");
+        const freezing = store.freeze(g.id, g.access, now, { expectedRevision: 0, state: "frozen_version", sourceAssetSha256: [], sourceFontSha256: [],
+          version: { id: randomUUID(), scene: EMPTY_SYNTHETIC_SCENE(), sceneSha256: hashOf("quota-lock:scene"), printProfileId: c4Profile.profileId, printProfileVersion: c4Profile.version, preflightState: "preview_only", preflightIssues: [] } });
+        assert.equal(await Promise.race([freezing.then(() => "done" as const), later(300)]), "pending", "freeze queues on the same lock");
+        // a caller with no access (wrong capability, then a malformed id) is refused without ever waiting for the held lock
+        const stranger = { kind: "guest" as const, capabilityHash: hashOf("nobody") };
+        assert.deepEqual(await Promise.race([store.insertAsset(g.id, stranger, now, assetFor(g.id, 10), quota), later(3000)]), { status: "not_found" });
+        assert.deepEqual(await Promise.race([store.insertAsset("not-a-uuid", g.access, now, assetFor(g.id, 10), quota), later(3000)]), { status: "not_found" });
+        holder.release(); await holder.done;
+        const [inserted, frozen] = await Promise.all([pending, freezing]); // either order is fine; neither may fail with 40P01
+        assert.equal(inserted.status, "inserted"); assert.equal(frozen.status === "frozen" || frozen.status === "asset_not_clean", true);
+      } finally { holder.release(); await holder.done.catch(() => undefined); }
+    });
+
+    await t.test("C4 createGuest: takes only the class-4 live-cap lock (other writers are not blocked by it) and waits for it", async () => {
+      const g = await newGuest("cap-lock"), now = new Date();
+      const holder = hold(tx => lockLiveGuestCap(tx));
+      try {
+        await holder.acquired;
+        const id = randomUUID(), pending = store.createGuest({ id, capabilityHash: hashOf(id), guestExpiresAt: new Date(Date.now() + 3_600_000), scene: EMPTY_SYNTHETIC_SCENE(), sceneSha256: hashOf(id + "s"), state: "guest_draft", now, liveGuestDraftsMax: 1_000_000 });
+        assert.equal(await Promise.race([pending.then(() => "done" as const), later(300)]), "pending", "guest creation waits for the live-cap lock");
+        const waiting = await q("SELECT classid::bigint AS hi FROM pg_locks WHERE locktype='advisory' AND NOT granted AND database=(SELECT oid FROM pg_database WHERE datname=current_database())");
+        assert.ok(waiting.rows.length >= 1 && waiting.rows.every(r => Number(r.hi) === 4), "the waiter is queued on a class-4 lock");
+        const other = await Promise.race([store.insertAsset(g.id, g.access, now, assetFor(g.id, 10), { maxAssets: 5, maxBytes: 1_000_000 }), later(3000)]);
+        assert.equal((other as { status: string }).status, "inserted", "per-composition writers are unaffected by the global cap lock");
+        holder.release(); await holder.done;
+        assert.equal((await pending).status, "created");
+      } finally { holder.release(); await holder.done.catch(() => undefined); }
     });
 
     await t.test("C3b connection budget: the race file never held more than its declared pool cap", async () => {

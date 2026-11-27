@@ -57,13 +57,17 @@ export function memoryHarness(): StoreHarness {
     const g = grants.get(tokenHash), a = accessible(compositionId, assetId, access, now), p = principal(access);
     return g && a && g.compositionId === compositionId && g.assetId === assetId && g.principalKind === p.kind && g.principalHash === p.hash && g.redeemedAt === null && g.expiresAt > now && statusOf(a.id) === "clean" ? g : null;
   };
+  const liveCount = (now: Date) => [...comps.values()].filter(c => c.ownerUserId === null && c.guestDraftId && drafts.get(c.guestDraftId)!.expiresAt > now && drafts.get(c.guestDraftId)!.ownerId === null).length;
   const publicGrant = ({ tokenHash: _t, principalHash: _p, ...g }: Grant): DownloadGrantRecord => g;
 
   const store: CompositionStore = {
     async ensurePrintProfile() {},
-    async createGuest(i) { drafts.set(i.id, { capabilityHash: i.capabilityHash, expiresAt: i.guestExpiresAt, ownerId: null });
+    async createGuest(i) {
+      if (!memSafePositive(i?.liveGuestDraftsMax) || !isMemDate(i.now)) memInvalid(); // unset or zero is never "unlimited"
+      if (liveCount(i.now) >= i.liveGuestDraftsMax) return { status: "cap_reached" };
+      drafts.set(i.id, { capabilityHash: i.capabilityHash, expiresAt: i.guestExpiresAt, ownerId: null });
       const c = { id: i.id, guestDraftId: i.id, ownerUserId: null, lifecycleState: i.state, scene: i.scene, sceneSha256: i.sceneSha256, draftRevision: 0, currentVersionId: null, printProfileId: i.scene.printProfileId, printProfileVersion: i.scene.printProfileVersion, createdAt: new Date(), updatedAt: new Date() };
-      comps.set(i.id, c); return project(c); },
+      comps.set(i.id, c); return { status: "created", record: project(c) }; },
     async createOwned(i) { const c = { id: i.id, guestDraftId: null, ownerUserId: i.ownerUserId, lifecycleState: i.state, scene: i.scene, sceneSha256: i.sceneSha256, draftRevision: 0, currentVersionId: null, printProfileId: i.scene.printProfileId, printProfileVersion: i.scene.printProfileVersion, createdAt: new Date(), updatedAt: new Date() }; comps.set(i.id, c); return project(c); },
     async get(id, access, now) { const c = comps.get(id); return c && ok(c, access, now) ? project(c) : null; },
     async listOwned(userId) { return [...comps.values()].filter(c => c.ownerUserId === userId).map(project); },
@@ -73,9 +77,13 @@ export function memoryHarness(): StoreHarness {
     async adoptClaimedGuest(id, userId, hash, now) { const c = comps.get(id), d = c?.guestDraftId ? drafts.get(c.guestDraftId) : undefined;
       if (!c || c.ownerUserId !== null || !d || d.capabilityHash !== hash || d.ownerId !== userId) return null;
       c.ownerUserId = userId; if (["guest_draft", "editable_scene"].includes(c.lifecycleState)) c.lifecycleState = "saved_owned"; c.updatedAt = now; return project(c); },
-    async insertAsset(id, access, now, a) { const c = comps.get(id); if (!c || !ok(c, access, now)) return null;
-      const dup = [...assets.values()].find(x => x.compositionId === id && x.sha256 === a.sha256); if (dup) return view(dup);
-      const row = { ...a, compositionId: id, createdAt: now }; assets.set(a.id, row); return view(row); },
+    async insertAsset(id, access, now, a, quota) {
+      if (!memSafePositive(quota?.maxAssets) || !memSafePositive(quota?.maxBytes) || !isMemDate(now) || !memSafePositive(a?.byteSize)) memInvalid();
+      const c = MEM_ID.test(id) ? comps.get(id) : undefined; if (!c || !ok(c, access, now)) return { status: "not_found" };
+      const owned = [...assets.values()].filter(x => x.compositionId === id), dup = owned.find(x => x.sha256 === a.sha256);
+      if (dup) return { status: "existing", asset: view(dup) };
+      if (owned.length >= quota.maxAssets || owned.reduce((sum, x) => sum + x.byteSize, 0) + a.byteSize > quota.maxBytes) return { status: "quota_exceeded" };
+      const row = { ...a, compositionId: id, createdAt: now }; assets.set(a.id, row); return { status: "inserted", asset: view(row) }; },
     async getAsset(id, assetId, access, now) { const c = comps.get(id), a = assets.get(assetId); return c && a && a.compositionId === id && ok(c, access, now) ? view(a) : null; },
     async listAssets(id, access, now) { const c = comps.get(id); return c && ok(c, access, now) ? [...assets.values()].filter(a => a.compositionId === id).map(view) : null; },
     async freeze(id, access, now, i) { const c = comps.get(id); if (!c || !ok(c, access, now)) return { status: "not_found" };
@@ -160,7 +168,7 @@ export function memoryHarness(): StoreHarness {
     },
     async countLiveGuestDrafts(now) {
       if (!isMemDate(now)) memInvalid();
-      return [...comps.values()].filter(c => c.ownerUserId === null && c.guestDraftId && drafts.get(c.guestDraftId)!.expiresAt > now && drafts.get(c.guestDraftId)!.ownerId === null).length;
+      return liveCount(now);
     },
     async pruneRateBuckets(input) {
       if (!isMemDate(input?.olderThan) || !isMemDate(input.now) || !memPositive(input.longestWindowSeconds)) memInvalid();
@@ -173,6 +181,7 @@ export function memoryHarness(): StoreHarness {
   return {
     store, async newUser() { return randomUUID(); }, async m1bClaim(draftId, userId) { drafts.get(draftId)!.ownerId = userId; },
     async expireGuest(draftId) { drafts.get(draftId)!.expiresAt = new Date(0); },
+    async bucketCount() { return buckets.size; },
     /** Test-only injection of the `clean -> quarantined` late-detection edge (no store primitive produces it in C3b). */
     async lateQuarantine(compositionId, assetId) {
       const a = assets.get(assetId)!;
@@ -189,6 +198,7 @@ const MEM_OPERATIONS: readonly RateLimitOperation[] = ["GUEST_CREATE_GLOBAL", "A
 const isMemDate = (value: unknown): value is Date => value instanceof Date && Number.isFinite(value.getTime());
 /** Same structural ceilings as the SQL store (PostgreSQL integer range; scanner text length). Not policy. */
 const MEM_INTEGER_MAX = 2147483647, MEM_TEXT_MAX = 512;
+const memSafePositive = (n: unknown) => typeof n === "number" && Number.isSafeInteger(n) && n > 0;
 const memPositive = (n: unknown) => typeof n === "number" && Number.isSafeInteger(n) && n > 0 && n <= MEM_INTEGER_MAX;
 const memText = (value: unknown) => typeof value === "string" && value.trim() !== "" && value === value.trim() && value.length <= MEM_TEXT_MAX;
 const memReason = (value: unknown): value is string => typeof value === "string" && value.length <= MEM_TEXT_MAX && MEM_REASON.test(value);

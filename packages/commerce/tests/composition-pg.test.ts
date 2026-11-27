@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import { compositionStore } from "@vynvori/db/composition";
 import { compositionConformance } from "./composition-suite";
 import { storeConformance, type StoreHarness } from "./composition-store-suite";
+import { limiterConformance } from "./composition-limiter-suite";
 import { SYNTHETIC_SCAN_EVIDENCE } from "./composition-synthetic";
 import { freshComposition } from "../../db/tests/composition-fixture";
 // CI sets CI_REQUIRE_PG_TESTS=1 so a missing database fails the run instead of silently skipping.
@@ -27,6 +28,7 @@ async function pgHarness(): Promise<StoreHarness> {
     store: compositionStore(db),
     async newUser() { const id = randomUUID(); await db.query("INSERT INTO vynvori_identity.profiles(id,issuer,subject) VALUES($1,'https://issuer.test',$2)", [id, id]); return id; },
     async m1bClaim(draftId, userId) { await db.query("UPDATE vynvori_identity.guest_drafts SET owner_id=$2, claimed_at=now() WHERE id=$1", [draftId, userId]); },
+    async bucketCount() { return (await db.query("SELECT count(*)::int AS n FROM vynvori_composition.rate_limit_buckets")).rows[0].n as number; },
     async expireGuest(draftId) { await db.query("UPDATE vynvori_identity.guest_drafts SET expires_at=to_timestamp(0) WHERE id=$1", [draftId]); },
     /** Test-only injection of the `clean -> quarantined` late-detection edge through the real trigger (no C3b primitive produces it). */
     async lateQuarantine(compositionId, assetId) {
@@ -41,3 +43,4 @@ async function pgHarness(): Promise<StoreHarness> {
 }
 compositionConformance("composition service (PostgreSQL store)", pgHarness, { skip });
 storeConformance("composition store primitives (PostgreSQL store)", pgHarness, { skip });
+limiterConformance("composition limiter (PostgreSQL store)", pgHarness, { skip });

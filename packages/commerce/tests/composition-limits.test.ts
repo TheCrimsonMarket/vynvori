@@ -4,8 +4,8 @@ import { randomUUID } from "node:crypto";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
-  COMPOSITION_LIMIT_KEYS, IMAGE_BYTES_STRUCTURAL_CEILING, IMAGE_SIDE_STRUCTURAL_CEILING, SECONDS_STRUCTURAL_CEILING, parseCompositionLimits, resolveApiLimits,
-  resolveGuestCreateLimits, resolveUploadLimits,
+  COMPOSITION_LIMIT_KEYS, IMAGE_BYTES_STRUCTURAL_CEILING, IMAGE_SIDE_STRUCTURAL_CEILING, RATE_LIMITED_OPERATIONS, RATE_STRUCTURAL_CEILING, SECONDS_STRUCTURAL_CEILING, parseCompositionLimits, resolveApiLimits,
+  resolveGuestCreateLimits, resolveLiveGuestDraftsMax, resolveRatePolicies, resolveUploadLimits,
 } from "../src/composition-limits";
 import { compositionService, CompositionError } from "../src/composition";
 import { compositionHttpHandlers, compositionCookies, type CompositionIdentityPort } from "../src/composition-http";
@@ -86,6 +86,43 @@ test("static: no removed policy literal and no defaultCompositionConfig remains 
   const files = [...walk(join(repo, "packages/commerce/src")), ...walk(join(repo, "apps/web/src"))];
   assert.ok(files.length > 20);
   for (const file of files) { const text = readFileSync(file, "utf8"); for (const pattern of banned) assert.doesNotMatch(text, pattern, `${file} matches ${pattern}`); }
+});
+
+test("C4 rate policies: an operation is configured only when BOTH its window and its maximum are valid; each closes on its own", () => {
+  assert.deepEqual(Object.keys(resolveRatePolicies(parseCompositionLimits({}))), [], "nothing configured: nothing open, no default");
+  const full = resolveRatePolicies(parseCompositionLimits(syntheticLimitEnv()));
+  assert.deepEqual(Object.keys(full).sort(), [...RATE_LIMITED_OPERATIONS].sort());
+  for (const operation of RATE_LIMITED_OPERATIONS) for (const half of ["WINDOW_SECONDS", "MAX"]) {
+    const env = syntheticLimitEnv(); delete env[`M3_LIMIT_RATE_${operation}_${half}`];
+    const policies = resolveRatePolicies(parseCompositionLimits(env));
+    assert.equal(policies[operation], undefined, `${operation} without ${half} is closed`);
+    assert.equal(Object.keys(policies).length, RATE_LIMITED_OPERATIONS.length - 1, "no other operation is affected");
+  }
+  const env = { ...syntheticLimitEnv(), M3_LIMIT_RATE_OWNER_WRITE_MAX: "0", M3_LIMIT_RATE_GUEST_WRITE_WINDOW_SECONDS: "-5", M3_LIMIT_RATE_OWNER_RESCAN_MAX: String(RATE_STRUCTURAL_CEILING + 1) };
+  const parsed = parseCompositionLimits(env), policies = resolveRatePolicies(parsed);
+  assert.deepEqual([...parsed.invalid].sort(), ["M3_LIMIT_RATE_GUEST_WRITE_WINDOW_SECONDS", "M3_LIMIT_RATE_OWNER_RESCAN_MAX", "M3_LIMIT_RATE_OWNER_WRITE_MAX"]);
+  assert.deepEqual([policies.OWNER_WRITE, policies.GUEST_WRITE, policies.OWNER_RESCAN], [undefined, undefined, undefined], "zero, negative and above-ceiling are closed, never unlimited");
+  const at = resolveRatePolicies(parseCompositionLimits({ ...syntheticLimitEnv(), M3_LIMIT_RATE_OWNER_WRITE_MAX: String(RATE_STRUCTURAL_CEILING), M3_LIMIT_RATE_OWNER_WRITE_WINDOW_SECONDS: String(RATE_STRUCTURAL_CEILING) }));
+  assert.deepEqual(at.OWNER_WRITE, { windowSeconds: RATE_STRUCTURAL_CEILING, max: RATE_STRUCTURAL_CEILING });
+  assert.equal(RATE_STRUCTURAL_CEILING, 2147483647, "the PostgreSQL integer range the rate statement casts to");
+});
+test("C4 live-guest cap: unset or invalid closes guest creation; otherwise it is the configured number", () => {
+  assert.equal(resolveLiveGuestDraftsMax(parseCompositionLimits({})), undefined);
+  assert.equal(resolveLiveGuestDraftsMax(parseCompositionLimits({ ...syntheticLimitEnv(), M3_LIMIT_LIVE_GUEST_DRAFTS_MAX: "0" })), undefined);
+  assert.equal(resolveLiveGuestDraftsMax(parseCompositionLimits({ ...syntheticLimitEnv(), M3_LIMIT_LIVE_GUEST_DRAFTS_MAX: "7" })), 7);
+});
+test("static (C4): no policy value is given a literal in src: every limit is read from M3_LIMIT_* configuration", () => {
+  const files = [
+    ...walk(join(repo, "packages/commerce/src")).filter(file => /composition[^/]*\.ts$/.test(file)), join(repo, "packages/db/src/composition-store.ts"),
+    ...walk(join(repo, "apps/web/src/server")).filter(file => /composition[^/]*\.ts$/.test(file)),
+  ];
+  assert.ok(files.length >= 5);
+  for (const file of files) {
+    const text = readFileSync(file, "utf8");
+    assert.doesNotMatch(text, /M3_LIMIT_[A-Z_]+["'`]?\s*[:=]\s*["'`]?\d/, `${file} assigns a literal to an M3_LIMIT_ key`);
+    assert.doesNotMatch(text, /(windowSeconds|liveGuestDraftsMax|maxAssets|maxBytes|maxAssetsPerComposition|maxBytesPerComposition)\s*[:=]\s*\d/, `${file} gives a limit a numeric literal`);
+    assert.doesNotMatch(text, /\bRATE_(?![A-Z_]*STRUCTURAL_CEILING)[A-Z_]+\s*[:=]\s*\d/, `${file} gives a rate key a numeric literal (structural ceilings are the only allowed constants)`);
+  }
 });
 
 // ---- capability closure over the service and HTTP boundary

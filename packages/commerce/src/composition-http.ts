@@ -21,6 +21,8 @@ const statuses: Record<CompositionError["code"], [number, string, boolean]> = {
   STORAGE_UNAVAILABLE: [503, "Storage is temporarily unavailable.", true],
   LIMITS_NOT_CONFIGURED: [503, "This feature is not configured yet.", false],
   ASSET_NOT_CLEAN: [409, "Artwork in this design has not passed its safety check yet.", false],
+  RATE_LIMITED: [429, "Too many requests. Wait a moment and try again.", true],
+  GUEST_CAPACITY: [503, "Guest drafts are at capacity right now. Try again later or sign in.", true],
 };
 class HttpError extends Error { constructor(readonly status: number, readonly code: "INVALID_REQUEST" | "FORBIDDEN" | "AUTH_REQUIRED" | "DISABLED" | "UNAVAILABLE") { super(code); } }
 
@@ -111,7 +113,9 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
         const correlationId = randomUUID();
         if (error instanceof CompositionError) {
           const [status, message, retryable] = statuses[error.code];
-          return json({ error: { code: `COMPOSITION_${error.code}`, message, retryable, correlationId, ...(error.code === "REVISION_CONFLICT" ? { currentRevision: Number(error.detail) } : {}) } }, status);
+          // 429 carries Retry-After (whole seconds, from the database-clock window), in the header and in the body for the editor.
+          const wait = error.code === "RATE_LIMITED" ? Number(error.detail) : null;
+          return json({ error: { code: `COMPOSITION_${error.code}`, message, retryable, correlationId, ...(error.code === "REVISION_CONFLICT" ? { currentRevision: Number(error.detail) } : {}), ...(wait !== null ? { retryAfterSeconds: wait } : {}) } }, status, wait !== null ? new Headers({ "retry-after": String(wait) }) : undefined);
         }
         if (error instanceof HttpError) {
           const status = error.status as number;
@@ -142,6 +146,7 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
       const session = cookie(request, compositionCookies.session);
       if (session !== null) {
         const { access } = await requireOwner(request, true);
+        await service!.admitOwnerWrite(access.userId); // charge before any body is read (ADR-0022 D2)
         const data = request.headers.get("content-length") === "0" ? {} : await parseJson(request).catch(() => ({}));
         exact(data, ["scene"]);
         const record = await service!.createOwned(access.userId, data.scene);
@@ -167,19 +172,25 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
         assets: assets.map(a => ({ assetId: a.id, sha256: a.sha256, mime: a.mime, widthPx: a.widthPx, heightPx: a.heightPx })), versions: versions.map(versionView) });
     }),
     save: wrapped(async (request, params) => {
-      const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true);
+      const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true, false); // the JSON-limit answer waits until access is proven
+      await service!.admit("write", compositionId, access); // access in SQL, then charge, then (only then) the body
+      requireApiLimits();
       const data = await parseJson(request); exact(data, ["expectedRevision", "scene"]);
       const record = await service!.saveDraft(compositionId, access, revisionOf(data), data.scene);
       return json({ ...view(record, access), sceneHashSha256: record.sceneSha256 });
     }),
     freeze: wrapped(async (request, params) => {
-      const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true);
+      const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true, false); // the JSON-limit answer waits until access is proven
+      await service!.admit("write", compositionId, access);
+      requireApiLimits();
       const data = await parseJson(request); exact(data, ["expectedRevision"]);
       const { version, record } = await service!.freeze(compositionId, access, revisionOf(data));
       return json({ ...view(record, access), version: versionView(version) }, 201);
     }),
     restore: wrapped(async (request, params) => {
-      const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true);
+      const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true, false); // the JSON-limit answer waits until access is proven
+      await service!.admit("write", compositionId, access);
+      requireApiLimits();
       const data = await parseJson(request); exact(data, ["expectedRevision", "versionId"]);
       if (typeof data.versionId !== "string") throw new HttpError(400, "INVALID_REQUEST");
       const record = await service!.restore(compositionId, access, data.versionId, revisionOf(data));
@@ -205,6 +216,7 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
       const resolved = await requireOwner(request, true);
       const [cookieId, capability] = (cookie(request, compositionCookies.guest) ?? "").split(".");
       if (cookieId !== compositionId || !capability || !opaque.test(capability)) throw new HttpError(401, "AUTH_REQUIRED");
+      await service!.admitOwnerWrite(resolved.access.userId); // charged to the verified user before the M1b claim runs
       try { await identity!.claimGuest(session!, compositionId, capability); } catch { throw new CompositionError("NOT_FOUND"); }
       const record = await service!.claim(compositionId, resolved.access.userId, capability);
       const headers = new Headers({ "set-cookie": `${compositionCookies.guest}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0` });
@@ -212,9 +224,15 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
     }),
     uploadAsset: wrapped(async (request, params) => {
       const compositionId = id(params, "id"), { access } = await actor(request, compositionId, true, false);
-      service!.assertUploadsAvailable(); // flag first (UPLOADS_DISABLED), then configuration
+      // ADR-0022 D2 / F4b order: format-check ids and credentials, access verified IN SQL (a guest cookie's format proves nothing), flag,
+      // configuration, charge, and only then read the body. A caller without access therefore buffers nothing, creates no bucket row and
+      // learns nothing about configuration.
+      await service!.authorize(compositionId, access);
+      service!.assertUploadsEnabled();
+      service!.assertUploadsAvailable();
       requireApiLimits();
       if (cfg.maxUploadBytes === undefined) throw new CompositionError("LIMITS_NOT_CONFIGURED");
+      await service!.admit("assetUpload", compositionId, access);
       const bytes = await readBody(request, cfg.maxUploadBytes);
       const asset = await service!.uploadAsset(compositionId, access, bytes, request.headers.get("content-type"));
       return json({ asset: { assetId: asset.id, sha256: asset.sha256, mime: asset.mime, widthPx: asset.widthPx, heightPx: asset.heightPx } }, 201);
