@@ -2,11 +2,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { canonicalSceneJson } from "@vynvori/contracts";
-import type { AssetRecord, CompositionAccess, CompositionRecord, CompositionStore, VersionRecord } from "@vynvori/contracts/composition-port";
+import { canonicalSceneJson, sceneSourceHashes } from "@vynvori/contracts";
+import type {
+  ArtifactScanStatus, AssetRecord, CompositionAccess, CompositionRecord, CompositionStore, DownloadGrantRecord, RateLimitOperation, ScanAttemptRecord,
+  ScanEventRecord, ScanResultEvent, ScanTransitionOutcome, VersionRecord,
+} from "@vynvori/contracts/composition-port";
 import { compositionService, CompositionError, secretHash, draftProjection } from "../src/composition";
 import { SYNTHETIC_COMPOSITION_CONFIG, SYNTHETIC_GUEST_TTL_SECONDS } from "./composition-synthetic";
 import { imageLayer, memoryStorage, png, jpeg, sceneWith, sha256, textLayer, webp } from "./composition-fixtures";
+import { markClean, type StoreHarness } from "./composition-store-suite";
 
 export type Harness = Readonly<{
   store: CompositionStore;
@@ -14,18 +18,47 @@ export type Harness = Readonly<{
   newUser(): Promise<string>;
   /** Simulates the M1b `claimGuest` effect: guest draft gets owner_id + claimed_at. */
   m1bClaim(draftId: string, userId: string): Promise<void>;
+  /** Moves the M1b guest draft's expiry into the past (an expired capability). */
+  expireGuest(draftId: string): Promise<void>;
 }>;
 
-/** In-memory port implementation with the same access semantics as the SQL store. */
-export function memoryHarness(): Harness {
+/** In-memory port implementation with the same access semantics as the SQL store (and the same C3b primitives, ADR-0022). */
+export function memoryHarness(): StoreHarness {
   type Draft = { capabilityHash: string; expiresAt: Date; ownerId: string | null };
-  const drafts = new Map<string, Draft>(), comps = new Map<string, any>(), assets = new Map<string, AssetRecord>(), versions = new Map<string, VersionRecord[]>();
+  type RawAsset = Omit<AssetRecord, "scanStatus">;
+  type Grant = DownloadGrantRecord & { tokenHash: string; principalHash: string };
+  const drafts = new Map<string, Draft>(), comps = new Map<string, any>(), assets = new Map<string, RawAsset>(), versions = new Map<string, VersionRecord[]>();
+  const pinsOf = new Map<string, readonly string[]>(), events = new Map<string, ScanEventRecord[]>(), attempts = new Map<string, ScanAttemptRecord>(), grants = new Map<string, Grant>(), buckets = new Map<string, number>();
   const ok = (c: any, access: CompositionAccess, now: Date) => access.kind === "owner" ? c.ownerUserId === access.userId
     : c.ownerUserId === null && !!c.guestDraftId && drafts.get(c.guestDraftId)?.capabilityHash === access.capabilityHash && drafts.get(c.guestDraftId)!.expiresAt > now && drafts.get(c.guestDraftId)!.ownerId === null;
   const project = (c: any): CompositionRecord => {
     const v = versions.get(c.id)?.find(x => x.id === c.currentVersionId);
     return { ...c, currentVersionSceneSha256: v?.sceneSha256 ?? null, guestExpiresAt: c.ownerUserId ? null : drafts.get(c.guestDraftId)?.expiresAt ?? null };
   };
+  const statusOf = (assetId: string): ArtifactScanStatus => events.get(assetId)?.at(-1)?.toStatus ?? "pending";
+  const view = (a: RawAsset): AssetRecord => ({ ...a, scanStatus: statusOf(a.id) });
+  /** The asset if `access` passes at `now` (same uniform not-found as the SQL predicate). */
+  const accessible = (compositionId: string, assetId: string, access: CompositionAccess, now: Date): RawAsset | null => {
+    if (!MEM_ID.test(compositionId) || !MEM_ID.test(assetId)) return null;
+    const c = comps.get(compositionId), a = assets.get(assetId);
+    return c && a && a.compositionId === compositionId && ok(c, access, now) ? a : null;
+  };
+  const openAttemptOf = (assetId: string) => [...attempts.values()].find(x => x.assetId === assetId && x.finishedAt === null);
+  const append = (a: RawAsset, now: Date, e: Partial<ScanEventRecord> & { toStatus: ArtifactScanStatus }): ScanEventRecord => {
+    const list = events.get(a.id) ?? [];
+    const event: ScanEventRecord = Object.freeze({ assetId: a.id, compositionId: a.compositionId, seq: list.length + 1, fromStatus: statusOf(a.id), assetSha256: a.sha256, attemptId: null, scannerId: null, engineVersion: null, definitionsVersion: null, evidenceRef: null, reasonCode: null, recordedAt: now, ...e });
+    list.push(event); events.set(a.id, list); return event;
+  };
+  const rejected = (reason: "attempt_not_open" | "lease_active" | "illegal_transition", a: RawAsset): ScanTransitionOutcome => ({ status: "rejected", reason, scanStatus: statusOf(a.id) });
+  const close = (attempt: ScanAttemptRecord, now: Date, outcome: "completed" | "lease_expired") => attempts.set(attempt.attemptId, Object.freeze({ ...attempt, finishedAt: now, outcome }));
+  const principal = (access: CompositionAccess) => access.kind === "owner" ? { kind: "owner" as const, hash: sha256(Buffer.from(access.userId)) } : { kind: "guest" as const, hash: access.capabilityHash };
+  const redeemable = (compositionId: string, assetId: string, access: CompositionAccess, now: Date, tokenHash: string): Grant | null => {
+    if (!isMemDate(now) || typeof tokenHash !== "string" || !MEM_HEX64.test(tokenHash)) return null;
+    const g = grants.get(tokenHash), a = accessible(compositionId, assetId, access, now), p = principal(access);
+    return g && a && g.compositionId === compositionId && g.assetId === assetId && g.principalKind === p.kind && g.principalHash === p.hash && g.redeemedAt === null && g.expiresAt > now && statusOf(a.id) === "clean" ? g : null;
+  };
+  const publicGrant = ({ tokenHash: _t, principalHash: _p, ...g }: Grant): DownloadGrantRecord => g;
+
   const store: CompositionStore = {
     async ensurePrintProfile() {},
     async createGuest(i) { drafts.set(i.id, { capabilityHash: i.capabilityHash, expiresAt: i.guestExpiresAt, ownerId: null });
@@ -41,19 +74,129 @@ export function memoryHarness(): Harness {
       if (!c || c.ownerUserId !== null || !d || d.capabilityHash !== hash || d.ownerId !== userId) return null;
       c.ownerUserId = userId; if (["guest_draft", "editable_scene"].includes(c.lifecycleState)) c.lifecycleState = "saved_owned"; c.updatedAt = now; return project(c); },
     async insertAsset(id, access, now, a) { const c = comps.get(id); if (!c || !ok(c, access, now)) return null;
-      const dup = [...assets.values()].find(x => x.compositionId === id && x.sha256 === a.sha256); if (dup) return dup;
-      const row = { ...a, compositionId: id, createdAt: now }; assets.set(a.id, row); return row; },
-    async getAsset(id, assetId, access, now) { const c = comps.get(id), a = assets.get(assetId); return c && a && a.compositionId === id && ok(c, access, now) ? a : null; },
-    async listAssets(id, access, now) { const c = comps.get(id); return c && ok(c, access, now) ? [...assets.values()].filter(a => a.compositionId === id) : null; },
+      const dup = [...assets.values()].find(x => x.compositionId === id && x.sha256 === a.sha256); if (dup) return view(dup);
+      const row = { ...a, compositionId: id, createdAt: now }; assets.set(a.id, row); return view(row); },
+    async getAsset(id, assetId, access, now) { const c = comps.get(id), a = assets.get(assetId); return c && a && a.compositionId === id && ok(c, access, now) ? view(a) : null; },
+    async listAssets(id, access, now) { const c = comps.get(id); return c && ok(c, access, now) ? [...assets.values()].filter(a => a.compositionId === id).map(view) : null; },
     async freeze(id, access, now, i) { const c = comps.get(id); if (!c || !ok(c, access, now)) return { status: "not_found" };
       if (c.draftRevision !== i.expectedRevision) return { status: "conflict", currentRevision: c.draftRevision };
       const list = versions.get(id) ?? []; let v = list.find(x => x.sceneSha256 === i.version.sceneSha256);
-      if (!v) { v = { ...i.version, compositionId: id, versionNo: list.length + 1, frozenAt: now }; list.push(Object.freeze(v)); versions.set(id, list); }
+      // D5 on both branches: the re-point branch checks the pins of the version it re-points to.
+      const pins = [...new Set(v ? pinsOf.get(v.id)! : [...i.sourceAssetSha256, ...sceneSourceHashes(i.version.scene).assets])].sort();
+      const notClean = pins.filter(hash => { const a = [...assets.values()].find(x => x.compositionId === id && x.sha256 === hash); return !a || statusOf(a.id) !== "clean"; });
+      if (notClean.length) return { status: "asset_not_clean", assetSha256: notClean };
+      if (!v) { v = { ...i.version, compositionId: id, versionNo: list.length + 1, frozenAt: now }; pinsOf.set(v.id, [...i.sourceAssetSha256]); list.push(Object.freeze(v)); versions.set(id, list); }
       Object.assign(c, { currentVersionId: v.id, lifecycleState: i.state, updatedAt: now }); return { status: "frozen", version: v, record: project(c) }; },
     async getVersion(id, vid, access, now) { const c = comps.get(id); return c && ok(c, access, now) ? versions.get(id)?.find(v => v.id === vid) ?? null : null; },
     async listVersions(id, access, now) { const c = comps.get(id); return c && ok(c, access, now) ? versions.get(id) ?? [] : null; },
+
+    async listScanEvents(compositionId, assetId, access, now) { const a = accessible(compositionId, assetId, access, now); return a ? [...(events.get(a.id) ?? [])] : null; },
+    async openScanAttempt(compositionId, assetId, access, now, input) {
+      if (!MEM_ID.test(input?.attemptId ?? "")) memInvalid();
+      if (!isMemDate(now) || !isMemDate(input.leaseExpiresAt) || input.leaseExpiresAt <= now) memInvalid();
+      const a = accessible(compositionId, assetId, access, now); if (!a) return { status: "not_found" };
+      const open = openAttemptOf(a.id); if (open) return { status: "busy", attempt: open };
+      if (statusOf(a.id) !== "pending") return { status: "not_scannable", scanStatus: statusOf(a.id) };
+      if (attempts.has(input.attemptId)) memInvalid(); // the SQL primary key refuses a reused id the same way
+      const attempt: ScanAttemptRecord = Object.freeze({ attemptId: input.attemptId, assetId, compositionId, startedAt: now, leaseExpiresAt: input.leaseExpiresAt, finishedAt: null, outcome: null });
+      attempts.set(attempt.attemptId, attempt); return { status: "opened", attempt };
+    },
+    async completeScanAttempt(compositionId, assetId, access, now, input) {
+      if (!MEM_ID.test(input?.attemptId ?? "") || !isMemDate(now)) memInvalid();
+      memScanResult(input.result);
+      const a = accessible(compositionId, assetId, access, now); if (!a) return { status: "not_found" };
+      const attempt = attempts.get(input.attemptId);
+      if (!attempt || attempt.assetId !== a.id || attempt.compositionId !== compositionId || attempt.finishedAt !== null) return rejected("attempt_not_open", a);
+      if (!MEM_EDGES[statusOf(a.id)].includes(input.result.toStatus)) return rejected("illegal_transition", a);
+      close(attempt, now, "completed");
+      const r = input.result;
+      return { status: "recorded", event: r.toStatus === "unknown"
+        ? append(a, now, { toStatus: "unknown", attemptId: attempt.attemptId, scannerId: r.scannerId ?? null, reasonCode: r.reasonCode })
+        : append(a, now, { toStatus: r.toStatus, attemptId: attempt.attemptId, scannerId: r.scannerId, engineVersion: r.engineVersion, definitionsVersion: r.definitionsVersion, evidenceRef: r.evidenceRef }) };
+    },
+    async expireScanAttempt(compositionId, assetId, access, now, input) {
+      if (!MEM_ID.test(input?.attemptId ?? "") || !isMemDate(now)) memInvalid();
+      const a = accessible(compositionId, assetId, access, now); if (!a) return { status: "not_found" };
+      const attempt = attempts.get(input.attemptId);
+      if (!attempt || attempt.assetId !== a.id || attempt.compositionId !== compositionId || attempt.finishedAt !== null) return rejected("attempt_not_open", a);
+      if (now < attempt.leaseExpiresAt || Date.now() < attempt.leaseExpiresAt.getTime()) return rejected("lease_active", a); // caller clock AND the store clock
+      if (!MEM_EDGES[statusOf(a.id)].includes("unknown")) return rejected("illegal_transition", a);
+      close(attempt, now, "lease_expired");
+      return { status: "recorded", event: append(a, now, { toStatus: "unknown", attemptId: attempt.attemptId, reasonCode: "lease_expired" }) };
+    },
+    async requestRescan(compositionId, assetId, access, now, input) {
+      if (!memReason(input?.reasonCode) || !isMemDate(now)) memInvalid();
+      const a = accessible(compositionId, assetId, access, now); if (!a) return { status: "not_found" };
+      if (statusOf(a.id) !== "unknown") return rejected("illegal_transition", a);
+      return { status: "recorded", event: append(a, now, { toStatus: "pending", reasonCode: input.reasonCode }) };
+    },
+
+    async createDownloadGrant(compositionId, assetId, access, now, input) {
+      if (!MEM_ID.test(input?.grantId ?? "") || typeof input.tokenHash !== "string" || !MEM_HEX64.test(input.tokenHash)) memInvalid();
+      if (!isMemDate(now) || !isMemDate(input.expiresAt) || input.expiresAt <= now) memInvalid();
+      const a = accessible(compositionId, assetId, access, now); if (!a) return { status: "not_found" };
+      if (statusOf(a.id) !== "clean") return { status: "asset_not_clean", scanStatus: statusOf(a.id) };
+      if (grants.has(input.tokenHash) || [...grants.values()].some(x => x.grantId === input.grantId)) memInvalid(); // the SQL unique keys refuse the same way
+      const p = principal(access);
+      const g: Grant = { grantId: input.grantId, assetId, compositionId, principalKind: p.kind, issuedAt: now, expiresAt: input.expiresAt, redeemedAt: null, tokenHash: input.tokenHash, principalHash: p.hash };
+      grants.set(input.tokenHash, g); return { status: "created", grant: publicGrant(g) };
+    },
+    async validateDownloadGrant(compositionId, assetId, access, now, tokenHash) { const g = redeemable(compositionId, assetId, access, now, tokenHash); return g ? publicGrant(g) : null; },
+    async consumeDownloadGrant(compositionId, assetId, access, now, tokenHash) {
+      const g = redeemable(compositionId, assetId, access, now, tokenHash); if (!g) return null;
+      const spent: Grant = { ...g, redeemedAt: now }; grants.set(tokenHash, spent); return publicGrant(spent);
+    },
+
+    async consumeRateToken(input) {
+      if (!MEM_OPERATIONS.includes(input?.operation)) memInvalid();
+      if (input.operation.endsWith("_GLOBAL") ? input.subject !== "global" : !MEM_ID.test(input.subject ?? "")) memInvalid();
+      if (![input.windowSeconds, input.max].every(memPositive)) memInvalid();
+      if (input.at !== undefined && !isMemDate(input.at)) memInvalid();
+      const stride = input.windowSeconds * 1000, at = (input.at ?? new Date()).getTime();
+      const windowStart = new Date(Math.floor(at / stride) * stride), resetAt = new Date(windowStart.getTime() + stride);
+      const key = `${input.operation}:${input.subject}|${windowStart.toISOString()}`, count = buckets.get(key) ?? 0;
+      if (count >= input.max) return { admitted: false, windowStart, resetAt };
+      buckets.set(key, count + 1); return { admitted: true, count: count + 1, windowStart, resetAt };
+    },
+    async countLiveGuestDrafts(now) {
+      if (!isMemDate(now)) memInvalid();
+      return [...comps.values()].filter(c => c.ownerUserId === null && c.guestDraftId && drafts.get(c.guestDraftId)!.expiresAt > now && drafts.get(c.guestDraftId)!.ownerId === null).length;
+    },
+    async pruneRateBuckets(input) {
+      if (!isMemDate(input?.olderThan) || !isMemDate(input.now) || !memPositive(input.longestWindowSeconds)) memInvalid();
+      if (input.olderThan.getTime() > input.now.getTime() - input.longestWindowSeconds * 1000) memInvalid();
+      let removed = 0;
+      for (const key of [...buckets.keys()]) if (new Date(key.slice(key.indexOf("|") + 1)) < input.olderThan) { buckets.delete(key); removed += 1; }
+      return removed;
+    },
   };
-  return { store, async newUser() { return randomUUID(); }, async m1bClaim(draftId, userId) { drafts.get(draftId)!.ownerId = userId; } };
+  return {
+    store, async newUser() { return randomUUID(); }, async m1bClaim(draftId, userId) { drafts.get(draftId)!.ownerId = userId; },
+    async expireGuest(draftId) { drafts.get(draftId)!.expiresAt = new Date(0); },
+    /** Test-only injection of the `clean -> quarantined` late-detection edge (no store primitive produces it in C3b). */
+    async lateQuarantine(compositionId, assetId) {
+      const a = assets.get(assetId)!;
+      if (a.compositionId !== compositionId || statusOf(assetId) !== "clean") throw new Error("lateQuarantine needs a clean asset");
+      const attemptId = randomUUID(), now = new Date();
+      attempts.set(attemptId, Object.freeze({ attemptId, assetId, compositionId, startedAt: now, leaseExpiresAt: new Date(now.getTime() + 1000), finishedAt: now, outcome: "completed" }));
+      append(a, now, { toStatus: "quarantined", attemptId, scannerId: "synthetic-scanner", engineVersion: "synthetic-engine-0", definitionsVersion: "synthetic-defs-1", evidenceRef: "evidence://synthetic/late" });
+    },
+  };
+}
+const MEM_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/, MEM_HEX64 = /^[a-f0-9]{64}$/, MEM_REASON = /^[a-z][a-z0-9_]*$/;
+const MEM_EDGES: Readonly<Record<ArtifactScanStatus, readonly ArtifactScanStatus[]>> = { pending: ["clean", "quarantined", "unknown"], unknown: ["pending"], clean: ["quarantined"], quarantined: [] };
+const MEM_OPERATIONS: readonly RateLimitOperation[] = ["GUEST_CREATE_GLOBAL", "ASSET_UPLOAD_GLOBAL", "GUEST_WRITE", "GUEST_ASSET_UPLOAD", "GUEST_DOWNLOAD_GRANT", "GUEST_RESCAN", "OWNER_WRITE", "OWNER_ASSET_UPLOAD", "OWNER_DOWNLOAD_GRANT", "OWNER_RESCAN"];
+const isMemDate = (value: unknown): value is Date => value instanceof Date && Number.isFinite(value.getTime());
+/** Same structural ceilings as the SQL store (PostgreSQL integer range; scanner text length). Not policy. */
+const MEM_INTEGER_MAX = 2147483647, MEM_TEXT_MAX = 512;
+const memPositive = (n: unknown) => typeof n === "number" && Number.isSafeInteger(n) && n > 0 && n <= MEM_INTEGER_MAX;
+const memText = (value: unknown) => typeof value === "string" && value.trim() !== "" && value === value.trim() && value.length <= MEM_TEXT_MAX;
+const memReason = (value: unknown): value is string => typeof value === "string" && value.length <= MEM_TEXT_MAX && MEM_REASON.test(value);
+function memInvalid(): never { throw new RangeError("composition store: invalid input"); }
+function memScanResult(r: ScanResultEvent) {
+  if (r?.toStatus === "clean" || r?.toStatus === "quarantined") { if (![r.scannerId, r.engineVersion, r.definitionsVersion, r.evidenceRef].every(memText)) memInvalid(); }
+  else if (r?.toStatus === "unknown") { if (!memReason(r.reasonCode) || (r.scannerId !== undefined && !memText(r.scannerId))) memInvalid(); }
+  else memInvalid();
 }
 
 const code = (promise: Promise<unknown>, expected: CompositionError["code"]) => assert.rejects(promise, (error: unknown) => error instanceof CompositionError && error.code === expected);
@@ -163,6 +306,7 @@ export function compositionConformance(label: string, factory: () => Promise<Har
   t("frozen versions are immutable; edits start a new draft; restore never rewrites history", async () => {
     const { service, h } = await setup(); const g = await guest(service);
     const asset = await service.uploadAsset(g.id, g.access, png(3000, 3000), "image/png");
+    await markClean(h.store, g.id, asset.id, g.access, clock); // ADR-0022 D5: freeze requires every pinned asset to be clean
     const s1 = await service.saveDraft(g.id, g.access, 0, sceneWith([imageLayer("l1", asset.id, asset.sha256)]));
     const frozen = await service.freeze(g.id, g.access, s1.draftRevision);
     assert.equal(frozen.version.versionNo, 1); assert.equal(frozen.record.lifecycleState, "frozen_version"); assert.equal(frozen.version.sceneSha256, s1.sceneSha256);
@@ -183,8 +327,9 @@ export function compositionConformance(label: string, factory: () => Promise<Har
     void h;
   });
   t("preflight is preview-only: out-of-bounds freezes as blocked, nothing is ever print-eligible", async () => {
-    const { service } = await setup(); const g = await guest(service);
+    const { service, h } = await setup(); const g = await guest(service);
     const asset = await service.uploadAsset(g.id, g.access, png(3000, 3000), "image/png");
+    await markClean(h.store, g.id, asset.id, g.access, clock); // ADR-0022 D5
     const saved = await service.saveDraft(g.id, g.access, 0, sceneWith([imageLayer("l1", asset.id, asset.sha256, { xMm: 150 })]));
     const { version } = await service.freeze(g.id, g.access, saved.draftRevision);
     assert.equal(version.preflightState, "blocked"); assert.ok(version.preflightIssues.some(i => i.code === "LAYER_OUT_OF_BOUNDS"));

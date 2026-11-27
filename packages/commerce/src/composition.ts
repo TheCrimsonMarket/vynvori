@@ -21,7 +21,7 @@ export type { CompositionAccess, CompositionRecord, AssetRecord, VersionRecord, 
 export class CompositionError extends Error {
   constructor(readonly code:
     | "NOT_FOUND" | "REVISION_CONFLICT" | "INVALID_SCENE" | "SCENE_LIMIT" | "ASSET_NOT_OWNED" | "FONT_UNLICENSED" | "UPLOADS_DISABLED"
-    | "UNSUPPORTED_MEDIA" | "ASSET_TOO_LARGE" | "ASSET_QUOTA" | "OWNER_REQUIRED" | "ILLEGAL_TRANSITION" | "STORAGE_UNAVAILABLE" | "LIMITS_NOT_CONFIGURED", readonly detail?: string) { super(code); this.name = "CompositionError"; }
+    | "UNSUPPORTED_MEDIA" | "ASSET_TOO_LARGE" | "ASSET_QUOTA" | "OWNER_REQUIRED" | "ILLEGAL_TRANSITION" | "STORAGE_UNAVAILABLE" | "LIMITS_NOT_CONFIGURED" | "ASSET_NOT_CLEAN", readonly detail?: string) { super(code); this.name = "CompositionError"; }
 }
 
 /**
@@ -144,6 +144,7 @@ export function compositionService(store: CompositionStore, storage: Composition
       });
       if (result.status === "conflict") throw new CompositionError("REVISION_CONFLICT", String(result.currentRevision));
       if (result.status === "not_found") throw new CompositionError("NOT_FOUND");
+      if (result.status === "asset_not_clean") throw new CompositionError("ASSET_NOT_CLEAN"); // D5: checked by the store inside the freeze transaction
       return { version: result.version, record: result.record };
     },
 

@@ -31,3 +31,11 @@ export function syntheticLimitEnv(): Record<string, string> {
   });
   return env;
 }
+
+/** SYNTHETIC C3b store-primitive values (ADR-0022 C3b). Test fixtures only; no founder value exists for any of them. */
+export const SYNTHETIC_SCAN_LEASE_SECONDS = 60;
+export const SYNTHETIC_GRANT_TTL_SECONDS = 300;
+export const SYNTHETIC_RATE_WINDOW_SECONDS = 60;
+export const SYNTHETIC_RATE_MAX = 3;
+/** Synthetic scanner evidence: never a real vendor, engine or signature set (founder ruling QC: no scanner is chosen). */
+export const SYNTHETIC_SCAN_EVIDENCE = Object.freeze({ scannerId: "synthetic-scanner", engineVersion: "synthetic-engine-0", definitionsVersion: "synthetic-defs-0", evidenceRef: "evidence://synthetic/clean" });
