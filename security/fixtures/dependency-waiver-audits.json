@@ -1,5 +1,5 @@
 {
- "capturedOn": "2026-11-02",
+ "capturedOn": "2026-11-27",
  "command": {
   "production": "npm audit --omit=dev --json",
   "all": "npm audit --json"
@@ -12,19 +12,20 @@
     "severity": "moderate",
     "isDirect": false,
     "via": [
+     "@medusajs/dashboard",
      "glob"
     ],
     "effects": [
      "@medusajs/medusa"
     ],
-    "range": ">=2.3.0",
+    "range": "0.0.1 - 2.22.8-preview-20261118094528",
     "nodes": [
      "node_modules/@medusajs/admin-bundler"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.8.4",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/analytics": {
@@ -35,7 +36,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/analytics"
     ],
@@ -49,7 +50,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/analytics-local"
     ],
@@ -63,7 +64,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/analytics-posthog"
     ],
@@ -77,7 +78,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/api-key"
     ],
@@ -91,7 +92,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/auth"
     ],
@@ -105,7 +106,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/auth-emailpass"
     ],
@@ -119,7 +120,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/auth-github"
     ],
@@ -133,7 +134,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/auth-google"
     ],
@@ -149,14 +150,14 @@
     "effects": [
      "@medusajs/medusa"
     ],
-    "range": "*",
+    "range": "<=2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/auth-oidc"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.8.4",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/cache-inmemory": {
@@ -167,7 +168,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/cache-inmemory"
     ],
@@ -181,7 +182,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/cache-redis"
     ],
@@ -197,14 +198,14 @@
     "effects": [
      "@medusajs/medusa"
     ],
-    "range": "*",
+    "range": "<=2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/caching"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.8.4",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/caching-redis": {
@@ -215,7 +216,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": "*",
+    "range": "<=2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/caching-redis"
     ],
@@ -229,7 +230,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/cart"
     ],
@@ -243,17 +244,16 @@
      "glob"
     ],
     "effects": [
-     "@medusajs/draft-order",
      "@medusajs/framework"
     ],
-    "range": ">=2.3.0",
+    "range": "2.3.0 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/cli"
     ],
     "fixAvailable": {
-     "name": "@medusajs/cli",
-     "version": "2.2.0",
-     "isSemVerMajor": true
+     "name": "@medusajs/medusa",
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/core-flows": {
@@ -266,14 +266,14 @@
     "effects": [
      "@medusajs/medusa"
     ],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/core-flows"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.8.4",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/currency": {
@@ -284,7 +284,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/currency"
     ],
@@ -298,11 +298,32 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/customer"
     ],
     "fixAvailable": true
+   },
+   "@medusajs/dashboard": {
+    "name": "@medusajs/dashboard",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "i18next"
+    ],
+    "effects": [
+     "@medusajs/admin-bundler",
+     "@medusajs/draft-order"
+    ],
+    "range": "<=2.22.8-preview-20261118094528",
+    "nodes": [
+     "node_modules/@medusajs/dashboard"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.23.1",
+     "isSemVerMajor": false
+    }
    },
    "@medusajs/draft-order": {
     "name": "@medusajs/draft-order",
@@ -310,19 +331,20 @@
     "isDirect": false,
     "via": [
      "@medusajs/cli",
+     "@medusajs/dashboard",
      "@medusajs/framework"
     ],
     "effects": [
      "@medusajs/medusa"
     ],
-    "range": "*",
+    "range": "<=2.22.8-preview-20261118094528",
     "nodes": [
      "node_modules/@medusajs/draft-order"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.8.4",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/event-bus-local": {
@@ -333,7 +355,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/event-bus-local"
     ],
@@ -347,7 +369,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/event-bus-redis"
     ],
@@ -361,7 +383,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/file"
     ],
@@ -375,7 +397,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/file-local"
     ],
@@ -389,7 +411,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/file-s3"
     ],
@@ -421,6 +443,7 @@
      "@medusajs/core-flows",
      "@medusajs/currency",
      "@medusajs/customer",
+     "@medusajs/draft-order",
      "@medusajs/event-bus-local",
      "@medusajs/event-bus-redis",
      "@medusajs/file",
@@ -458,14 +481,14 @@
      "@medusajs/workflow-engine-inmemory",
      "@medusajs/workflow-engine-redis"
     ],
-    "range": ">=2.4.0",
+    "range": "2.4.0 || 2.6.1 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/framework"
     ],
     "fixAvailable": {
-     "name": "@medusajs/framework",
-     "version": "2.8.4",
-     "isSemVerMajor": true
+     "name": "@medusajs/medusa",
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/fulfillment": {
@@ -476,7 +499,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/fulfillment"
     ],
@@ -490,7 +513,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/fulfillment-manual"
     ],
@@ -504,7 +527,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/index"
     ],
@@ -518,7 +541,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/inventory"
     ],
@@ -532,7 +555,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/link-modules"
     ],
@@ -546,7 +569,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/locking"
     ],
@@ -560,7 +583,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/locking-postgres"
     ],
@@ -574,7 +597,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/locking-redis"
     ],
@@ -642,14 +665,14 @@
      "@medusajs/workflow-engine-redis"
     ],
     "effects": [],
-    "range": "1.19.0-next-20231211194438 - 1.19.0-next-20231213101140 || >=2.3.0",
+    "range": "1.19.0-next-20231211194438 - 1.19.0-next-20231213101140 || 2.4.0 || 2.6.1 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/medusa"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.8.4",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/notification": {
@@ -660,7 +683,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/notification"
     ],
@@ -674,7 +697,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/notification-local"
     ],
@@ -685,11 +708,10 @@
     "severity": "moderate",
     "isDirect": false,
     "via": [
-     "@medusajs/framework",
-     "@sendgrid/mail"
+     "@medusajs/framework"
     ],
     "effects": [],
-    "range": "*",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/notification-sendgrid"
     ],
@@ -703,7 +725,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/order"
     ],
@@ -717,7 +739,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/payment"
     ],
@@ -731,7 +753,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/payment-stripe"
     ],
@@ -745,7 +767,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/pricing"
     ],
@@ -759,7 +781,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/product"
     ],
@@ -773,7 +795,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/promotion"
     ],
@@ -789,14 +811,14 @@
     "effects": [
      "@medusajs/medusa"
     ],
-    "range": "*",
+    "range": "<=2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/rbac"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.8.4",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/region": {
@@ -807,7 +829,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/region"
     ],
@@ -821,7 +843,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/sales-channel"
     ],
@@ -835,7 +857,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=0.0.2-snapshot-20231107114332",
+    "range": "0.0.2-snapshot-20231107114332 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/search"
     ],
@@ -851,14 +873,14 @@
     "effects": [
      "@medusajs/medusa"
     ],
-    "range": "*",
+    "range": "<=2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/search-postgres"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.8.4",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/settings": {
@@ -869,7 +891,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": "*",
+    "range": "<=2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/settings"
     ],
@@ -883,7 +905,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/stock-location"
     ],
@@ -897,7 +919,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/store"
     ],
@@ -911,7 +933,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/tax"
     ],
@@ -927,14 +949,14 @@
     "effects": [
      "@medusajs/medusa"
     ],
-    "range": "*",
+    "range": "<=2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/translation"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.8.4",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/user": {
@@ -945,7 +967,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/user"
     ],
@@ -959,7 +981,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/workflow-engine-inmemory"
     ],
@@ -973,88 +995,9 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/workflow-engine-redis"
-    ],
-    "fixAvailable": true
-   },
-   "@sendgrid/client": {
-    "name": "@sendgrid/client",
-    "severity": "low",
-    "isDirect": false,
-    "via": [
-     "@sendgrid/helpers"
-    ],
-    "effects": [],
-    "range": ">=6.5.3",
-    "nodes": [
-     "node_modules/@sendgrid/client"
-    ],
-    "fixAvailable": true
-   },
-   "@sendgrid/helpers": {
-    "name": "@sendgrid/helpers",
-    "severity": "low",
-    "isDirect": false,
-    "via": [
-     "deepmerge"
-    ],
-    "effects": [
-     "@sendgrid/client",
-     "@sendgrid/mail"
-    ],
-    "range": ">=6.5.3",
-    "nodes": [
-     "node_modules/@sendgrid/helpers"
-    ],
-    "fixAvailable": true
-   },
-   "@sendgrid/mail": {
-    "name": "@sendgrid/mail",
-    "severity": "low",
-    "isDirect": false,
-    "via": [
-     "@sendgrid/client",
-     "@sendgrid/helpers"
-    ],
-    "effects": [
-     "@medusajs/notification-sendgrid"
-    ],
-    "range": ">=6.5.3",
-    "nodes": [
-     "node_modules/@sendgrid/mail"
-    ],
-    "fixAvailable": true
-   },
-   "deepmerge": {
-    "name": "deepmerge",
-    "severity": "low",
-    "isDirect": false,
-    "via": [
-     {
-      "source": 1243505,
-      "name": "deepmerge",
-      "dependency": "deepmerge",
-      "title": "deepmerge mergeObject() allows prototype poisoning of returned objects",
-      "url": "https://github.com/advisories/GHSA-gcqx-w48m-w2h4",
-      "severity": "low",
-      "cwe": [
-       "CWE-1321"
-      ],
-      "cvss": {
-       "score": 5.3,
-       "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N"
-      },
-      "range": ">=4.2.0 <=4.3.1"
-     }
-    ],
-    "effects": [
-     "@sendgrid/helpers"
-    ],
-    "range": ">=4.2.0",
-    "nodes": [
-     "node_modules/deepmerge"
     ],
     "fixAvailable": true
    },
@@ -1086,14 +1029,50 @@
      "@medusajs/cli",
      "@medusajs/framework"
     ],
-    "range": "3.0.0 - 14.0.1",
+    "range": "9.0.0 - 14.0.1",
     "nodes": [
      "node_modules/glob"
     ],
     "fixAvailable": {
-     "name": "@medusajs/cli",
-     "version": "2.2.0",
-     "isSemVerMajor": true
+     "name": "@medusajs/medusa",
+     "version": "2.23.1",
+     "isSemVerMajor": false
+    }
+   },
+   "i18next": {
+    "name": "i18next",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     {
+      "source": 1250194,
+      "name": "i18next",
+      "dependency": "i18next",
+      "title": "i18next deepExtend recurses into inherited built-ins, allowing corruption of shared built-in objects (DoS)",
+      "url": "https://github.com/advisories/GHSA-6jcc-5g8w-32mx",
+      "severity": "moderate",
+      "cwe": [
+       "CWE-471",
+       "CWE-1321"
+      ],
+      "cvss": {
+       "score": 5.9,
+       "vectorString": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:L/A:H"
+      },
+      "range": "<26.3.4"
+     }
+    ],
+    "effects": [
+     "@medusajs/dashboard"
+    ],
+    "range": "<26.3.4",
+    "nodes": [
+     "node_modules/i18next"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "minimatch": {
@@ -1102,7 +1081,7 @@
     "isDirect": false,
     "via": [
      {
-      "source": 1244012,
+      "source": 1244623,
       "name": "minimatch",
       "dependency": "minimatch",
       "title": "minimatch has potential denial of service via globparts amplification",
@@ -1115,31 +1094,31 @@
        "score": 0,
        "vectorString": null
       },
-      "range": "<11.0.1"
+      "range": ">=7.0.0 <11.0.1"
      }
     ],
     "effects": [
      "glob"
     ],
-    "range": "<11.0.1",
+    "range": "7.0.0 - 11.0.0",
     "nodes": [
      "node_modules/minimatch"
     ],
     "fixAvailable": {
-     "name": "@medusajs/cli",
-     "version": "2.2.0",
-     "isSemVerMajor": true
+     "name": "@medusajs/medusa",
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    }
   },
   "metadata": {
    "vulnerabilities": {
     "info": 0,
-    "low": 4,
-    "moderate": 59,
+    "low": 0,
+    "moderate": 61,
     "high": 0,
     "critical": 0,
-    "total": 63
+    "total": 61
    },
    "dependencies": {
     "prod": 1010,
@@ -1194,86 +1173,25 @@
      "isSemVerMajor": true
     }
    },
-   "@eslint-community/eslint-utils": {
-    "name": "@eslint-community/eslint-utils",
-    "severity": "moderate",
-    "isDirect": false,
-    "via": [
-     "eslint"
-    ],
-    "effects": [
-     "@next/eslint-plugin-next",
-     "@typescript-eslint/utils",
-     "eslint"
-    ],
-    "range": "*",
-    "nodes": [
-     "node_modules/@eslint-community/eslint-utils"
-    ],
-    "fixAvailable": {
-     "name": "eslint",
-     "version": "4.0.0",
-     "isSemVerMajor": true
-    }
-   },
-   "@eslint/config-array": {
-    "name": "@eslint/config-array",
-    "severity": "moderate",
-    "isDirect": false,
-    "via": [
-     "minimatch"
-    ],
-    "effects": [
-     "eslint"
-    ],
-    "range": "*",
-    "nodes": [
-     "node_modules/@eslint/config-array"
-    ],
-    "fixAvailable": {
-     "name": "eslint",
-     "version": "4.0.0",
-     "isSemVerMajor": true
-    }
-   },
-   "@eslint/eslintrc": {
-    "name": "@eslint/eslintrc",
-    "severity": "moderate",
-    "isDirect": false,
-    "via": [
-     "minimatch"
-    ],
-    "effects": [
-     "eslint"
-    ],
-    "range": "0.0.1 || >=0.1.1",
-    "nodes": [
-     "node_modules/@eslint/eslintrc"
-    ],
-    "fixAvailable": {
-     "name": "eslint",
-     "version": "4.0.0",
-     "isSemVerMajor": true
-    }
-   },
    "@medusajs/admin-bundler": {
     "name": "@medusajs/admin-bundler",
     "severity": "moderate",
     "isDirect": false,
     "via": [
+     "@medusajs/dashboard",
      "glob"
     ],
     "effects": [
      "@medusajs/medusa"
     ],
-    "range": ">=2.3.0",
+    "range": "0.0.1 - 2.22.8-preview-20261118094528",
     "nodes": [
      "node_modules/@medusajs/admin-bundler"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.2.0",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/analytics": {
@@ -1284,7 +1202,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/analytics"
     ],
@@ -1298,7 +1216,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/analytics-local"
     ],
@@ -1312,7 +1230,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/analytics-posthog"
     ],
@@ -1326,7 +1244,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/api-key"
     ],
@@ -1340,7 +1258,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/auth"
     ],
@@ -1354,7 +1272,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/auth-emailpass"
     ],
@@ -1368,7 +1286,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/auth-github"
     ],
@@ -1382,7 +1300,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/auth-google"
     ],
@@ -1398,14 +1316,14 @@
     "effects": [
      "@medusajs/medusa"
     ],
-    "range": "*",
+    "range": "<=2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/auth-oidc"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.2.0",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/cache-inmemory": {
@@ -1416,7 +1334,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/cache-inmemory"
     ],
@@ -1430,7 +1348,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/cache-redis"
     ],
@@ -1446,14 +1364,14 @@
     "effects": [
      "@medusajs/medusa"
     ],
-    "range": "*",
+    "range": "<=2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/caching"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.2.0",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/caching-redis": {
@@ -1464,7 +1382,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": "*",
+    "range": "<=2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/caching-redis"
     ],
@@ -1478,7 +1396,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/cart"
     ],
@@ -1492,17 +1410,16 @@
      "glob"
     ],
     "effects": [
-     "@medusajs/draft-order",
      "@medusajs/framework"
     ],
-    "range": ">=2.3.0",
+    "range": "2.3.0 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/cli"
     ],
     "fixAvailable": {
-     "name": "@medusajs/cli",
-     "version": "2.2.0",
-     "isSemVerMajor": true
+     "name": "@medusajs/medusa",
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/core-flows": {
@@ -1515,14 +1432,14 @@
     "effects": [
      "@medusajs/medusa"
     ],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/core-flows"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.2.0",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/currency": {
@@ -1533,7 +1450,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/currency"
     ],
@@ -1547,11 +1464,32 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/customer"
     ],
     "fixAvailable": true
+   },
+   "@medusajs/dashboard": {
+    "name": "@medusajs/dashboard",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     "i18next"
+    ],
+    "effects": [
+     "@medusajs/admin-bundler",
+     "@medusajs/draft-order"
+    ],
+    "range": "<=2.22.8-preview-20261118094528",
+    "nodes": [
+     "node_modules/@medusajs/dashboard"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.23.1",
+     "isSemVerMajor": false
+    }
    },
    "@medusajs/draft-order": {
     "name": "@medusajs/draft-order",
@@ -1559,19 +1497,20 @@
     "isDirect": false,
     "via": [
      "@medusajs/cli",
+     "@medusajs/dashboard",
      "@medusajs/framework"
     ],
     "effects": [
      "@medusajs/medusa"
     ],
-    "range": "*",
+    "range": "<=2.22.8-preview-20261118094528",
     "nodes": [
      "node_modules/@medusajs/draft-order"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.2.0",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/event-bus-local": {
@@ -1582,7 +1521,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/event-bus-local"
     ],
@@ -1596,7 +1535,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/event-bus-redis"
     ],
@@ -1610,7 +1549,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/file"
     ],
@@ -1624,7 +1563,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/file-local"
     ],
@@ -1638,7 +1577,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/file-s3"
     ],
@@ -1670,6 +1609,7 @@
      "@medusajs/core-flows",
      "@medusajs/currency",
      "@medusajs/customer",
+     "@medusajs/draft-order",
      "@medusajs/event-bus-local",
      "@medusajs/event-bus-redis",
      "@medusajs/file",
@@ -1707,14 +1647,14 @@
      "@medusajs/workflow-engine-inmemory",
      "@medusajs/workflow-engine-redis"
     ],
-    "range": ">=2.4.0",
+    "range": "2.4.0 || 2.6.1 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/framework"
     ],
     "fixAvailable": {
-     "name": "@medusajs/framework",
-     "version": "2.8.4",
-     "isSemVerMajor": true
+     "name": "@medusajs/medusa",
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/fulfillment": {
@@ -1725,7 +1665,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/fulfillment"
     ],
@@ -1739,7 +1679,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/fulfillment-manual"
     ],
@@ -1753,7 +1693,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/index"
     ],
@@ -1767,7 +1707,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/inventory"
     ],
@@ -1781,7 +1721,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/link-modules"
     ],
@@ -1795,7 +1735,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/locking"
     ],
@@ -1809,7 +1749,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/locking-postgres"
     ],
@@ -1823,7 +1763,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/locking-redis"
     ],
@@ -1891,14 +1831,14 @@
      "@medusajs/workflow-engine-redis"
     ],
     "effects": [],
-    "range": "1.19.0-next-20231211194438 - 1.19.0-next-20231213101140 || >=2.3.0",
+    "range": "1.19.0-next-20231211194438 - 1.19.0-next-20231213101140 || 2.4.0 || 2.6.1 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/medusa"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.2.0",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/notification": {
@@ -1909,7 +1849,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/notification"
     ],
@@ -1923,7 +1863,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/notification-local"
     ],
@@ -1934,11 +1874,10 @@
     "severity": "moderate",
     "isDirect": false,
     "via": [
-     "@medusajs/framework",
-     "@sendgrid/mail"
+     "@medusajs/framework"
     ],
     "effects": [],
-    "range": "*",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/notification-sendgrid"
     ],
@@ -1952,7 +1891,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/order"
     ],
@@ -1966,7 +1905,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/payment"
     ],
@@ -1980,7 +1919,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/payment-stripe"
     ],
@@ -1994,7 +1933,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/pricing"
     ],
@@ -2008,7 +1947,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/product"
     ],
@@ -2022,7 +1961,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/promotion"
     ],
@@ -2038,14 +1977,14 @@
     "effects": [
      "@medusajs/medusa"
     ],
-    "range": "*",
+    "range": "<=2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/rbac"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.2.0",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/region": {
@@ -2056,7 +1995,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/region"
     ],
@@ -2070,7 +2009,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/sales-channel"
     ],
@@ -2084,7 +2023,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=0.0.2-snapshot-20231107114332",
+    "range": "0.0.2-snapshot-20231107114332 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/search"
     ],
@@ -2100,14 +2039,14 @@
     "effects": [
      "@medusajs/medusa"
     ],
-    "range": "*",
+    "range": "<=2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/search-postgres"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.2.0",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/settings": {
@@ -2118,7 +2057,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": "*",
+    "range": "<=2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/settings"
     ],
@@ -2132,7 +2071,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/stock-location"
     ],
@@ -2146,7 +2085,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/store"
     ],
@@ -2160,7 +2099,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/tax"
     ],
@@ -2176,14 +2115,14 @@
     "effects": [
      "@medusajs/medusa"
     ],
-    "range": "*",
+    "range": "<=2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/translation"
     ],
     "fixAvailable": {
      "name": "@medusajs/medusa",
-     "version": "2.2.0",
-     "isSemVerMajor": true
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "@medusajs/user": {
@@ -2194,7 +2133,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/user"
     ],
@@ -2208,7 +2147,7 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/workflow-engine-inmemory"
     ],
@@ -2222,77 +2161,9 @@
      "@medusajs/framework"
     ],
     "effects": [],
-    "range": ">=2.8.5",
+    "range": "2.8.5 - 2.22.3-snapshot-20261103230838",
     "nodes": [
      "node_modules/@medusajs/workflow-engine-redis"
-    ],
-    "fixAvailable": true
-   },
-   "@next/eslint-plugin-next": {
-    "name": "@next/eslint-plugin-next",
-    "severity": "moderate",
-    "isDirect": false,
-    "via": [
-     "@eslint-community/eslint-utils"
-    ],
-    "effects": [
-     "eslint-config-next"
-    ],
-    "range": ">=16.3.0-canary.0",
-    "nodes": [
-     "node_modules/@next/eslint-plugin-next"
-    ],
-    "fixAvailable": {
-     "name": "eslint-config-next",
-     "version": "0.2.4",
-     "isSemVerMajor": true
-    }
-   },
-   "@sendgrid/client": {
-    "name": "@sendgrid/client",
-    "severity": "low",
-    "isDirect": false,
-    "via": [
-     "@sendgrid/helpers"
-    ],
-    "effects": [],
-    "range": ">=6.5.3",
-    "nodes": [
-     "node_modules/@sendgrid/client"
-    ],
-    "fixAvailable": true
-   },
-   "@sendgrid/helpers": {
-    "name": "@sendgrid/helpers",
-    "severity": "low",
-    "isDirect": false,
-    "via": [
-     "deepmerge"
-    ],
-    "effects": [
-     "@sendgrid/client",
-     "@sendgrid/mail"
-    ],
-    "range": ">=6.5.3",
-    "nodes": [
-     "node_modules/@sendgrid/helpers"
-    ],
-    "fixAvailable": true
-   },
-   "@sendgrid/mail": {
-    "name": "@sendgrid/mail",
-    "severity": "low",
-    "isDirect": false,
-    "via": [
-     "@sendgrid/client",
-     "@sendgrid/helpers"
-    ],
-    "effects": [
-     "@medusajs/notification-sendgrid"
-    ],
-    "range": ">=6.5.3",
-    "nodes": [
-     "node_modules/@sendgrid/mail"
     ],
     "fixAvailable": true
    },
@@ -2301,44 +2172,31 @@
     "severity": "moderate",
     "isDirect": false,
     "via": [
-     "@typescript-eslint/parser",
      "@typescript-eslint/type-utils",
-     "@typescript-eslint/utils",
-     "eslint"
+     "@typescript-eslint/utils"
     ],
-    "effects": [
-     "typescript-eslint"
-    ],
-    "range": "*",
+    "effects": [],
+    "range": "6.16.0 - 8.72.2",
     "nodes": [
      "node_modules/@typescript-eslint/eslint-plugin"
     ],
-    "fixAvailable": {
-     "name": "eslint-config-next",
-     "version": "0.2.4",
-     "isSemVerMajor": true
-    }
+    "fixAvailable": true
    },
    "@typescript-eslint/parser": {
     "name": "@typescript-eslint/parser",
     "severity": "moderate",
     "isDirect": false,
     "via": [
-     "@typescript-eslint/typescript-estree",
-     "eslint"
+     "@typescript-eslint/typescript-estree"
     ],
     "effects": [
-     "@typescript-eslint/eslint-plugin"
+     "typescript-eslint"
     ],
-    "range": "*",
+    "range": "6.16.0 - 8.72.2",
     "nodes": [
      "node_modules/@typescript-eslint/parser"
     ],
-    "fixAvailable": {
-     "name": "eslint-config-next",
-     "version": "0.2.4",
-     "isSemVerMajor": true
-    }
+    "fixAvailable": true
    },
    "@typescript-eslint/type-utils": {
     "name": "@typescript-eslint/type-utils",
@@ -2346,21 +2204,14 @@
     "isDirect": false,
     "via": [
      "@typescript-eslint/typescript-estree",
-     "@typescript-eslint/utils",
-     "eslint"
+     "@typescript-eslint/utils"
     ],
-    "effects": [
-     "@typescript-eslint/eslint-plugin"
-    ],
-    "range": ">=5.9.2-alpha.0",
+    "effects": [],
+    "range": "6.16.0 - 8.72.2",
     "nodes": [
      "node_modules/@typescript-eslint/type-utils"
     ],
-    "fixAvailable": {
-     "name": "eslint-config-next",
-     "version": "0.2.4",
-     "isSemVerMajor": true
-    }
+    "fixAvailable": true
    },
    "@typescript-eslint/typescript-estree": {
     "name": "@typescript-eslint/typescript-estree",
@@ -2375,68 +2226,26 @@
      "@typescript-eslint/utils",
      "typescript-eslint"
     ],
-    "range": ">=6.16.0",
+    "range": "6.16.0 - 8.72.2",
     "nodes": [
      "node_modules/@typescript-eslint/typescript-estree"
     ],
-    "fixAvailable": {
-     "name": "eslint-config-next",
-     "version": "0.2.4",
-     "isSemVerMajor": true
-    }
+    "fixAvailable": true
    },
    "@typescript-eslint/utils": {
     "name": "@typescript-eslint/utils",
     "severity": "moderate",
     "isDirect": false,
     "via": [
-     "@eslint-community/eslint-utils",
-     "@typescript-eslint/typescript-estree",
-     "eslint"
+     "@typescript-eslint/typescript-estree"
     ],
     "effects": [
      "@typescript-eslint/eslint-plugin",
-     "@typescript-eslint/type-utils",
      "typescript-eslint"
     ],
-    "range": "*",
+    "range": "6.16.0 - 8.72.2",
     "nodes": [
      "node_modules/@typescript-eslint/utils"
-    ],
-    "fixAvailable": {
-     "name": "eslint-config-next",
-     "version": "0.2.4",
-     "isSemVerMajor": true
-    }
-   },
-   "deepmerge": {
-    "name": "deepmerge",
-    "severity": "low",
-    "isDirect": false,
-    "via": [
-     {
-      "source": 1243505,
-      "name": "deepmerge",
-      "dependency": "deepmerge",
-      "title": "deepmerge mergeObject() allows prototype poisoning of returned objects",
-      "url": "https://github.com/advisories/GHSA-gcqx-w48m-w2h4",
-      "severity": "low",
-      "cwe": [
-       "CWE-1321"
-      ],
-      "cvss": {
-       "score": 5.3,
-       "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N"
-      },
-      "range": ">=4.2.0 <=4.3.1"
-     }
-    ],
-    "effects": [
-     "@sendgrid/helpers"
-    ],
-    "range": ">=4.2.0",
-    "nodes": [
-     "node_modules/deepmerge"
     ],
     "fixAvailable": true
    },
@@ -2493,106 +2302,6 @@
      "isSemVerMajor": true
     }
    },
-   "eslint": {
-    "name": "eslint",
-    "severity": "moderate",
-    "isDirect": true,
-    "via": [
-     "@eslint-community/eslint-utils",
-     "@eslint/config-array",
-     "@eslint/eslintrc",
-     "minimatch"
-    ],
-    "effects": [
-     "@eslint-community/eslint-utils",
-     "@typescript-eslint/eslint-plugin",
-     "@typescript-eslint/parser",
-     "@typescript-eslint/type-utils",
-     "@typescript-eslint/utils",
-     "eslint-config-next",
-     "typescript-eslint"
-    ],
-    "range": "0.7.1 - 2.0.0-rc.1 || >=4.1.0",
-    "nodes": [
-     "node_modules/eslint"
-    ],
-    "fixAvailable": {
-     "name": "eslint",
-     "version": "4.0.0",
-     "isSemVerMajor": true
-    }
-   },
-   "eslint-config-next": {
-    "name": "eslint-config-next",
-    "severity": "moderate",
-    "isDirect": true,
-    "via": [
-     "@next/eslint-plugin-next",
-     "eslint",
-     "eslint-plugin-import",
-     "eslint-plugin-jsx-a11y",
-     "eslint-plugin-react",
-     "typescript-eslint"
-    ],
-    "effects": [],
-    "range": ">=10.2.1-canary.2",
-    "nodes": [
-     "node_modules/eslint-config-next"
-    ],
-    "fixAvailable": {
-     "name": "eslint-config-next",
-     "version": "0.2.4",
-     "isSemVerMajor": true
-    }
-   },
-   "eslint-plugin-import": {
-    "name": "eslint-plugin-import",
-    "severity": "moderate",
-    "isDirect": false,
-    "via": [
-     "minimatch"
-    ],
-    "effects": [],
-    "range": ">=1.15.0",
-    "nodes": [
-     "node_modules/eslint-config-next/node_modules/eslint-plugin-import"
-    ],
-    "fixAvailable": true
-   },
-   "eslint-plugin-jsx-a11y": {
-    "name": "eslint-plugin-jsx-a11y",
-    "severity": "moderate",
-    "isDirect": false,
-    "via": [
-     "minimatch"
-    ],
-    "effects": [
-     "eslint-config-next"
-    ],
-    "range": ">=6.5.0",
-    "nodes": [
-     "node_modules/eslint-config-next/node_modules/eslint-plugin-jsx-a11y"
-    ],
-    "fixAvailable": {
-     "name": "eslint-config-next",
-     "version": "0.2.4",
-     "isSemVerMajor": true
-    }
-   },
-   "eslint-plugin-react": {
-    "name": "eslint-plugin-react",
-    "severity": "moderate",
-    "isDirect": false,
-    "via": [
-     "minimatch"
-    ],
-    "effects": [],
-    "range": ">=7.23.0",
-    "nodes": [
-     "node_modules/eslint-config-next/node_modules/eslint-plugin-react"
-    ],
-    "fixAvailable": true
-   },
    "glob": {
     "name": "glob",
     "severity": "moderate",
@@ -2621,14 +2330,50 @@
      "@medusajs/cli",
      "@medusajs/framework"
     ],
-    "range": "3.0.0 - 14.0.1",
+    "range": "9.0.0 - 14.0.1",
     "nodes": [
      "node_modules/glob"
     ],
     "fixAvailable": {
-     "name": "@medusajs/cli",
-     "version": "2.2.0",
-     "isSemVerMajor": true
+     "name": "@medusajs/medusa",
+     "version": "2.23.1",
+     "isSemVerMajor": false
+    }
+   },
+   "i18next": {
+    "name": "i18next",
+    "severity": "moderate",
+    "isDirect": false,
+    "via": [
+     {
+      "source": 1250194,
+      "name": "i18next",
+      "dependency": "i18next",
+      "title": "i18next deepExtend recurses into inherited built-ins, allowing corruption of shared built-in objects (DoS)",
+      "url": "https://github.com/advisories/GHSA-6jcc-5g8w-32mx",
+      "severity": "moderate",
+      "cwe": [
+       "CWE-471",
+       "CWE-1321"
+      ],
+      "cvss": {
+       "score": 5.9,
+       "vectorString": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:L/A:H"
+      },
+      "range": "<26.3.4"
+     }
+    ],
+    "effects": [
+     "@medusajs/dashboard"
+    ],
+    "range": "<26.3.4",
+    "nodes": [
+     "node_modules/i18next"
+    ],
+    "fixAvailable": {
+     "name": "@medusajs/medusa",
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "minimatch": {
@@ -2637,7 +2382,7 @@
     "isDirect": false,
     "via": [
      {
-      "source": 1244012,
+      "source": 1244623,
       "name": "minimatch",
       "dependency": "minimatch",
       "title": "minimatch has potential denial of service via globparts amplification",
@@ -2650,31 +2395,21 @@
        "score": 0,
        "vectorString": null
       },
-      "range": "<11.0.1"
+      "range": ">=7.0.0 <11.0.1"
      }
     ],
     "effects": [
-     "@eslint/config-array",
-     "@eslint/eslintrc",
      "@typescript-eslint/typescript-estree",
-     "eslint",
-     "eslint-plugin-import",
-     "eslint-plugin-jsx-a11y",
-     "eslint-plugin-react",
      "glob"
     ],
-    "range": "<11.0.1",
+    "range": "7.0.0 - 11.0.0",
     "nodes": [
-     "node_modules/@eslint/config-array/node_modules/minimatch",
-     "node_modules/@eslint/eslintrc/node_modules/minimatch",
-     "node_modules/eslint-config-next/node_modules/minimatch",
-     "node_modules/eslint/node_modules/minimatch",
      "node_modules/minimatch"
     ],
     "fixAvailable": {
-     "name": "eslint",
-     "version": "4.0.0",
-     "isSemVerMajor": true
+     "name": "@medusajs/medusa",
+     "version": "2.23.1",
+     "isSemVerMajor": false
     }
    },
    "typescript-eslint": {
@@ -2685,31 +2420,24 @@
      "@typescript-eslint/eslint-plugin",
      "@typescript-eslint/parser",
      "@typescript-eslint/typescript-estree",
-     "@typescript-eslint/utils",
-     "eslint"
+     "@typescript-eslint/utils"
     ],
-    "effects": [
-     "eslint-config-next"
-    ],
-    "range": "*",
+    "effects": [],
+    "range": "<=8.72.2",
     "nodes": [
      "node_modules/typescript-eslint"
     ],
-    "fixAvailable": {
-     "name": "eslint-config-next",
-     "version": "0.2.4",
-     "isSemVerMajor": true
-    }
+    "fixAvailable": true
    }
   },
   "metadata": {
    "vulnerabilities": {
     "info": 0,
-    "low": 4,
-    "moderate": 78,
+    "low": 0,
+    "moderate": 71,
     "high": 0,
     "critical": 0,
-    "total": 82
+    "total": 71
    },
    "dependencies": {
     "prod": 1010,
