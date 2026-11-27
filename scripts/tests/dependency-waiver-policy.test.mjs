@@ -37,9 +37,9 @@ test("reviewed policy is anchored and the captured audits are accepted with ever
   const result = call();
   assert.equal(result.accepted, true, result.code);
   assert.equal(result.status, "ACCEPTED_WITH_DATED_WAIVER");
-  assert.equal(result.counts.total, 63);
+  assert.equal(result.counts.total, 61);
   assert.equal(result.counts.high + result.counts.critical, 0);
-  assert.equal(result.allDependencyCounts.total, 82);
+  assert.equal(result.allDependencyCounts.total, 65);
   assert.deepEqual(result.waiversUsed, policy.waivers.map(waiver => waiver.ghsa).sort());
 });
 
@@ -107,7 +107,7 @@ test("development-only waivers cannot cover production-audit findings", () => {
 
 test("vulnerable paths outside the lockfile are rejected", () => {
   const changed = structuredClone(fixture.production);
-  const name = Object.keys(changed.vulnerabilities).find(key => !["glob", "minimatch", "deepmerge"].includes(key));
+  const name = Object.keys(changed.vulnerabilities).find(key => !["glob", "minimatch", "i18next"].includes(key));
   changed.vulnerabilities[name].nodes = ["node_modules/not-in-lock"];
   rejected(call({ production: run(changed) }), "UNREVIEWED_VULNERABLE_PATH");
 });
@@ -136,12 +136,15 @@ test("propagated records must trace to a waived origin and cannot exceed its sev
   cycle.vulnerabilities["cycle-b"] = record("cycle-b");
   cycle.metadata.vulnerabilities.moderate += 2; cycle.metadata.vulnerabilities.total += 2;
   rejected(call({ production: run(cycle) }), "UNMAPPABLE_ADVISORY_GRAPH");
+  // Every waiver is moderate since ADR-0023 removed the only low one (deepmerge), so a propagated record can only exceed its
+  // origin by becoming high or critical, which is rejected earlier as UNWAIVABLE_SEVERITY. The ADVISORY_GRAPH_CHANGED
+  // comparison stays in the evaluator as defence in depth; this case proves the escalation is still rejected.
   const escalated = structuredClone(fixture.production);
-  const dependent = Object.keys(escalated.vulnerabilities).find(key => escalated.vulnerabilities[key].via.length === 1 && escalated.vulnerabilities[key].via[0] === "deepmerge");
-  assert.ok(dependent, "fixture has a record propagated only from the low deepmerge origin");
-  escalated.vulnerabilities[dependent].severity = "moderate";
-  escalated.metadata.vulnerabilities.low--; escalated.metadata.vulnerabilities.moderate++;
-  rejected(call({ production: run(escalated) }), "ADVISORY_GRAPH_CHANGED");
+  const dependent = Object.keys(escalated.vulnerabilities).find(key => escalated.vulnerabilities[key].via.length === 1 && escalated.vulnerabilities[key].via[0] === "i18next");
+  assert.ok(dependent, "fixture has a record propagated only from the moderate i18next origin");
+  escalated.vulnerabilities[dependent].severity = "high";
+  escalated.metadata.vulnerabilities.moderate--; escalated.metadata.vulnerabilities.high++;
+  rejected(call({ production: run(escalated) }), "UNWAIVABLE_SEVERITY");
 });
 
 test("execution, signal and exit-status failures are never waived, for either audit", () => {
@@ -173,7 +176,7 @@ test("a full audit that silently dropped development or production findings is r
   // Equivalent to running the "all" audit with dev dependencies omitted.
   rejected(call({ all: run(fixture.production) }), "AUDIT_GRAPH_INCOMPLETE");
   const narrowed = structuredClone(fixture.all);
-  const dropped = Object.keys(fixture.production.vulnerabilities).find(key => !["glob", "minimatch", "deepmerge"].includes(key) &&
+  const dropped = Object.keys(fixture.production.vulnerabilities).find(key => !["glob", "minimatch", "i18next"].includes(key) &&
     !Object.values(narrowed.vulnerabilities).some(record => record.via.includes(key)));
   delete narrowed.vulnerabilities[dropped];
   narrowed.metadata.vulnerabilities[fixture.all.vulnerabilities[dropped].severity]--; narrowed.metadata.vulnerabilities.total--;
@@ -183,8 +186,20 @@ test("a full audit that silently dropped development or production findings is r
 test("an empty audit cannot pass while reviewed vulnerable nodes are still installed", () => {
   const clean = audit => ({ ...audit, vulnerabilities: {}, metadata: { ...audit.metadata, vulnerabilities: { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 } } });
   rejected(call({ production: run(clean(fixture.production)), all: run(clean(fixture.all)) }), "AUDIT_GRAPH_INCOMPLETE");
+  // A full audit that silently lost the reviewed development-only esbuild origin and everything that depends on it.
   const missing = structuredClone(fixture.all);
-  missing.vulnerabilities.minimatch.nodes = missing.vulnerabilities.minimatch.nodes.filter(node => !node.startsWith("node_modules/eslint/"));
+  const gone = new Set(["esbuild"]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const [name, record] of Object.entries(missing.vulnerabilities)) {
+      if (!gone.has(name) && record.via.some(item => typeof item === "string" && gone.has(item))) { gone.add(name); grew = true; }
+    }
+  }
+  assert.ok(gone.size > 1, "fixture has records that depend on the esbuild origin");
+  for (const name of gone) {
+    missing.metadata.vulnerabilities[missing.vulnerabilities[name].severity]--; missing.metadata.vulnerabilities.total--;
+    delete missing.vulnerabilities[name];
+  }
   rejected(call({ all: run(missing) }), "AUDIT_GRAPH_INCOMPLETE");
 });
 
@@ -204,4 +219,57 @@ test("installed-tree collection fails closed on changed versions or contexts", a
   const context = structuredClone(policy);
   context.waivers[0].nodes[0].context = "development";
   await assert.rejects(inspectWaivedNodes(root, context), /WAIVED_NODE_CONTEXT_CHANGED/);
+});
+
+test("ADR-0023 refresh: the reviewed waiver set is exactly glob, minimatch, esbuild and i18next", () => {
+  assert.deepEqual(policy.waivers.map(waiver => waiver.package).sort(), ["esbuild", "glob", "i18next", "minimatch"]);
+  assert.equal(policy.expiresAt, "2026-12-17T23:59:59Z");
+  // The ESLint development copies of minimatch are outside the current advisory range and are no longer waived.
+  assert.deepEqual(policy.waivers.find(waiver => waiver.package === "minimatch").nodes.map(node => node.path), ["node_modules/minimatch"]);
+});
+
+test("the minimatch advisory must keep its current range, so an upstream range change fails closed", () => {
+  const changed = structuredClone(fixture.production);
+  Object.assign(changed.vulnerabilities.minimatch.via.find(item => typeof item === "object"), { range: "<11.0.1" });
+  rejected(call({ production: run(changed) }), "ADVISORY_ORIGIN_MISMATCH");
+});
+
+test("the Next.js advisories are not waived", () => {
+  for (const ghsa of ["GHSA-mfr8-8qww-v76h", "GHSA-vc7v-qv4w-wrv8", "GHSA-7qx7-33qx-rqx2", "GHSA-f3mh-rxg3-f5g2", "GHSA-pc58-hwjq-p385", "GHSA-rhh4-g77r-r9qj", "GHSA-vvgp-ww4w-46vf"]) {
+    assert.ok(!policy.waivers.some(waiver => waiver.ghsa === ghsa), ghsa);
+    rejected(call({ production: run(addOrigin(fixture.production, "glob", { url: `https://github.com/advisories/${ghsa}` })) }), "UNWAIVED_ADVISORY");
+  }
+});
+
+test("the i18next waiver covers only the reviewed production path and version", () => {
+  const moved = structuredClone(fixture.production);
+  moved.vulnerabilities.i18next.nodes.push("node_modules/other/node_modules/i18next");
+  const movedState = structuredClone(state);
+  movedState.lock.packages["node_modules/other/node_modules/i18next"] = { version: "23.7.11" };
+  rejected(call({ production: run(moved), state: movedState }), "UNWAIVED_VULNERABLE_NODE");
+  const version = structuredClone(state);
+  version.installed["node_modules/i18next"].version = "23.7.12";
+  rejected(call({ state: version }), "UNWAIVED_VULNERABLE_NODE");
+});
+
+// Removes a record and everything that depends on it, keeping the counts consistent, so only the completeness check can object.
+const without = (audit, origin) => {
+  const changed = structuredClone(audit);
+  const gone = new Set([origin]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const [name, record] of Object.entries(changed.vulnerabilities)) {
+      if (!gone.has(name) && record.via.some(item => typeof item === "string" && gone.has(item))) { gone.add(name); grew = true; }
+    }
+  }
+  for (const name of gone) {
+    changed.metadata.vulnerabilities[changed.vulnerabilities[name].severity]--; changed.metadata.vulnerabilities.total--;
+    delete changed.vulnerabilities[name];
+  }
+  return changed;
+};
+
+for (const name of ["glob", "minimatch", "i18next"]) test(`a production audit that omits the reviewed ${name} node is rejected as incomplete`, () => {
+  rejected(call({ production: run(without(fixture.production, name)) }), "AUDIT_GRAPH_INCOMPLETE");
+  rejected(call({ all: run(without(fixture.all, name)) }), "AUDIT_GRAPH_INCOMPLETE");
 });

@@ -8,6 +8,8 @@
   "scope": "ci-and-local-audit-gate-only",
   "deploymentAuthorized": false,
   "decisionRecord": "docs/implementation/ADR-0020-Dated-Dependency-Advisory-Waiver.md",
+  "amendedOn": "2026-11-27",
+  "amendmentRecord": "docs/implementation/ADR-0023-Waiver-Policy-Refresh-and-Next-16-4-6.md",
   "waivers": [
     {
       "ghsa": "GHSA-3g3m-2fjr-6pw4",
@@ -25,29 +27,13 @@
       "ghsa": "GHSA-g3hv-75wg-m249",
       "package": "minimatch",
       "severity": "moderate",
-      "range": "<11.0.1",
+      "range": ">=7.0.0 <11.0.1",
       "nodes": [
-        { "path": "node_modules/minimatch", "version": "10.2.6", "context": "production", "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-10.2.6.tgz", "integrity": "sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==" },
-        { "path": "node_modules/@eslint/config-array/node_modules/minimatch", "version": "3.1.5", "context": "development", "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-3.1.5.tgz", "integrity": "sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w==" },
-        { "path": "node_modules/@eslint/eslintrc/node_modules/minimatch", "version": "3.1.5", "context": "development", "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-3.1.5.tgz", "integrity": "sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w==" },
-        { "path": "node_modules/eslint-config-next/node_modules/minimatch", "version": "3.1.5", "context": "development", "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-3.1.5.tgz", "integrity": "sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w==" },
-        { "path": "node_modules/eslint/node_modules/minimatch", "version": "3.1.5", "context": "development", "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-3.1.5.tgz", "integrity": "sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w==" }
+        { "path": "node_modules/minimatch", "version": "10.2.6", "context": "production", "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-10.2.6.tgz", "integrity": "sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==" }
       ],
       "owner": "VYNVORI founder",
-      "rationale": "Production copy is required by glob 13 (above); development copies are ESLint's. Only a major upgrade fixes it; patterns are repository-controlled.",
-      "recheck": "With the glob waiver and on ESLint upgrades; remove when no affected node remains."
-    },
-    {
-      "ghsa": "GHSA-gcqx-w48m-w2h4",
-      "package": "deepmerge",
-      "severity": "low",
-      "range": ">=4.2.0 <=4.3.1",
-      "nodes": [
-        { "path": "node_modules/deepmerge", "version": "4.3.1", "context": "production", "resolved": "https://registry.npmjs.org/deepmerge/-/deepmerge-4.3.1.tgz", "integrity": "sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A==" }
-      ],
-      "owner": "VYNVORI founder",
-      "rationale": "No patched release exists (4.3.1 is latest). Reached only through @medusajs/notification-sendgrid, which is not configured in apps/medusa.",
-      "recheck": "Before waiver expiry and before configuring any SendGrid notification provider."
+      "rationale": "Production copy is required by glob 13 (above). The four ESLint development copies (3.1.5) are outside the advisory's current range (>=7.0.0) and are no longer reported or waived. Only a major upgrade fixes it; patterns are repository-controlled.",
+      "recheck": "With the glob waiver; remove when no affected node remains."
     },
     {
       "ghsa": "GHSA-67mh-4wv8-2f99",
@@ -60,6 +46,18 @@
       "owner": "VYNVORI founder",
       "rationale": "Development-only, via drizzle-kit's @esbuild-kit loader. The advisory affects esbuild's dev server, which this repository never starts or exposes.",
       "recheck": "On drizzle-kit upgrades and before waiver expiry."
+    },
+    {
+      "ghsa": "GHSA-6jcc-5g8w-32mx",
+      "package": "i18next",
+      "severity": "moderate",
+      "range": "<26.3.4",
+      "nodes": [
+        { "path": "node_modules/i18next", "version": "23.7.11", "context": "production", "resolved": "https://registry.npmjs.org/i18next/-/i18next-23.7.11.tgz", "integrity": "sha512-A/vOkw8vY99YHU9A1Td3I1dcTiYaPnwBWzrpVzfXUXSYgogK3cmBcmop/0cnXPc6QpUWIyqaugKNxRUEZVk9Nw==" }
+      ],
+      "owner": "VYNVORI founder",
+      "rationale": "Reached only through @medusajs/dashboard 2.21.2 (the Medusa admin UI), which pins i18next 23.7.11 exactly. apps/medusa sets admin.disable: true, so the dashboard is never built or served, and no repository code imports i18next. The fix is a major bump (>=26.3.4).",
+      "recheck": "On every Medusa upgrade and before waiver expiry. Remove when Medusa ships i18next >=26.3.4. Enabling the Medusa admin requires a new review first."
     }
   ]
 }
