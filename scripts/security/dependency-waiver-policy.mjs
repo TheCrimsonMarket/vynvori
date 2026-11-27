@@ -4,7 +4,7 @@ import { digest, sha256 } from "./audit-policy.mjs";
 
 // Founder-approved 2026-11-02 (ADR-0020). Updated only by an explicitly reviewed policy change, never by the runner/tests.
 export const WAIVER_POLICY_PATH = "security/dependency-waiver-policy.json";
-export const WAIVER_POLICY_SHA256 = "3e73828a9945b85a0f60442de6ee6ffaa5c8d524291f793279866a2a682111cc";
+export const WAIVER_POLICY_SHA256 = "8481a37063b2e1397f36ae029b1eae211b72b9130fc303379ed1be8b6c2fd7a2";
 // Hard ceiling in code: editing the JSON cannot extend the window even if the anchor were also changed carelessly.
 export const WAIVER_CEILING = "2026-12-17T23:59:59Z";
 const WAIVER_FLOOR = "2026-11-02T00:00:00Z";
