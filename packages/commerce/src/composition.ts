@@ -15,6 +15,8 @@ import { isScanPortConfigured, runScan } from "./composition-scan";
 export const sceneSha256 = (scene: CompositionSceneV1) => createHash("sha256").update(canonicalSceneJson(scene)).digest("hex");
 export const secretHash = (secret: string) => createHash("sha256").update(secret).digest("hex");
 const capabilityPattern = /^[A-Za-z0-9_-]{43}$/;
+/** A download-grant token: 32 random bytes, base64url without padding (the same shape as a guest capability). */
+const grantTokenPattern = /^[A-Za-z0-9_-]{43}$/;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 export const isUuid = (value: unknown): value is string => typeof value === "string" && uuidPattern.test(value);
 
@@ -23,7 +25,8 @@ export type { CompositionAccess, CompositionRecord, AssetRecord, VersionRecord, 
 export class CompositionError extends Error {
   constructor(readonly code:
     | "NOT_FOUND" | "REVISION_CONFLICT" | "INVALID_SCENE" | "SCENE_LIMIT" | "ASSET_NOT_OWNED" | "FONT_UNLICENSED" | "UPLOADS_DISABLED"
-    | "UNSUPPORTED_MEDIA" | "ASSET_TOO_LARGE" | "ASSET_QUOTA" | "OWNER_REQUIRED" | "ILLEGAL_TRANSITION" | "STORAGE_UNAVAILABLE" | "LIMITS_NOT_CONFIGURED" | "ASSET_NOT_CLEAN" | "RATE_LIMITED" | "GUEST_CAPACITY" | "SCAN_UNAVAILABLE", readonly detail?: string) { super(code); this.name = "CompositionError"; }
+    | "UNSUPPORTED_MEDIA" | "ASSET_TOO_LARGE" | "ASSET_QUOTA" | "OWNER_REQUIRED" | "ILLEGAL_TRANSITION" | "STORAGE_UNAVAILABLE" | "LIMITS_NOT_CONFIGURED" | "ASSET_NOT_CLEAN" | "RATE_LIMITED" | "GUEST_CAPACITY" | "SCAN_UNAVAILABLE"
+    | "DOWNLOAD_UNAVAILABLE" | "ASSET_NOT_AVAILABLE", readonly detail?: string) { super(code); this.name = "CompositionError"; }
 }
 
 /**
@@ -48,6 +51,8 @@ export type CompositionConfig = Readonly<{
   /** One scanner call's timeout and the attempt lease (`M3_LIMIT_SCAN_*`; lease strictly longer). `undefined` closes scanning. */
   scanTimeoutMs: number | undefined;
   scanLeaseMs: number | undefined;
+  /** Download-grant lifetime (`M3_LIMIT_DOWNLOAD_GRANT_TTL_SECONDS`, ADR-0022 C6). `undefined` closes minting; there is no default. */
+  downloadGrantTtlMs: number | undefined;
 }>;
 
 /** What a caller is about to do, for rate limiting (ADR-0022 D1): the ten limited operations are these four kinds x guest/owner, plus the two global ones. */
@@ -368,6 +373,52 @@ export function compositionService(store: CompositionStore, storage: Composition
         asset = { ...asset, scanStatus: "pending" };
       }
       return scanPending(id, asset, access, bytes, true);
+    },
+    // ---- Download grants (ADR-0022 D4, C6). Short-lived, principal-bound, single-use (founder default, registry 2026-11-03). ------------
+    // No wallet, entitlement, ledger or payment check exists on this path (doc 06: originals are never gated behind export payment);
+    // a static test asserts this module imports none of them. Only the SHA-256 of a token is ever stored.
+
+    /** Downloads read the stored original, so they need storage. Flag-like (no number involved); checked after access. */
+    assertDownloadsAvailable(): void { if (!storage) throw new CompositionError("DOWNLOAD_UNAVAILABLE"); },
+    /** The grant lifetime. Unset closes minting (LIMITS_NOT_CONFIGURED), never "no expiry". */
+    assertDownloadGrantsConfigured(): void { if (config.downloadGrantTtlMs === undefined) throw new CompositionError("LIMITS_NOT_CONFIGURED"); },
+    /**
+     * Mint one grant for a `clean` asset of this composition. The caller (HTTP) has already proved access in SQL and charged
+     * `*_DOWNLOAD_GRANT`. The store re-checks access and `clean` under the asset lock, binds the grant to this principal and stores
+     * only the token hash. A non-clean asset answers ASSET_NOT_AVAILABLE, which is reachable only after the ownership predicate, so
+     * it is no cross-tenant oracle. The raw token is returned exactly once and is never logged.
+     */
+    async mintDownloadGrant(id: string, assetId: string, access: CompositionAccess): Promise<{ token: string; expiresAt: Date }> {
+      if (!isUuid(id) || !isUuid(assetId)) throw new CompositionError("NOT_FOUND");
+      if (!storage) throw new CompositionError("DOWNLOAD_UNAVAILABLE");
+      const ttlMs = config.downloadGrantTtlMs;
+      if (ttlMs === undefined) throw new CompositionError("LIMITS_NOT_CONFIGURED");
+      const token = randomBytes(32).toString("base64url"), issuedAt = now(), expiresAt = new Date(issuedAt.getTime() + ttlMs);
+      const created = await store.createDownloadGrant(id, assetId, access, issuedAt, { grantId: randomUUID(), tokenHash: secretHash(token), expiresAt });
+      if (created.status === "not_found") throw new CompositionError("NOT_FOUND");
+      if (created.status === "asset_not_clean") throw new CompositionError("ASSET_NOT_AVAILABLE");
+      return { token, expiresAt: created.grant.expiresAt };
+    },
+    /**
+     * Redeem a grant (ADR-0022 D4), in this order: (1) read-only validation of every condition (token, principal, composition,
+     * asset, unexpired, unredeemed, access, `clean`); (2) fetch the object and verify its size and SHA-256 BEFORE anything is
+     * consumed, so a storage failure never burns a grant; (3) consume with ONE atomic statement whose WHERE repeats every condition
+     * of (1), so a different valid principal presenting a leaked token gets nothing and leaves the grant spendable, and concurrent
+     * redeems have exactly one winner; (4) only then are the bytes returned. Every refusal is the same NOT_FOUND.
+     */
+    async redeemDownloadGrant(id: string, assetId: string, access: CompositionAccess, token: string): Promise<{ asset: AssetRecord; bytes: Uint8Array }> {
+      if (!isUuid(id) || !isUuid(assetId) || typeof token !== "string" || !grantTokenPattern.test(token)) throw new CompositionError("NOT_FOUND");
+      if (!storage) throw new CompositionError("DOWNLOAD_UNAVAILABLE");
+      const tokenHash = secretHash(token);
+      if (!(await store.validateDownloadGrant(id, assetId, access, now(), tokenHash))) throw new CompositionError("NOT_FOUND");
+      const asset = await store.getAsset(id, assetId, access, now());
+      if (!asset || asset.scanStatus !== "clean") throw new CompositionError("NOT_FOUND");
+      let bytes: Uint8Array;
+      try { bytes = await storage.get(asset.objectKey, asset.sha256, asset.byteSize); }
+      catch { throw new CompositionError("STORAGE_UNAVAILABLE"); }
+      if (bytes.byteLength !== asset.byteSize || createHash("sha256").update(bytes).digest("hex") !== asset.sha256) throw new CompositionError("STORAGE_UNAVAILABLE");
+      if (!(await store.consumeDownloadGrant(id, assetId, access, now(), tokenHash))) throw new CompositionError("NOT_FOUND");
+      return { asset, bytes };
     },
     /**
      * Bytes are streamed through the app after an ownership check; no presigned or public URL is ever issued. Only a `clean` asset

@@ -230,3 +230,33 @@ export function describeScanOutcome(name: string, status: ScanStatus): string {
     case "quarantined": return `${name}: this artwork did not pass the safety check and cannot be used. Remove it from the design.`;
   }
 }
+
+// --- download the unchanged original (ADR-0022 D4, C6). The server is authoritative: it mints only for a `clean` asset it owns.
+/** Offered only for an uploaded asset the server reports `clean`; never for pending, unknown, quarantined or a local-only asset. */
+export const canDownloadOriginal = (asset: Pick<EditorAsset, "persisted" | "scanStatus"> | undefined) => !!asset?.persisted && asset.scanStatus === "clean";
+const GRANT_TOKEN = /^[A-Za-z0-9_-]{43}$/;
+/**
+ * The same-origin path the editor may navigate to, taken from a mint response, or null. It must be exactly this composition's and
+ * asset's download route with one well-formed grant, so a malformed or foreign answer can never send the browser elsewhere.
+ */
+export function downloadPathFrom(data: unknown, compositionId: string, assetId: string): string | null {
+  const url = data && typeof data === "object" && "downloadUrl" in data ? (data as { downloadUrl: unknown }).downloadUrl : null;
+  if (typeof url !== "string") return null;
+  const prefix = `/api/v1/compositions/${compositionId}/assets/${assetId}/download?grant=`;
+  return url.startsWith(prefix) && GRANT_TOKEN.test(url.slice(prefix.length)) ? url : null;
+}
+/** What the person hears when a download cannot start. Never names a token, a grant id or an internal reason. */
+export function describeDownloadFailure(status: number, data: unknown): string {
+  const failure = classifyApiFailure(status, data);
+  if (failure.kind === "rate_limited") return failure.retryAfterSeconds === null ? "Too many download requests. Try again shortly." : `Too many download requests. Try again in about ${plural(failure.retryAfterSeconds, "second")}.`;
+  const code = data && typeof data === "object" && "error" in data && data.error && typeof data.error === "object" ? (data.error as { code?: unknown }).code : undefined;
+  if (code === "COMPOSITION_ASSET_NOT_AVAILABLE") return "This artwork cannot be downloaded until it passes its safety check.";
+  if (failure.kind === "not_configured" || code === "COMPOSITION_DOWNLOAD_UNAVAILABLE") return "Downloading originals is not set up yet.";
+  return "The download could not be started. Try again.";
+}
+export const describeDownloadStarted = (name: string) => `${name}: download started.`;
+/** The server-generated filename from the download response, accepted only in its exact shape (`original-<sha12>.<ext>`), else null. */
+export function downloadFileName(disposition: string | null): string | null {
+  const match = /^attachment; filename="(original-[0-9a-f]{12}\.(?:png|jpg|webp))"$/.exec(disposition ?? "");
+  return match ? match[1]! : null;
+}
