@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { Client, PoolClient } from "pg";
 import { LedgerBusinessRejection, LedgerError, type LedgerConn, type LedgerDb } from "../src/ledger-core";
 import { recordVendorCostEvidence, type RecordVendorCostEvidenceInput } from "../src/ledger-evidence";
-import { authorizeQuote, getReservation, recordWorkflowRef, releaseReservation } from "../src/ledger-reservations";
+import { authorizeQuote, recordWorkflowRef, releaseReservation } from "../src/ledger-reservations";
 import { holdReservation, settleReservation } from "../src/ledger-settlement";
 import { dropLedger, freshLedger, grantSyntheticCredits, ledgerPool, ledgerTarget, registerSyntheticGrantSource, syntheticProfileWithWallet } from "./ledger-fixture";
 import { SYNTHETIC_BUNDLE_HOLD, SYNTHETIC_CHARGES, SYNTHETIC_HOLDS, consent, currentPricePolicy, eligibilityPort, issueTestQuote, releaseEvidence } from "./ledger-reservation-fixture";
@@ -113,10 +113,10 @@ test("ledger settlement: settle, reconciliation hold and vendor-cost isolation i
       assert.equal((await client.query("SELECT delta_available::int a FROM vynvori_ledger.ledger_entries WHERE reservation_id = $1 AND entry_kind = 'settle'", [target.reservationId])).rows[0].a, 0);
     });
 
-    await t.test("settle refuses: evidence for a sibling's operation (EVIDENCE_INVALID, persisted), a never-dispatched reservation (INVALID_TRANSITION), another user (NOT_FOUND, nothing recorded)", async () => {
+    await t.test("settle refuses: evidence for a sibling's operation (EVIDENCE_INVALID, persisted), a never-dispatched reservation (INVALID_TRANSITION, not persisted), another user (NOT_FOUND, nothing recorded)", async () => {
       const { user, r } = await withBundle({ dispatch: false });
       const [target, sibling] = [r[0]!, r[1]!];
-      await assert.rejects(settle(user, target.reservationId, settleEvidence(target.operationId)), rejection("INVALID_TRANSITION"), "never dispatched: stays reserved for a human (S8)");
+      await assert.rejects(settle(user, target.reservationId, settleEvidence(target.operationId)), code("INVALID_TRANSITION"), "never dispatched: stays reserved for a human (S8)");
       await recordWorkflowRef(pool, { userId: user, component: "workflow", reservationId: target.reservationId, workflowRef: "wf/x", idempotencyKey: key("dispatch") });
       const wrong = key("wrong-op");
       await assert.rejects(settle(user, target.reservationId, settleEvidence(sibling.operationId), wrong), rejection("EVIDENCE_INVALID"));
@@ -174,13 +174,17 @@ test("ledger settlement: settle, reconciliation hold and vendor-cost isolation i
       assert.equal(await stateOf(h.reservationId), "reconciliation_hold", "the hold stays until a human resolves it (remedy milestone)");
     });
 
-    await t.test("out of order: evidence for a reservation that does not exist (yet) is NOT_FOUND and records nothing, so the same key works once the reservation exists; evidence before the dispatch marker is INVALID_TRANSITION", async () => {
+    await t.test("out of order: evidence for a reservation that does not exist (yet) is NOT_FOUND and records nothing, so the same key works once the reservation exists; evidence before the dispatch marker is INVALID_TRANSITION, not persisted, so the same key holds once the marker commits", async () => {
       const { user, r } = await withBundle({ dispatch: false });
       const k = key("early"), commands = await count("ledger_commands", user);
       await assert.rejects(settle(user, randomUUID(), settleEvidence(r[0]!.operationId), k), code("NOT_FOUND"));
       await assert.rejects(hold(user, randomUUID(), holdEvidence(r[0]!.operationId), key("early-hold")), code("NOT_FOUND"));
       assert.equal(await count("ledger_commands", user), commands, "NOT_FOUND is never persisted under the key");
-      await assert.rejects(hold(user, r[1]!.reservationId, holdEvidence(r[1]!.operationId)), rejection("INVALID_TRANSITION"), "before dispatch is recorded");
+      const holdKey = key("early-dispatch-hold");
+      await assert.rejects(hold(user, r[1]!.reservationId, holdEvidence(r[1]!.operationId), holdKey), code("INVALID_TRANSITION"), "before dispatch is recorded");
+      assert.equal(await count("ledger_commands", user), commands, "a not-yet-dispatched refusal is never persisted under the key");
+      await recordWorkflowRef(pool, { userId: user, component: "workflow", reservationId: r[1]!.reservationId, workflowRef: "wf/late-hold", idempotencyKey: key("dispatch") });
+      assert.equal((await hold(user, r[1]!.reservationId, holdEvidence(r[1]!.operationId), holdKey)).state, "reconciliation_hold", "the same key holds once the marker exists");
       await recordWorkflowRef(pool, { userId: user, component: "workflow", reservationId: r[0]!.reservationId, workflowRef: "wf/late", idempotencyKey: key("dispatch") });
       assert.equal((await settle(user, r[0]!.reservationId, settleEvidence(r[0]!.operationId), k)).state, "settled", "the key that met NOT_FOUND is still free");
     });

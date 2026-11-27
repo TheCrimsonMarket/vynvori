@@ -108,7 +108,10 @@ export async function settleReservation(db: LedgerDb, input: SettleReservationIn
   }, async tx => {
     const reservation = await lockReservation(tx, reservationId);
     if (evidence.operationId !== reservation.operation_id) throw new LedgerBusinessRejection("EVIDENCE_INVALID");
-    if (reservation.state !== "reserved" || reservation.workflow_ref === null) throw new LedgerBusinessRejection("INVALID_TRANSITION");
+    if (reservation.state !== "reserved") throw new LedgerBusinessRejection("INVALID_TRANSITION");
+    // Not dispatched YET: a plain LedgerError is not persisted, so the same key succeeds once the dispatch marker commits (an
+    // unknown outcome learned before its marker must still be holdable under the caller's original key). Nothing is written.
+    if (reservation.workflow_ref === null) throw new LedgerError("INVALID_TRANSITION");
     // Units come from the locked row as exact bigint text and are combined in SQL, never added in JavaScript.
     await tx.query(
       `INSERT INTO ${S}.ledger_entries(entry_id, user_id, command_id, entry_kind, delta_available, delta_reserved, delta_held, delta_consumed, delta_external, reservation_id, evidence_kind, evidence_ref, cause_kind, cause_ref)
@@ -136,7 +139,10 @@ export async function holdReservation(db: LedgerDb, input: HoldReservationInput)
   }, async tx => {
     const reservation = await lockReservation(tx, reservationId);
     if (evidence.operationId !== reservation.operation_id) throw new LedgerBusinessRejection("EVIDENCE_INVALID");
-    if (reservation.state !== "reserved" || reservation.workflow_ref === null) throw new LedgerBusinessRejection("INVALID_TRANSITION");
+    if (reservation.state !== "reserved") throw new LedgerBusinessRejection("INVALID_TRANSITION");
+    // Not dispatched YET: a plain LedgerError is not persisted, so the same key succeeds once the dispatch marker commits (an
+    // unknown outcome learned before its marker must still be holdable under the caller's original key). Nothing is written.
+    if (reservation.workflow_ref === null) throw new LedgerError("INVALID_TRANSITION");
     await tx.query(
       `INSERT INTO ${S}.ledger_entries(entry_id, user_id, command_id, entry_kind, delta_available, delta_reserved, delta_held, delta_consumed, delta_external, reservation_id, evidence_kind, evidence_ref, cause_kind, cause_ref)
        VALUES($1,$2,$3,'hold',0,-$4::bigint,$4::bigint,0,0,$5::uuid,$6,$7,'reservation',$5::uuid::text || ':hold')`,
