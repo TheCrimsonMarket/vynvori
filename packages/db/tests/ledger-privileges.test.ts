@@ -587,6 +587,7 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
           assert.equal((await admin.query(`SELECT has_function_privilege($1, 'vynvori_ledger.${fn}()', 'EXECUTE') AS x`, [rt])).rows[0].x, false, `${fn} is not executable by the runtime role`);
         const before = [await packageRow(b.packageId), await slotRows(b.packageId), await buckets(b.userId)];
         await admin.query(`GRANT SELECT, UPDATE ON vynvori_ledger.ledger_packages, vynvori_ledger.refinement_slots TO ${q(rtt)}`);
+        await admin.query(`GRANT INSERT ON vynvori_ledger.refinement_slots TO ${q(rtt)}`);
         const tempTrigger = (pool: Pool, update: string) => runAs(pool,
           ["CREATE TEMP TABLE s7_exploit(x int)"],
           [`CREATE FUNCTION pg_temp.s7_exploit_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN ${update}; RETURN NEW; END $$`],
@@ -594,12 +595,14 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
           ["INSERT INTO s7_exploit VALUES (1)"]);
         const closePackage = `UPDATE vynvori_ledger.ledger_packages SET state = 'closure_pending' WHERE package_id = '${b.packageId}'`;
         const useSlot = `UPDATE vynvori_ledger.refinement_slots SET state = 'forfeited' WHERE package_id = '${b.packageId}' AND ordinal = 2`;
+        const insertSlot = `INSERT INTO vynvori_ledger.refinement_slots(slot_id, user_id, package_id, ordinal, state) VALUES (gen_random_uuid(), '${b.userId}', '${b.packageId}', 1, 'available')`;
         const probe = async (pool: Pool, label: string) => {
           await assert.rejects(pool.query(closePackage), code("23000", /only through package events/), `${label}: direct package state`);
           await assert.rejects(pool.query(useSlot), code("23000", /only through slot events/), `${label}: direct slot state`);
           await assert.rejects(pool.query("UPDATE vynvori_ledger.ledger_packages SET state = state"), code("23000", /only through package events/), `${label}: a no-op state update`);
           await assert.rejects(tempTrigger(pool, closePackage), code("23000", /only through package events/), `${label}: TEMP trigger (depth 2, not the function owner), package`);
           await assert.rejects(tempTrigger(pool, useSlot), code("23000", /only through slot events/), `${label}: TEMP trigger, slot`);
+          await assert.rejects(tempTrigger(pool, insertSlot), code("23000", /refinement slots are created/), `${label}: TEMP trigger (depth 2, not the function owner) cannot create a slot`);
         };
         await withRole(rtt, pool => probe(pool, "table-level UPDATE"));
         await probe(rtwPool, "pg_write_all_data");
@@ -608,6 +611,7 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
         await assert.rejects(rtwPool.query("UPDATE vynvori_ledger.refinement_slot_events SET evidence_ref = 'x'"), code("23000", /append-only/), "pg_write_all_data: slot event update");
         await assert.rejects(rtwPool.query("UPDATE vynvori_ledger.ledger_package_events SET evidence_ref = 'x'"), code("23000", /append-only/), "pg_write_all_data: package event update");
         await admin.query(`REVOKE UPDATE ON vynvori_ledger.ledger_packages, vynvori_ledger.refinement_slots FROM ${q(rtt)}`);
+        await admin.query(`REVOKE INSERT ON vynvori_ledger.refinement_slots FROM ${q(rtt)}`);
         assert.deepEqual([await packageRow(b.packageId), await slotRows(b.packageId), await buckets(b.userId)], before, "package, slots and wallet unchanged");
         assert.equal((await getBundleState(rtPool, b.userId, b.packageId)).state, "open_for_refinements");
       });

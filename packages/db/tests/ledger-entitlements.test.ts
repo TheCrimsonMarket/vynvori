@@ -440,6 +440,55 @@ test("ledger entitlements: package transitions, refinement slots and closure in 
       assert.equal(await entryCount(b.user), 1 + 3, "one grant plus the bundle's three reserve entries; nothing from S7");
     });
 
+    // ---- each business precondition is also enforced by the database on its own (raw SQL, so the library's pre-checks cannot answer first) ----
+    const pkgEv = (e: { user: string; packageId: string; command: string; from: string; to: string; begin?: string; final?: string; cause?: string; notice?: string }) => client.query(
+      "INSERT INTO vynvori_ledger.ledger_package_events(package_event_id,user_id,package_id,command_id,from_state,to_state,begin_reason,final_reservation_id,closure_cause,closure_notice_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
+      [randomUUID(), e.user, e.packageId, e.command, e.from, e.to, e.begin ?? null, e.final ?? null, e.cause ?? null, e.notice ?? null]);
+    const slotEv = (e: { user: string; slot: string; packageId: string; command: string; from: string; to: string; source?: string; operation?: string; delivered?: string; evidence?: string; cause?: string; notice?: string }) => client.query(
+      "INSERT INTO vynvori_ledger.refinement_slot_events(slot_event_id,user_id,slot_id,package_id,command_id,from_state,to_state,source_version_id,operation_id,delivered_version_id,evidence_ref,closure_cause,closure_notice_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
+      [randomUUID(), e.user, e.slot, e.packageId, e.command, e.from, e.to, e.source ?? null, e.operation ?? null, e.delivered ?? null, e.evidence ?? null, e.cause ?? null, e.notice ?? null]);
+    const slotOf = async (b: B, ordinal: number) => (await client.query("SELECT slot_id FROM vynvori_ledger.refinement_slots WHERE package_id = $1 AND ordinal = $2", [b.packageId, ordinal])).rows[0].slot_id as string;
+
+    await t.test("backstop: the database refuses each business precondition on its own, without the library's pre-checks", async () => {
+      // an earlier transaction's command of the RIGHT kind cannot authorize a package event
+      const a = await opened();
+      const oldBegin = await rawCommand(a.user, "bundle_begin_closure");
+      await probe("package event under an earlier transaction's command of the right kind", () => pkgEv({ user: a.user, packageId: a.packageId, command: oldBegin, from: "open_for_refinements", to: "closure_pending", begin: "explicit_close_request" }), /same transaction/);
+      // closure cannot begin while a refinement is pending or unknown
+      const p = await opened();
+      await pend(p, 1, "op-db-pending");
+      const begin = async (b: B) => pkgEv({ user: b.user, packageId: b.packageId, command: await rawCommand(b.user, "bundle_begin_closure"), from: "open_for_refinements", to: "closure_pending", begin: "explicit_close_request" });
+      await probe("begin closure with a pending refinement", () => begin(p), /pending or unknown/);
+      await markRefinementUnknown(pool, sys(p, { ordinal: 1, operationId: "op-db-pending", evidenceRef: "e" }) as never);
+      await probe("begin closure with an unknown refinement", () => begin(p), /pending or unknown/);
+      // the closing notice must be the disclosed one; a quote without a notice can never close
+      const c = await opened(); await beginExplicit(c);
+      const close = async (b: B, notice: string, cause = "explicit_close", final?: string) => pkgEv({ user: b.user, packageId: b.packageId, command: await rawCommand(b.user, "bundle_close"), from: "closure_pending", to: "closed", cause, notice, final });
+      await probe("close under a notice the customer was not shown", () => close(c, "rcn-other"), /closure notice/);
+      const none = await opened(null); await beginExplicit(none);
+      await probe("close a package whose quote disclosed no notice", () => close(none, NOTICE), /closure notice/);
+      // an unresolved final blocks the close
+      const u = await opened(); await authorizeFinal(u); await beginExplicit(u);
+      await probe("close while a final is reserved", () => close(u, NOTICE), /unresolved/);
+      // a package with a settled final closes by delivery, never by an explicit close
+      const s = await opened(); const settled = await authorizeFinal(s);
+      await beginBundleClosure(pool, sys(s, { trigger: { kind: "final_authorized", finalReservationId: settled.reservationId } }) as never);
+      await forceSettled(settled.reservationId);
+      await probe("explicit close after a settled final", () => close(s, NOTICE), /final delivery, not explicit close/);
+      // slot events: forfeiture only while closure is pending, every other change only while open, and the slot's own operation
+      const o = await opened();
+      await probe("forfeit a slot of an open package", async () => slotEv({ user: o.user, slot: await slotOf(o, 1), packageId: o.packageId, command: await rawCommand(o.user, "bundle_close"), from: "available", to: "forfeited", cause: "explicit_close", notice: NOTICE }), /forfeited only while closure is pending/);
+      await probe("skip a slot of a closure_pending package", async () => slotEv({ user: c.user, slot: await slotOf(c, 1), packageId: c.packageId, command: await rawCommand(c.user, "refinement_skip"), from: "available", to: "skipped" }), /only while the package is open/);
+      const m = await opened();
+      await pend(m, 1, "op-db-own");
+      await probe("consume a slot under another operation", async () => slotEv({ user: m.user, slot: await slotOf(m, 1), packageId: m.packageId, command: await rawCommand(m.user, "refinement_consume"), from: "pending", to: "used", operation: "op-db-other", delivered: "v-db-1", evidence: "e" }), /own refinement operation/);
+      await probe("mark a slot unknown under another operation", async () => slotEv({ user: m.user, slot: await slotOf(m, 1), packageId: m.packageId, command: await rawCommand(m.user, "refinement_unknown"), from: "pending", to: "unknown", operation: "op-db-other", evidence: "e" }), /own refinement operation/);
+      // one delivered version consumes one slot of a package
+      const x = await opened();
+      await pend(x, 1, "op-db-x1"); await consume(x, 1, "op-db-x1", "v-db-dup"); await pend(x, 2, "op-db-x2");
+      await probe("two slots of one package consume the same delivered version", async () => slotEv({ user: x.user, slot: await slotOf(x, 2), packageId: x.packageId, command: await rawCommand(x.user, "refinement_consume"), from: "pending", to: "used", operation: "op-db-x2", delivered: "v-db-dup", evidence: "e" }), /refinement_slots_delivered_unique/);
+    });
+
     await t.test("C-02 reopen binding: a closure that began by the customer's explicit request is never reversed by a released final; free text is printable ASCII only", async () => {
       const b = await opened();
       const final = await authorizeFinal(b);
