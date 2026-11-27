@@ -137,6 +137,32 @@ export function describeExpiry(expiresAt: string | null | undefined, locale?: st
   return `until ${new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", ...(timeZone ? { timeZone } : {}) }).format(date)}`;
 }
 
+/**
+ * How the editor reads an API failure (ADR-0022 C4). Pure so it can be tested without a browser. `rate_limited` is a 429 (wait, then
+ * one retry), `not_configured` is the closed-capability 503 (never retried), `capacity` is the global guest-draft cap (503, retryable
+ * by the person, never automatically). The numbers shown come from the server's own `retryAfterSeconds`; there is no local default.
+ */
+export type ApiFailureKind = "rate_limited" | "not_configured" | "capacity" | "other";
+export type ApiFailure = Readonly<{ kind: ApiFailureKind; retryAfterSeconds: number | null }>;
+/** Engineering constant, not policy: the longest delay a browser timer can hold (2^31 - 1 ms), so a bad hint cannot overflow `setTimeout`. */
+export const MAX_RETRY_AFTER_SECONDS = 2_147_483;
+export function classifyApiFailure(status: number, data: unknown): ApiFailure {
+  const error = data && typeof data === "object" && "error" in data && data.error && typeof data.error === "object" ? (data.error as Record<string, unknown>) : {};
+  const code = typeof error.code === "string" ? error.code : "";
+  const wait = typeof error.retryAfterSeconds === "number" && Number.isSafeInteger(error.retryAfterSeconds) && error.retryAfterSeconds > 0 ? Math.min(error.retryAfterSeconds, MAX_RETRY_AFTER_SECONDS) : null;
+  if (status === 429 || code === "COMPOSITION_RATE_LIMITED") return { kind: "rate_limited", retryAfterSeconds: wait };
+  if (code === "COMPOSITION_LIMITS_NOT_CONFIGURED") return { kind: "not_configured", retryAfterSeconds: null };
+  if (code === "COMPOSITION_GUEST_CAPACITY") return { kind: "capacity", retryAfterSeconds: null };
+  return { kind: "other", retryAfterSeconds: null };
+}
+/** Status-line text for a rate-limited save (automatic single retry) or a rate-limited action the person started (manual retry). */
+export function describeRateLimited(retryAfterSeconds: number | null, retry: "automatic" | "manual"): string {
+  const when = retryAfterSeconds === null ? "shortly" : `in about ${plural(retryAfterSeconds, "second")}`;
+  return retry === "automatic" ? `Too many requests. Your edits are still here and saving will try again ${when}.` : `Too many requests. Your edits are still here. Try again ${when}.`;
+}
+export const describeNotConfigured = (what: "saving" | "artwork upload") => `${what === "saving" ? "Saving" : "Artwork upload"} is not set up yet. Your work stays in this tab only.`;
+export const describeGuestCapacity = () => "Saved guest drafts are full right now. Your work stays in this tab only. Try again later or sign in.";
+
 // --- accessibility helpers (pure; the announcements and names the editor exposes to assistive technology)
 /** The list label of a layer. Image names are the uploaded file name (never a path or an id). */
 export const layerTitle = (layer: EditorLayerV1, imageName?: string) => layer.kind === "text" ? `Text · ${layer.text.slice(0, 24)}` : `Image · ${imageName ?? "missing"}`;

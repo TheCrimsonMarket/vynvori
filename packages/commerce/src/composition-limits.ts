@@ -8,6 +8,8 @@ import type { ImageLimits } from "./image-inspect";
 /** Structural ceilings. They mirror the `0001` composition-schema CHECKs on `assets`; a test reads the SQL and fails on drift. */
 export const IMAGE_BYTES_STRUCTURAL_CEILING = 26214400;
 export const IMAGE_SIDE_STRUCTURAL_CEILING = 20000;
+/** Every rate window and maximum is bound to the PostgreSQL `integer` range the rate statement casts to (engineering constant, not policy). */
+export const RATE_STRUCTURAL_CEILING = 2147483647;
 
 export const RATE_LIMITED_OPERATIONS = Object.freeze([
   "GUEST_CREATE_GLOBAL", "ASSET_UPLOAD_GLOBAL",
@@ -44,6 +46,7 @@ const canonicalPositiveInteger = /^[1-9][0-9]*$/;
 /** Any "seconds" value is added to a clock to make a Date; this keeps that Date valid (JS Date range). Technical bound, not policy. */
 export const SECONDS_STRUCTURAL_CEILING = 8_000_000_000_000;
 function ceilingOf(name: CompositionLimitName): number {
+  if (name.startsWith("RATE_")) return RATE_STRUCTURAL_CEILING;
   return name === "IMAGE_MAX_BYTES" ? IMAGE_BYTES_STRUCTURAL_CEILING : name === "IMAGE_MAX_SIDE_PX" ? IMAGE_SIDE_STRUCTURAL_CEILING : name.endsWith("_SECONDS") ? SECONDS_STRUCTURAL_CEILING : Number.MAX_SAFE_INTEGER;
 }
 
@@ -89,3 +92,22 @@ export function resolveUploadLimits(parsed: ParsedCompositionLimits): UploadLimi
     maxAssetsPerComposition: v.MAX_ASSETS_PER_COMPOSITION!, maxBytesPerComposition: v.MAX_BYTES_PER_COMPOSITION!,
   });
 }
+
+/** One operation's fixed-window policy: a window length in seconds and the maximum admitted per window. Both come from `M3_LIMIT_RATE_*`. */
+export type RatePolicy = Readonly<{ windowSeconds: number; max: number }>;
+export type RatePolicies = Readonly<Partial<Record<RateLimitedOperation, RatePolicy>>>;
+/**
+ * Rate policies (ADR-0022 D1/D2, C4). An operation is present only when BOTH its window and its maximum are valid; an absent entry
+ * closes that operation (`COMPOSITION_LIMITS_NOT_CONFIGURED`), never "unlimited". Each operation closes on its own: one missing pair
+ * leaves the other nine untouched.
+ */
+export function resolveRatePolicies(parsed: ParsedCompositionLimits): RatePolicies {
+  const out: Partial<Record<RateLimitedOperation, RatePolicy>> = {};
+  for (const operation of RATE_LIMITED_OPERATIONS) {
+    const windowSeconds = parsed.values[`RATE_${operation}_WINDOW_SECONDS`], max = parsed.values[`RATE_${operation}_MAX`];
+    if (windowSeconds !== undefined && max !== undefined) out[operation] = Object.freeze({ windowSeconds, max });
+  }
+  return Object.freeze(out);
+}
+/** The global cap of unexpired, unclaimed guest drafts, or `undefined` while unset or invalid (guest creation is then closed). */
+export function resolveLiveGuestDraftsMax(parsed: ParsedCompositionLimits): number | undefined { return parsed.values.LIVE_GUEST_DRAFTS_MAX; }

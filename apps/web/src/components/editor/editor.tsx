@@ -7,10 +7,10 @@ import { Button } from "@/components/ui/button";
 import {
   KEY_HELP, PT_TO_MM, addImageLayer, addTextLayer, commit, deleteLayer, describeLayerCount, describeMove, duplicateLayer, font, isOutside, keyStep, layerActionName, layerTitle, layersOf, moveInStack,
   neighbourAfterDelete, nudge, parseMm, profile, redo, resizeKeepingAspect, sceneKey, stackPosition, startHistory, summarizeIssues, undo, updateLayer, zoneOf,
-  checkUploadDimensions, checkUploadFileSize, describeExpiry, type EditorAsset, type LayerPatch, type UploadLimits,
+  checkUploadDimensions, checkUploadFileSize, classifyApiFailure, describeExpiry, describeGuestCapacity, describeNotConfigured, describeRateLimited, type ApiFailure, type EditorAsset, type LayerPatch, type UploadLimits,
 } from "./model";
 
-type ServerState = { compositionId: string | null; revision: number; owner: "guest" | "owner" | null; autosave: "idle" | "pending" | "conflict" | "failed" | "unavailable"; lastSavedKey: string | null; expiresAt: string | null; versions: VersionView[]; currentVersionId: string | null };
+type ServerState = { compositionId: string | null; revision: number; owner: "guest" | "owner" | null; autosave: "idle" | "pending" | "conflict" | "failed" | "unavailable" | "limited"; lastSavedKey: string | null; expiresAt: string | null; versions: VersionView[]; currentVersionId: string | null };
 type VersionView = { versionId: string; versionNo: number; sceneHashSha256: string; frozenAt: string; preflight: { state: "preview_only" | "blocked"; issues: { code: string; severity: string; layerId?: string; zoneId?: string }[] } };
 const ACCEPT = "image/png,image/jpeg,image/webp";
 const ISSUE_TEXT: Record<string, string> = {
@@ -196,10 +196,25 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
   }
 
   // --- server persistence (all optional; the editor is fully usable without it)
+  // ADR-0022 C4: a 429 pauses autosave and arms ONE timer from the server's own Retry-After; no hint means no automatic retry at all
+  // (the Save button still works, one click per attempt). The closed-capability 503 is never retried. No retry storm either way.
+  const limitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (limitTimer.current) clearTimeout(limitTimer.current); }, []);
+  function pauseForRateLimit(failure: ApiFailure) {
+    if (limitTimer.current) { clearTimeout(limitTimer.current); limitTimer.current = null; }
+    setServer(s => ({ ...s, autosave: "limited" }));
+    if (failure.retryAfterSeconds !== null) limitTimer.current = setTimeout(() => { limitTimer.current = null; setServer(s => (s.autosave === "limited" ? { ...s, autosave: "idle" } : s)); }, failure.retryAfterSeconds * 1000);
+  }
   async function ensureComposition(): Promise<{ id: string; revision: number } | null> {
     if (server.compositionId) return { id: server.compositionId, revision: server.revision };
     const created = await api("/api/v1/compositions", "POST");
-    if (!created.ok) { notify(created.status === 503 ? "Saving is not available in this preview. Your work stays in this tab only." : "Could not start a saved draft."); setServer(s => ({ ...s, autosave: created.status === 503 ? "unavailable" : "failed" })); return null; }
+    if (!created.ok) {
+      const failure = classifyApiFailure(created.status, created.data);
+      if (failure.kind === "rate_limited") { notify(describeRateLimited(failure.retryAfterSeconds, "automatic")); pauseForRateLimit(failure); return null; }
+      if (failure.kind === "capacity") { notify(describeGuestCapacity()); setServer(s => ({ ...s, autosave: "failed" })); return null; }
+      if (failure.kind === "not_configured") { notify(describeNotConfigured("saving")); setServer(s => ({ ...s, autosave: "unavailable" })); return null; }
+      notify(created.status === 503 ? "Saving is not available in this preview. Your work stays in this tab only." : "Could not start a saved draft."); setServer(s => ({ ...s, autosave: created.status === 503 ? "unavailable" : "failed" })); return null;
+    }
     const id = created.data.draft.compositionId as string; try { sessionStorage.setItem("vynvori.byo.compositionId", id); } catch { /* optional */ }
     setServer(s => ({ ...s, compositionId: id, revision: 0, expiresAt: created.data.expiresAt ?? null, owner: created.data.draft.ownerKind === "authenticated_owner" ? "owner" : "guest" }));
     return { id, revision: 0 };
@@ -211,12 +226,22 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
     for (const asset of assets.values()) {
       if (asset.persisted || !bytes.current.has(asset.assetId)) continue;
       const stored = bytes.current.get(asset.assetId)!, up = await api(`/api/v1/compositions/${target.id}/assets`, "POST", undefined, { bytes: stored.data, type: stored.type });
+      if (!up.ok) {
+        const failure = classifyApiFailure(up.status, up.data);
+        if (failure.kind === "rate_limited") { notify(describeRateLimited(failure.retryAfterSeconds, "automatic")); pauseForRateLimit(failure); return false; }
+        if (failure.kind === "not_configured") { notify(describeNotConfigured("artwork upload")); setServer(s => ({ ...s, autosave: "unavailable" })); return false; }
+      }
       if (!up.ok) { notify(up.status === 503 ? "Artwork upload is not available in this preview; your work stays in this tab only." : up.status === 415 ? "That file type is not accepted." : "Artwork could not be saved."); setServer(s => ({ ...s, autosave: up.status === 503 ? "unavailable" : "failed" })); return false; }
       const serverId = up.data.asset.assetId as string; remap.set(serverId, { ...asset, assetId: serverId, persisted: true, url: `/api/v1/compositions/${target.id}/assets/${serverId}` }); remap.delete(asset.assetId);
       working = { ...working, pages: working.pages.map(p => ({ ...p, layers: p.layers.map(l => l.kind === "image" && l.sourceAssetId === asset.assetId ? { ...l, sourceAssetId: serverId } : l) })) };
     }
     const saved = await api(`/api/v1/compositions/${target.id}`, "PUT", { expectedRevision: target.revision, scene: working });
     if (saved.status === 409) { setServer(s => ({ ...s, autosave: "conflict" })); notify("This draft changed elsewhere. Reload to continue without losing your copy."); return false; }
+    if (!saved.ok) {
+      const failure = classifyApiFailure(saved.status, saved.data);
+      if (failure.kind === "rate_limited") { notify(describeRateLimited(failure.retryAfterSeconds, "automatic")); pauseForRateLimit(failure); return false; }
+      if (failure.kind === "not_configured") { notify(describeNotConfigured("saving")); setServer(s => ({ ...s, autosave: "unavailable" })); return false; }
+    }
     if (!saved.ok) { setServer(s => ({ ...s, autosave: "failed" })); notify(saved.status === 401 ? "Your draft expired or you were signed out. Start a new draft or sign in." : "Could not save. Your edits are still here."); return false; }
     setAssets(remap); setHistory(h => ({ ...h, present: working }));
     setServer(s => ({ ...s, compositionId: target.id, revision: saved.data.draft.draftRevision, autosave: "idle", lastSavedKey: sceneKey(working), expiresAt: saved.data.expiresAt ?? s.expiresAt, owner: saved.data.draft.ownerKind === "authenticated_owner" ? "owner" : "guest" }));
@@ -226,7 +251,7 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
   useEffect(() => { saveRef.current = saveDraft; });
   // biome-ignore lint/correctness/useExhaustiveDependencies: key is deliberate, each scene change restarts the debounce
   useEffect(() => { // debounced autosave only once a server draft exists; stale timers are cancelled by the cleanup
-    if (!server.compositionId || !dirty || server.autosave === "conflict" || server.autosave === "pending") return;
+    if (!server.compositionId || !dirty || server.autosave === "conflict" || server.autosave === "pending" || server.autosave === "limited" || server.autosave === "unavailable") return;
     const timer = setTimeout(() => { void saveRef.current(); }, 1500); return () => clearTimeout(timer);
   }, [key, dirty, server.compositionId, server.autosave]);
   async function freeze() {
@@ -236,7 +261,7 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
       const id = server.compositionId ?? (await ensureComposition())?.id; if (!id) return;
       const state = await api(`/api/v1/compositions/${id}`, "GET"); if (!state.ok) { notify("Could not freeze this version."); return; }
       const response = await api(`/api/v1/compositions/${id}/versions`, "POST", { expectedRevision: state.data.draft.draftRevision });
-      if (!response.ok) { notify("Could not freeze this version."); return; }
+      if (!response.ok) { const failure = classifyApiFailure(response.status, response.data); notify(failure.kind === "rate_limited" ? describeRateLimited(failure.retryAfterSeconds, "manual") : "Could not freeze this version."); return; }
       const refreshed = await api(`/api/v1/compositions/${id}`, "GET");
       if (refreshed.ok) setServer(s => ({ ...s, versions: refreshed.data.versions, currentVersionId: refreshed.data.currentVersionId, revision: refreshed.data.draft.draftRevision }));
       notify(`Version ${response.data.version.versionNo} frozen. It can no longer change; further edits create a new version.`);
@@ -246,7 +271,7 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
     if (!server.compositionId) return; setBusy(true);
     try {
       const response = await api(`/api/v1/compositions/${server.compositionId}/restore`, "POST", { expectedRevision: server.revision, versionId });
-      if (!response.ok) { notify(response.status === 409 ? "This draft changed elsewhere. Reload first." : "Could not restore that version."); return; }
+      if (!response.ok) { const failure = classifyApiFailure(response.status, response.data); notify(failure.kind === "rate_limited" ? describeRateLimited(failure.retryAfterSeconds, "manual") : response.status === 409 ? "This draft changed elsewhere. Reload first." : "Could not restore that version."); return; }
       const parsed = CompositionSceneV1Schema.safeParse(response.data.scene); if (!parsed.success) { notify("Could not restore that version."); return; }
       setHistory(h => commit(h, parsed.data)); setServer(s => ({ ...s, revision: response.data.draft.draftRevision, lastSavedKey: sceneKey(parsed.data) })); setSelected(null);
       notify("Version restored into your draft. The frozen version is unchanged.");
@@ -257,7 +282,7 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
     try {
       const response = await api(`/api/v1/compositions/${server.compositionId}/claim`, "POST");
       if (response.ok) { setServer(s => ({ ...s, owner: "owner" })); notify("Draft moved to your account."); }
-      else notify(response.status === 401 ? "Sign in first, then move this draft to your account." : "This draft could not be moved to your account.");
+      else { const failure = classifyApiFailure(response.status, response.data); notify(failure.kind === "rate_limited" ? describeRateLimited(failure.retryAfterSeconds, "manual") : response.status === 401 ? "Sign in first, then move this draft to your account." : "This draft could not be moved to your account."); }
     } finally { setBusy(false); }
   }
 

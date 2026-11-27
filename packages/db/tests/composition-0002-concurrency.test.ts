@@ -229,7 +229,7 @@ test("M3 0002 concurrency: scan-event, attempt, grant and rate-bucket races; loc
       const profile = SYNTHETIC_PREVIEW_PROFILE, profileSha = createHash("sha256").update(JSON.stringify(profile)).digest("hex");
       await store.ensurePrintProfile(profile, profileSha);
       const scene = EMPTY_SYNTHETIC_SCENE(), sceneSha = hashOf("freeze-order:scene");
-      await store.createGuest({ id, capabilityHash, guestExpiresAt: new Date(Date.now() + 3_600_000), scene, sceneSha256: sceneSha, state: "guest_draft" });
+      await store.createGuest({ id, capabilityHash, guestExpiresAt: new Date(Date.now() + 3_600_000), scene, sceneSha256: sceneSha, state: "guest_draft", now: new Date(), liveGuestDraftsMax: 1000 });
       const writer = hold(tx => lockComposition(tx, id));
       try {
         await writer.acquired;

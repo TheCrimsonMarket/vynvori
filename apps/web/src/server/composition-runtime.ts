@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { compositionHttpHandlers, compositionService, compositionAssetStorage, parseCompositionLimits, resolveApiLimits, resolveGuestCreateLimits, resolveUploadLimits } from "@vynvori/commerce/composition";
+import { compositionHttpHandlers, compositionService, compositionAssetStorage, parseCompositionLimits, resolveApiLimits, resolveGuestCreateLimits, resolveLiveGuestDraftsMax, resolveRatePolicies, resolveUploadLimits } from "@vynvori/commerce/composition";
 import { compositionStore } from "@vynvori/db/composition";
 import { getIdentityRuntime } from "./auth-runtime";
 import { identitySettings } from "./identity-settings";
@@ -51,6 +51,8 @@ export function createCompositionRuntime(env: Env) {
   const service = compositionService(compositionStore(identity.pool), storage, {
     uploadsEnabled: settings.uploads, guestTtlMs: guest ? guest.guestTtlSeconds * 1000 : undefined, imageLimits: uploads?.imageLimits,
     maxAssetsPerComposition: uploads?.maxAssetsPerComposition, maxBytesPerComposition: uploads?.maxBytesPerComposition,
+    // C4: each rate policy and the live-draft cap are present only when fully configured; an absent one closes just that operation.
+    rate: resolveRatePolicies(parsed), liveGuestDraftsMax: resolveLiveGuestDraftsMax(parsed),
   });
   return compositionHttpHandlers(config, service, {
     async verify(secret) { const session = await sessions.verify(secret); return { userId: session.userId }; },
