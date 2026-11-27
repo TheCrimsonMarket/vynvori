@@ -140,7 +140,7 @@ CREATE TABLE vynvori_ledger.credit_reservations(
   package_id uuid NULL,
   original_package_id uuid NULL,
   pre_attempt_package_state text NULL CONSTRAINT credit_reservations_pre_attempt_state CHECK (pre_attempt_package_state IN ('quoted', 'authorized', 'partial', 'delivered_3_of_3', 'open_for_refinements', 'closure_pending', 'closed', 'remedy_pending')),
-  workflow_ref text NULL CONSTRAINT credit_reservations_workflow_ref_shape CHECK (workflow_ref ~ '^[A-Za-z0-9._:/-]{1,256}$'),
+  workflow_ref text NULL CONSTRAINT credit_reservations_workflow_ref_shape CHECK (length(workflow_ref) BETWEEN 1 AND 256 AND workflow_ref ~ '^[A-Za-z0-9._:/-]+$'),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT credit_reservations_authorization_fk FOREIGN KEY (authorization_id, user_id) REFERENCES vynvori_ledger.ledger_authorizations(authorization_id, user_id) ON DELETE RESTRICT,
   CONSTRAINT credit_reservations_allocation_fk FOREIGN KEY (quote_version_id, operation_index) REFERENCES vynvori_ledger.ledger_quote_allocations(quote_version_id, operation_index) ON DELETE RESTRICT,

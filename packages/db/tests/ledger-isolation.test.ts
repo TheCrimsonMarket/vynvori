@@ -7,8 +7,11 @@ import { featureDefaults } from "@vynvori/shared/public";
 import * as ledgerCore from "../src/ledger-core";
 import * as ledgerMigrations from "../src/ledger-migrations";
 import * as ledgerQuotes from "../src/ledger-quotes";
+import * as ledgerReservations from "../src/ledger-reservations";
+import { authorizeQuote, recordWorkflowRef, releaseReservation } from "../src/ledger-reservations";
 import { issueQuote, renewQuote } from "../src/ledger-quotes";
 import { dropLedger, freshLedger, ledgerTarget, registerSyntheticGrantSource, syntheticProfileWithWallet, grantSyntheticCredits } from "./ledger-fixture";
+import { consent, currentPricePolicy, eligibilityPort, issueTestQuote, releaseEvidence } from "./ledger-reservation-fixture";
 
 // ADR-0021 D13: W1 ships a library plus schema, not a feature. No database needed; this test always runs.
 const root = fileURLToPath(new URL("../../../", import.meta.url));
@@ -21,7 +24,7 @@ function walk(dir: string, out: string[] = []): string[] {
   }
   return out;
 }
-const ledgerSources = new Set(["packages/db/src/ledger-core.ts", "packages/db/src/ledger-migrations.ts", "packages/db/src/ledger-quotes.ts"]);
+const ledgerSources = new Set(["packages/db/src/ledger-core.ts", "packages/db/src/ledger-migrations.ts", "packages/db/src/ledger-quotes.ts", "packages/db/src/ledger-reservations.ts"]);
 const files = ["apps", "packages", "services", "scripts"].flatMap(dir => { try { return walk(join(root, dir)); } catch { return []; } });
 
 test("no app or non-test module imports the ledger (D13)", () => {
@@ -36,7 +39,7 @@ test("no app or non-test module imports the ledger (D13)", () => {
 });
 
 test("packages/db/src exports no numeric constants and nothing that mints or registers credits", () => {
-  for (const [name, module] of Object.entries({ ledgerCore, ledgerMigrations, ledgerQuotes })) {
+  for (const [name, module] of Object.entries({ ledgerCore, ledgerMigrations, ledgerQuotes, ledgerReservations })) {
     for (const [key, value] of Object.entries(module)) {
       assert.ok(typeof value !== "number" && typeof value !== "bigint", `${name}.${key} must not be a numeric constant`);
       assert.doesNotMatch(key, /mint|synthetic|testing|register.*source|price|rate|package/i, `${name}.${key}`);
@@ -58,8 +61,12 @@ test("ledger-quotes exposes exactly the reviewed API (S3; a new export must be a
   assert.deepEqual(Object.keys(ledgerQuotes).sort(), ["assessQuoteForAuthorization", "getLatestQuoteVersion", "getQuote", "issueQuote", "renewQuote"]);
 });
 
+test("ledger-reservations exposes exactly the reviewed API (S5; no settle, hold, grant or package-transition export)", () => {
+  assert.deepEqual(Object.keys(ledgerReservations).sort(), ["authorizeQuote", "getReservation", "recordWorkflowRef", "releaseReservation"]);
+});
+
 // ADR-0021 S3 addendum A4: BINDING for every future step. All command kinds implemented anywhere under packages/db/src.
-const KNOWN_LEDGER_COMMAND_KINDS = ["grant_credits", "quote_issue", "quote_renew"];
+const KNOWN_LEDGER_COMMAND_KINDS = ["grant_credits", "quote_issue", "quote_renew", "reservation_authorize", "reservation_dispatch", "reservation_release"];
 const dbSrcFiles = () => readdirSync(join(root, "packages/db/src")).filter(f => f.endsWith(".ts"));
 
 test("A4(2): every commandKind literal under packages/db/src is a registered command kind (S5/S6 must register theirs here)", () => {
@@ -78,6 +85,21 @@ test("A4(3): INSERT INTO the quote tables appears only in ledger-quotes.ts", () 
     const text = readFileSync(join(root, "packages/db/src", file), "utf8");
     if (file === "ledger-quotes.ts") { assert.match(text, pattern, "ledger-quotes.ts should itself insert into the quote tables"); continue; }
     assert.doesNotMatch(text, pattern, file);
+  }
+});
+
+test("A4(3) for S5: INSERT INTO the authorization, package and reservation tables, and any UPDATE of reservations, appear only in ledger-reservations.ts", () => {
+  const insert = /INSERT\s+INTO\s+\S*(?:ledger_authorizations|ledger_packages|credit_reservations)\b/i, update = /UPDATE\s+\S*credit_reservations\b/i;
+  for (const file of dbSrcFiles()) {
+    const text = readFileSync(join(root, "packages/db/src", file), "utf8");
+    if (file === "ledger-reservations.ts") {
+      assert.match(text, insert, "ledger-reservations.ts should itself insert into the S5 tables");
+      // Its only UPDATE writes the dispatch marker; state is written by the 0005 definer function, never from TypeScript.
+      assert.deepEqual([...text.matchAll(/UPDATE\s+\S*credit_reservations\s+SET\s+(\w+)/gi)].map(m => m[1]), ["workflow_ref"]);
+      assert.doesNotMatch(text, /SET\s+state\b/i, "no TypeScript writes a reservation state");
+      continue;
+    }
+    assert.doesNotMatch(text, insert, file); assert.doesNotMatch(text, update, file);
   }
 });
 
@@ -125,6 +147,26 @@ test("A4(1): every ledger command locks the wallet row FOR UPDATE before touchin
     log.length = 0;
     await renewQuote(spyDb, { userId: user, quoteId: "lock-order-quote", expectedLatestVersionNo: 1, quoteView: promoView("lock-order-quote", "lock-order-quote-v2", 1), modelRef: "lock-order-model", allocations: [], idempotencyKey: "lock-order-renew-key-0001" });
     assert.match(firstLedgerStatement() ?? "", WALLET_LOCK, "quote_renew");
+
+    // S5 commands: authorize (customer), dispatch and release (system) all take the wallet lock first.
+    await grantSyntheticCredits(spyDb, { userId: user, grantSourceId: source, sourceRef: "lock-order-funds", units: 100 });
+    const quoteVersionId = await issueTestQuote(spyDb, user, "final", "lock-order-final");
+    const originalPackageId = await bundlePackage();
+    log.length = 0;
+    const authorized = await authorizeQuote(spyDb, { userId: user, quoteVersionId, idempotencyKey: "lock-order-authorize-0001", consent: consent(), originalPackageId, now: new Date(), pricePolicy: currentPricePolicy, eligibility: eligibilityPort() });
+    assert.match(firstLedgerStatement() ?? "", WALLET_LOCK, "reservation_authorize");
+    const reservation = authorized.reservations[0]!;
+    log.length = 0;
+    await recordWorkflowRef(spyDb, { userId: user, component: "lock-order", reservationId: reservation.reservationId, workflowRef: "wf/lock-order-1", idempotencyKey: "lock-order-dispatch-0001" });
+    assert.match(firstLedgerStatement() ?? "", WALLET_LOCK, "reservation_dispatch");
+    log.length = 0;
+    await releaseReservation(spyDb, { userId: user, component: "lock-order", reservationId: reservation.reservationId, evidence: releaseEvidence(reservation.operationId), idempotencyKey: "lock-order-release-0001" });
+    assert.match(firstLedgerStatement() ?? "", WALLET_LOCK, "reservation_release");
+
+    async function bundlePackage() {
+      const bundle = await issueTestQuote(spyDb, user, "bundle", "lock-order-bundle");
+      return (await authorizeQuote(spyDb, { userId: user, quoteVersionId: bundle, idempotencyKey: "lock-order-bundle-auth-01", consent: consent(), now: new Date(), pricePolicy: currentPricePolicy, eligibility: eligibilityPort() })).packageId!;
+    }
   } finally { await client.end().catch(() => undefined); await dropLedger("isolation"); }
 });
 
