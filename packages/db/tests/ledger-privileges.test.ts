@@ -415,7 +415,7 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
       let s5Bundle!: Awaited<ReturnType<typeof authorizeQuote>>;
       let s5Keys = 0;
       const s5Authorize = (pool: Pool, user: string, quoteVersionId: string, originalPackageId?: string) =>
-        authorizeQuote(pool, { userId: user, quoteVersionId, idempotencyKey: `priv-s5-authorize-${String(s5Keys++).padStart(4, "0")}`, consent: consent(), originalPackageId, now: new Date(), pricePolicy: currentPricePolicy, eligibility: eligibilityPort() });
+        authorizeQuote(pool, { userId: user, quoteVersionId, idempotencyKey: `priv-s5-authorize-${String(s5Keys++).padStart(4, "0")}`, consent: consent(), ...(originalPackageId ? { originalPackageId } : {}), now: new Date(), pricePolicy: currentPricePolicy, eligibility: eligibilityPort() });
 
       await t.test("S5 positive: authorize (bundle and final), dispatch and release work end to end as the restricted runtime role", async () => {
         await ensureWallet(rtPool, s5User);
