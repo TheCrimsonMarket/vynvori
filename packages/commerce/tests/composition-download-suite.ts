@@ -10,7 +10,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { CompositionAccess } from "@vynvori/contracts/composition-port";
 import { compositionService, secretHash, type CompositionConfig } from "../src/composition";
 import type { CompositionAssetStorage } from "../src/composition-storage";
-import { compositionCookies, compositionHttpHandlers, type CompositionIdentityPort } from "../src/composition-http";
+import { compositionCookies, compositionHttpHandlers, DOWNLOAD_GRANT_HEADER, type CompositionIdentityPort } from "../src/composition-http";
 import { memoryStorage, png } from "./composition-fixtures";
 import type { StoreHarness } from "./composition-store-suite";
 import {
@@ -80,15 +80,22 @@ export function downloadConformance(label: string, factory: () => Promise<StoreH
     method: "POST", body: init.body ?? null,
     headers: { origin: ORIGIN, "sec-fetch-site": "same-origin", ...(cookie ? { cookie } : {}), ...(cookie?.includes(compositionCookies.csrf) ? { "x-vynvori-csrf": CSRF } : {}), ...init.headers },
   });
-  const redeemRequest = (cookie: string | null, path: string, headers: Record<string, string> = {}) =>
-    new Request(`${ORIGIN}${path}`, { headers: { "sec-fetch-site": "same-origin", ...(cookie ? { cookie } : {}), ...headers } });
+  /**
+   * Tests address a redeem as `<path>?grant=<token>` for readability; the request itself carries each `grant` value in the
+   * `x-vynvori-download-grant` header and has NO query string (a token never travels in a URL). Repeated values arrive comma-joined.
+   */
+  const redeemRequest = (cookie: string | null, path: string, headers: Record<string, string> = {}) => {
+    const url = new URL(path, ORIGIN), tokens = url.searchParams.getAll("grant"); url.search = "";
+    const h = new Headers({ "sec-fetch-site": "same-origin", ...(cookie ? { cookie } : {}), ...headers });
+    for (const token of tokens) h.append(DOWNLOAD_GRANT_HEADER, token);
+    return new Request(url, { headers: h });
+  };
   /** Mint through HTTP and return the parsed answer (asserting 201). */
   async function mint(ctx: Ctx, who: { id: string; cookie: string }, assetId: string) {
     const response = await ctx.http.mintDownloadGrant(mintRequest(who.cookie), { id: who.id, assetId });
     assert.equal(response.status, 201, await response.clone().text());
-    const body = await response.json() as { downloadUrl: string; expiresAt: string };
-    const url = new URL(body.downloadUrl, ORIGIN);
-    return { ...body, path: `${url.pathname}${url.search}`, token: url.searchParams.get("grant")! };
+    const body = await response.json() as { downloadUrl: string; grantToken: string; expiresAt: string };
+    return { ...body, path: `${body.downloadUrl}?grant=${body.grantToken}`, token: body.grantToken };
   }
   const redeem = (ctx: Ctx, who: { cookie: string | null }, id: string, assetId: string, path: string, headers?: Record<string, string>) =>
     ctx.http.downloadAsset(redeemRequest(who.cookie, path, headers), { id, assetId });
@@ -108,8 +115,9 @@ export function downloadConformance(label: string, factory: () => Promise<StoreH
     t(`${who}: mint returns a same-origin download URL and the TTL expiry; redeem returns the unchanged original once, with download headers`, async () => {
       const ctx = await build(), w = who === "guest" ? await ctx.guestAsset() : await ctx.ownerAsset(), before = Date.now();
       const minted = await mint(ctx, w, w.asset.id);
-      assert.deepEqual(Object.keys(minted).sort(), ["downloadUrl", "expiresAt", "path", "token"]);
-      assert.match(minted.downloadUrl, new RegExp(`^/api/v1/compositions/${w.id}/assets/${w.asset.id}/download\\?grant=[A-Za-z0-9_-]{43}$`));
+      assert.deepEqual(Object.keys(minted).sort(), ["downloadUrl", "expiresAt", "grantToken", "path", "token"]);
+      assert.equal(minted.downloadUrl, `/api/v1/compositions/${w.id}/assets/${w.asset.id}/download`, "the URL carries no token (logs never see it)");
+      assert.match(minted.grantToken, /^[A-Za-z0-9_-]{43}$/);
       const expires = Date.parse(minted.expiresAt);
       assert.ok(expires >= before + SYNTHETIC_DOWNLOAD_GRANT_TTL_MS - 1000 && expires <= Date.now() + SYNTHETIC_DOWNLOAD_GRANT_TTL_MS, "expiry = issue time + configured TTL");
       if (/^[0-9a-f]{64}$/.test(minted.token)) assert.fail("a token is not a hash");
@@ -145,8 +153,8 @@ export function downloadConformance(label: string, factory: () => Promise<StoreH
       ["unknown token", g.asset.id, `${base}?grant=${"A".repeat(43)}`],
       ["malformed token", g.asset.id, `${base}?grant=${minted.token.slice(1)}`],
       ["token with a padding byte", g.asset.id, `${base}?grant=${minted.token}=`],
-      ["repeated grant parameter", g.asset.id, `${base}?grant=${minted.token}&grant=${minted.token}`],
-      ["missing grant parameter", g.asset.id, base],
+      ["repeated grant header", g.asset.id, `${base}?grant=${minted.token}&grant=${minted.token}`],
+      ["missing grant header", g.asset.id, base],
       ["another asset of the same composition", other.id, `/api/v1/compositions/${g.id}/assets/${other.id}/download?grant=${minted.token}`],
       ["a malformed asset id", "not-a-uuid", `/api/v1/compositions/${g.id}/assets/not-a-uuid/download?grant=${minted.token}`],
     ];
@@ -174,7 +182,8 @@ export function downloadConformance(label: string, factory: () => Promise<StoreH
     await uniform404(await redeem(ctx, owner, g.id, g.asset.id, minted.path), minted.token, "the new owner presenting the guest's token");
     const own = await ctx.http.mintDownloadGrant(mintRequest(`${owner.cookie}; ${compositionCookies.csrf}=${CSRF}`), { id: g.id, assetId: g.asset.id });
     assert.equal(own.status, 201, "the new owner mints a grant of their own");
-    assert.equal((await redeem(ctx, owner, g.id, g.asset.id, (await own.json()).downloadUrl)).status, 200);
+    const ownBody = await own.json() as { downloadUrl: string; grantToken: string };
+    assert.equal((await redeem(ctx, owner, g.id, g.asset.id, `${ownBody.downloadUrl}?grant=${ownBody.grantToken}`)).status, 200);
   });
   t("an expired guest draft gets 404 on mint and on redeem", async () => {
     const ctx = await build(), g = await ctx.guestAsset(7), minted = await mint(ctx, g, g.asset.id);
@@ -211,14 +220,14 @@ export function downloadConformance(label: string, factory: () => Promise<StoreH
     for (const headers of [{ "sec-purpose": "prefetch" }, { "sec-purpose": "prefetch;prerender" }, { "sec-purpose": "prefetch;anonymous-client-ip" }, { purpose: "prefetch" }, { "x-moz": "prefetch" }]) {
       await uniform404(await redeem(ctx, g, g.id, g.asset.id, minted.path, headers), minted.token, JSON.stringify(headers));
     }
-    for (const site of ["cross-site", "same-site"]) {
+    for (const site of ["cross-site", "same-site", "none"]) {
       const response = await redeem(ctx, g, g.id, g.asset.id, minted.path, { "sec-fetch-site": site });
       assert.equal(response.status, 403, site); assert.equal((await response.text()).includes(minted.token), false);
     }
-    const head = await ctx.http.downloadAsset(new Request(`${ORIGIN}${minted.path}`, { method: "HEAD", headers: { "sec-fetch-site": "same-origin", cookie: g.cookie } }), { id: g.id, assetId: g.asset.id });
+    const head = await ctx.http.downloadAsset(new Request(redeemRequest(g.cookie, minted.path), { method: "HEAD" }), { id: g.id, assetId: g.asset.id });
     assert.equal(head.status, 404, "a HEAD (link checker, proxy pre-flight) never spends a grant");
     await stillSpendable(ctx, g, g.asset.id, minted.token);
-    assert.equal((await redeem(ctx, g, g.id, g.asset.id, minted.path, { "sec-fetch-site": "none" })).status, 200, "a typed or pasted URL (no initiator) still works for its owner");
+    assert.equal((await redeem(ctx, g, g.id, g.asset.id, minted.path)).status, 200, "the owner's own same-origin request still redeems");
   });
 
   // ---- storage faults never burn a grant
@@ -284,4 +293,53 @@ export function downloadConformance(label: string, factory: () => Promise<StoreH
     const noCsrf = new Request(`${ORIGIN}/x`, { method: "POST", headers: { origin: ORIGIN, "sec-fetch-site": "same-origin", cookie: `${compositionCookies.session}=${o.session}` } });
     assert.equal((await ctx.http.mintDownloadGrant(noCsrf, { id: o.id, assetId: o.asset.id })).status, 403);
   });
+
+  // ---- C6 follow-up (founder decisions 2026-11-27): a token never travels in a URL; every redeem attempt is rate-limited
+  t("a token in the URL is refused (404) even with a valid header, and the old `?grant=` form never redeems", async () => {
+    const ctx = await build(), g = await ctx.guestAsset(23), minted = await mint(ctx, g, g.asset.id);
+    const withQuery = (search: string) => { const r = redeemRequest(g.cookie, minted.path); return new Request(`${r.url}${search}`, { headers: r.headers }); };
+    for (const search of [`?grant=${minted.token}`, "?x=1", "?"]) {
+      const response = await ctx.http.downloadAsset(withQuery(search), { id: g.id, assetId: g.asset.id });
+      if (search === "?") { assert.equal(response.status, 200, "an empty query string is no query"); continue; }
+      await uniform404(response, minted.token, search);
+      await stillSpendable(ctx, g, g.asset.id, minted.token);
+    }
+    const legacy = new Request(`${ORIGIN}${minted.path}`, { headers: { "sec-fetch-site": "same-origin", cookie: g.cookie } });
+    const again = await mint(ctx, g, g.asset.id);
+    await uniform404(await ctx.http.downloadAsset(new Request(`${ORIGIN}${again.path}`, { headers: legacy.headers }), { id: g.id, assetId: g.asset.id }), again.token, "token only in the query string");
+    await stillSpendable(ctx, g, g.asset.id, again.token);
+  });
+  for (const who of ["guest", "owner"] as const) {
+    const operation = who === "guest" ? "GUEST_DOWNLOAD_GRANT" : "OWNER_DOWNLOAD_GRANT";
+    t(`${who}: every redeem attempt is charged to ${operation} after access; a limited redeem is 429 and leaves the grant spendable; an unset policy closes redeem`, async () => {
+      const ctx = await build({ config: { rate: syntheticRatePolicies({ [operation]: { windowSeconds: SYNTHETIC_RATE_LIMIT_WINDOW_SECONDS, max: SYNTHETIC_RATE_LIMIT } }) } });
+      const w = who === "guest" ? await ctx.guestAsset(24) : await ctx.ownerAsset(25), rows = await ctx.h.bucketCount();
+      const minted = await mint(ctx, w, w.asset.id); // token 1
+      const bogus = `/api/v1/compositions/${w.id}/assets/${w.asset.id}/download?grant=${"Z".repeat(43)}`;
+      await uniform404(await redeem(ctx, w, w.id, w.asset.id, bogus), minted.token, "a wrong token is charged too (token 2), so guessing is bounded");
+      assert.equal((await redeem(ctx, w, w.id, w.asset.id, minted.path)).status, 200); // token 3, the last in this window
+      const next = await ctx.http.mintDownloadGrant(mintRequest(w.cookie), { id: w.id, assetId: w.asset.id });
+      assert.equal(next.status, 429, "mint and redeem share one budget");
+      assert.ok(await ctx.h.bucketCount() > rows);
+      // A fresh budget: mint, then exhaust it with wrong tokens; the real redeem is refused with 429 and the grant stays spendable.
+      const ctx2 = await build({ config: { rate: syntheticRatePolicies({ [operation]: { windowSeconds: SYNTHETIC_RATE_LIMIT_WINDOW_SECONDS, max: SYNTHETIC_RATE_LIMIT } }) } });
+      const w2 = who === "guest" ? await ctx2.guestAsset(26) : await ctx2.ownerAsset(27), held = await mint(ctx2, w2, w2.asset.id);
+      for (let i = 1; i < SYNTHETIC_RATE_LIMIT; i += 1) await redeem(ctx2, w2, w2.id, w2.asset.id, `/api/v1/compositions/${w2.id}/assets/${w2.asset.id}/download?grant=${"Y".repeat(43)}`);
+      const limited = await redeem(ctx2, w2, w2.id, w2.asset.id, held.path);
+      assert.equal(limited.status, 429); assert.ok(Number(limited.headers.get("retry-after")) >= 1);
+      assert.equal((await limited.text()).includes(held.token), false);
+      await stillSpendable(ctx2, w2, w2.asset.id, held.token);
+      // A malformed token is refused by shape before the charge, so it costs nothing (the budget above is already spent: still 404, not 429).
+      assert.equal((await redeem(ctx2, w2, w2.id, w2.asset.id, `/api/v1/compositions/${w2.id}/assets/${w2.asset.id}/download?grant=short`)).status, 404);
+      // Callers without access are never charged.
+      const stranger = await ctx2.guest(), before = await ctx2.h.bucketCount();
+      assert.equal((await redeem(ctx2, { cookie: `${compositionCookies.guest}=${w2.id}.${stranger.capability}` }, w2.id, w2.asset.id, held.path)).status, 404);
+      assert.equal(await ctx2.h.bucketCount(), before, "no bucket row for a caller without access");
+      // An unset policy closes redeem (503), only after access.
+      const { [operation]: _dropped, ...rest } = syntheticRatePolicies();
+      const ctx3 = await build({ config: { rate: rest } }), w3 = who === "guest" ? await ctx3.guestAsset(28) : await ctx3.ownerAsset(29);
+      const closed = await redeem(ctx3, w3, w3.id, w3.asset.id, `/api/v1/compositions/${w3.id}/assets/${w3.asset.id}/download?grant=${"X".repeat(43)}`);
+      assert.equal(closed.status, 503); assert.equal((await closed.json()).error.code, "COMPOSITION_LIMITS_NOT_CONFIGURED");
+    });
+  }
 }

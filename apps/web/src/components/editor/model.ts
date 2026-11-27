@@ -236,14 +236,15 @@ export function describeScanOutcome(name: string, status: ScanStatus): string {
 export const canDownloadOriginal = (asset: Pick<EditorAsset, "persisted" | "scanStatus"> | undefined) => !!asset?.persisted && asset.scanStatus === "clean";
 const GRANT_TOKEN = /^[A-Za-z0-9_-]{43}$/;
 /**
- * The same-origin path the editor may navigate to, taken from a mint response, or null. It must be exactly this composition's and
- * asset's download route with one well-formed grant, so a malformed or foreign answer can never send the browser elsewhere.
+ * Where and how to redeem, from a mint response, or null. The path must be exactly this composition's and asset's download route with
+ * no query string, and the token one well-formed grant: a malformed or foreign answer can never send the request elsewhere. The token
+ * is sent in a header, never in a URL (founder decision 2026-11-27: logs never carry the link code).
  */
-export function downloadPathFrom(data: unknown, compositionId: string, assetId: string): string | null {
-  const url = data && typeof data === "object" && "downloadUrl" in data ? (data as { downloadUrl: unknown }).downloadUrl : null;
-  if (typeof url !== "string") return null;
-  const prefix = `/api/v1/compositions/${compositionId}/assets/${assetId}/download?grant=`;
-  return url.startsWith(prefix) && GRANT_TOKEN.test(url.slice(prefix.length)) ? url : null;
+export function downloadTargetFrom(data: unknown, compositionId: string, assetId: string): { path: string; token: string } | null {
+  if (!data || typeof data !== "object") return null;
+  const { downloadUrl, grantToken } = data as { downloadUrl?: unknown; grantToken?: unknown };
+  const path = `/api/v1/compositions/${compositionId}/assets/${assetId}/download`;
+  return downloadUrl === path && typeof grantToken === "string" && GRANT_TOKEN.test(grantToken) ? { path, token: grantToken } : null;
 }
 /** What the person hears when a download cannot start. Never names a token, a grant id or an internal reason. */
 export function describeDownloadFailure(status: number, data: unknown): string {
