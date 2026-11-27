@@ -124,7 +124,13 @@ async function claimOfCommand(db: LedgerQueryable, commandId: string, userId: st
  */
 export async function claimPromo(db: LedgerDb, input: ClaimPromoInput): Promise<PromoClaimResult> {
   const userId = assertUuid(input.userId), operationId = assertToken(input.operationId, TOKEN_128);
-  await ensureWallet(asQueryable(db), userId);
+  try {
+    await ensureWallet(asQueryable(db), userId);
+  } catch (error) {
+    // Never surface a raw driver error (host, role or statement text): code-only, like runLedgerCommand.
+    if (error instanceof LedgerError) throw error;
+    throw new LedgerError("DATABASE_ERROR", (error as { code?: string } | null)?.code);
+  }
   const result = await runLedgerCommand(db, {
     actor: "system", component: "promo", expectedUserId: userId, userId, commandKind: "promo_claim",
     idempotencyKey: input.idempotencyKey, payload: { operationId } as LedgerJson,
