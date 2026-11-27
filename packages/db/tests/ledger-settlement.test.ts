@@ -328,8 +328,25 @@ test("ledger settlement: settle, reconciliation hold and vendor-cost isolation i
         await client.query("ALTER TABLE vynvori_ledger.ledger_entries DISABLE TRIGGER ledger_entries_bind_reservation");
         await rawEntry({ user: alice.user, command: await cmd("reservation_release"), kind: "release", reservation: target.reservationId, da: h, dr: -h, dh: 0, dc: 0, evidenceKind: "verified_zero_charge_failure" });
       }, /reservation transition did not apply|illegal reservation transition|one_terminal_per_reservation/, ["23000", "23505"]);
+      // The guard's own edge list, with the binding trigger and the definer's WHERE out of the way: the function OWNER (this client)
+      // at depth 2 through a TEMP trigger passes the owner test, so only the edge list can refuse leaving a terminal state.
+      const settledSibling = alice.r[1]!;
+      await settle(alice.user, settledSibling.reservationId, settleEvidence(settledSibling.operationId));
+      for (const [from, id, to] of [["reconciliation_hold", target.reservationId, "released"], ["reconciliation_hold", target.reservationId, "settled"], ["reconciliation_hold", target.reservationId, "reserved"], ["reconciliation_hold", target.reservationId, "operator_remedy"],
+        ["settled", settledSibling.reservationId, "released"], ["settled", settledSibling.reservationId, "reconciliation_hold"], ["settled", settledSibling.reservationId, "reserved"]] as const)
+        await probe(`the guard itself has no edge ${from} -> ${to}, even for the function owner at depth 2`, async () => {
+          await client.query(`CREATE TEMP TABLE s6_owner_probe(x int); CREATE FUNCTION pg_temp.s6_owner_probe_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN UPDATE vynvori_ledger.credit_reservations SET state = '${to}' WHERE reservation_id = '${id}'; RETURN NEW; END $$; CREATE TRIGGER s6_owner_probe_tg AFTER INSERT ON s6_owner_probe FOR EACH ROW EXECUTE FUNCTION pg_temp.s6_owner_probe_fn()`);
+          await client.query("INSERT INTO s6_owner_probe VALUES (1)");
+        }, /illegal reservation transition/);
+      await probe("control: the same owner probe CAN take reserved -> released (the edge exists), so the refusals above come from the edge list", async () => {
+        await client.query(`CREATE TEMP TABLE s6_owner_probe(x int); CREATE FUNCTION pg_temp.s6_owner_probe_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN UPDATE vynvori_ledger.credit_reservations SET state = 'released' WHERE reservation_id = '${alice.r[2]!.reservationId}'; RETURN NEW; END $$; CREATE TRIGGER s6_owner_probe_tg AFTER INSERT ON s6_owner_probe FOR EACH ROW EXECUTE FUNCTION pg_temp.s6_owner_probe_fn()`);
+        await client.query("INSERT INTO s6_owner_probe VALUES (1)");
+        throw Object.assign(new Error("control-ok"), { code: "23000" });
+      }, /control-ok/);
       assert.equal(await stateOf(target.reservationId), "reconciliation_hold");
-      assert.deepEqual(await buckets(alice.user), { a: 0, r: SYNTHETIC_BUNDLE_HOLD - h, h, c: 0 });
+      assert.equal(await stateOf(settledSibling.reservationId), "settled");
+      const [h1, c1] = [settledSibling.holdUnits, settledSibling.chargeUnits];
+      assert.deepEqual(await buckets(alice.user), { a: h1 - c1, r: SYNTHETIC_BUNDLE_HOLD - h - h1, h, c: c1 });
     });
   } finally {
     await pool.end().catch(() => undefined);
