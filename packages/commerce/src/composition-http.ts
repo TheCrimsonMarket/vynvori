@@ -24,7 +24,16 @@ const statuses: Record<CompositionError["code"], [number, string, boolean]> = {
   RATE_LIMITED: [429, "Too many requests. Wait a moment and try again.", true],
   GUEST_CAPACITY: [503, "Guest drafts are at capacity right now. Try again later or sign in.", true],
   SCAN_UNAVAILABLE: [503, "Artwork safety checks are not available yet.", false],
+  DOWNLOAD_UNAVAILABLE: [503, "Artwork download is not available yet.", false],
+  ASSET_NOT_AVAILABLE: [409, "This artwork cannot be downloaded until it passes its safety check.", false],
 };
+/** Server-generated download filename extension per stored (sniffed) MIME type. The original filename is never stored or echoed. */
+const DOWNLOAD_EXTENSION: Readonly<Record<string, string>> = Object.freeze({ "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" });
+/**
+ * A request the browser marks as speculative (prefetch or prerender) never redeems a single-use grant (ADR-0022 D4). `Sec-Purpose`
+ * is the standard header; `Purpose` and `X-Moz` are older equivalents still sent by some engines.
+ */
+const isSpeculative = (request: Request) => ["sec-purpose", "purpose", "x-moz", "x-purpose"].some(name => /prefetch|prerender/i.test(request.headers.get(name) ?? ""));
 class HttpError extends Error { constructor(readonly status: number, readonly code: "INVALID_REQUEST" | "FORBIDDEN" | "AUTH_REQUIRED" | "DISABLED" | "UNAVAILABLE") { super(code); } }
 
 export interface CompositionIdentityPort {
@@ -260,6 +269,46 @@ export function compositionHttpHandlers(config: CompositionHttpConfig, service?:
       if (request.body) await readBody(request, 0); // any byte at all is refused (413)
       const scanStatus = await service!.rescanAsset(compositionId, assetId, access);
       return json({ asset: { assetId, scanStatus } });
+    }),
+    /**
+     * POST /api/v1/compositions/:id/assets/:assetId/download-grants (ADR-0022 D4, C6). Mutating: same origin, CSRF for sessions.
+     * Order: ids and credentials, access in SQL, availability, configuration (grant TTL), charge `*_DOWNLOAD_GRANT`, then the empty-body
+     * check (any byte is 413), then the mint, which needs a `clean` asset (409 ASSET_NOT_AVAILABLE otherwise). The token appears in
+     * `downloadUrl` and nowhere else.
+     */
+    mintDownloadGrant: wrapped(async (request, params) => {
+      const compositionId = id(params, "id"), assetId = id(params, "assetId"), { access } = await actor(request, compositionId, true, false);
+      await service!.authorize(compositionId, access);
+      service!.assertDownloadsAvailable();
+      requireApiLimits();
+      service!.assertDownloadGrantsConfigured();
+      await service!.admit("downloadGrant", compositionId, access);
+      if (request.body) await readBody(request, 0);
+      const { token, expiresAt } = await service!.mintDownloadGrant(compositionId, assetId, access);
+      return json({ downloadUrl: `/api/v1/compositions/${compositionId}/assets/${assetId}/download?grant=${token}`, expiresAt: expiresAt.toISOString() }, 201);
+    }),
+    /**
+     * GET /api/v1/compositions/:id/assets/:assetId/download?grant=<token> (ADR-0022 D4, C6). Unauthenticated callers get 401 before
+     * any lookup. A cross-site or same-site (not same-origin) request is refused (403) before any lookup. Every authenticated but not
+     * entitled case (absent, foreign, expired, redeemed, wrong principal, claimed, non-clean, malformed or repeated token, a
+     * speculative request) gets the same NOT_FOUND. The bytes are the unchanged original, sent as an attachment.
+     */
+    downloadAsset: wrapped(async (request, params) => {
+      const compositionId = id(params, "id"), { access } = await actor(request, compositionId, false, false); // no JSON body on this route
+      const site = request.headers.get("sec-fetch-site");
+      if (site !== null && site !== "same-origin" && site !== "none") throw new HttpError(403, "FORBIDDEN");
+      const assetId = id(params, "assetId"), tokens = new URL(request.url).searchParams.getAll("grant");
+      if (isSpeculative(request) || tokens.length !== 1) throw new CompositionError("NOT_FOUND"); // a prefetch never spends a grant
+      await service!.authorize(compositionId, access);
+      service!.assertDownloadsAvailable();
+      const { asset, bytes } = await service!.redeemDownloadGrant(compositionId, assetId, access, tokens[0]!);
+      const extension = DOWNLOAD_EXTENSION[asset.mime];
+      if (!extension) throw new CompositionError("NOT_FOUND"); // unreachable for stored assets (inspectImage sniffs these three only)
+      const headers = baseHeaders();
+      headers.set("content-type", asset.mime); headers.set("content-length", String(bytes.byteLength));
+      headers.set("content-disposition", `attachment; filename="original-${asset.sha256.slice(0, 12)}.${extension}"`);
+      headers.set("content-security-policy", "default-src 'none'; sandbox"); headers.set("cross-origin-resource-policy", "same-origin");
+      return new Response(Buffer.from(bytes), { status: 200, headers });
     }),
     readAsset: wrapped(async (request, params) => {
       const compositionId = id(params, "id"), { access } = await actor(request, compositionId, false);

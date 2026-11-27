@@ -70,6 +70,8 @@ export const CAPABILITY_LIMIT_NAMES = Object.freeze({
   uploads: ["JSON_MAX_BYTES", "IMAGE_MAX_BYTES", "IMAGE_MAX_PIXELS", "IMAGE_MAX_SIDE_PX", "MAX_ASSETS_PER_COMPOSITION", "MAX_BYTES_PER_COMPOSITION"],
   /** ADR-0022 C5: one scanner call's timeout and the scan-attempt lease. Uploads and rescans need both (with a wired scanner). */
   scan: ["SCAN_TIMEOUT_SECONDS", "SCAN_LEASE_SECONDS"],
+  /** ADR-0022 C6: how long a minted download grant stays redeemable. Minting closes without it. */
+  download: ["DOWNLOAD_GRANT_TTL_SECONDS"],
 } as const satisfies Record<string, readonly SingleLimitName[]>);
 
 const need = (parsed: ParsedCompositionLimits, names: readonly SingleLimitName[]): Record<string, number> | null => {
@@ -131,4 +133,13 @@ export function resolveScanLimits(parsed: ParsedCompositionLimits): ScanLimits |
   const timeoutMs = v.SCAN_TIMEOUT_SECONDS! * 1000, leaseMs = v.SCAN_LEASE_SECONDS! * 1000;
   if (timeoutMs > TIMER_STRUCTURAL_CEILING_MS || leaseMs <= timeoutMs) return null;
   return Object.freeze({ timeoutMs, leaseMs });
+}
+
+/**
+ * Download-grant lifetime in milliseconds (ADR-0022 C6), or `undefined` while the key is unset or invalid: minting is then closed
+ * (`COMPOSITION_LIMITS_NOT_CONFIGURED`). The seconds value is already bounded by `SECONDS_STRUCTURAL_CEILING`, so the expiry is a
+ * valid Date. No default exists.
+ */
+export function resolveDownloadGrantTtlMs(parsed: ParsedCompositionLimits): number | undefined {
+  const v = need(parsed, CAPABILITY_LIMIT_NAMES.download); return v ? v.DOWNLOAD_GRANT_TTL_SECONDS! * 1000 : undefined;
 }

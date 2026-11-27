@@ -9,6 +9,7 @@ import {
   neighbourAfterDelete, nudge, parseMm, profile, redo, resizeKeepingAspect, sceneKey, stackPosition, startHistory, summarizeIssues, undo, updateLayer, zoneOf,
   checkUploadDimensions, checkUploadFileSize, classifyApiFailure, describeExpiry, describeGuestCapacity, describeNotConfigured, describeRateLimited, type ApiFailure, type EditorAsset, type LayerPatch, type UploadLimits,
   canRequestScan, describeScanOutcome, parseScanStatus, previewHref, scanLabel, type ScanStatus,
+  canDownloadOriginal, describeDownloadFailure, describeDownloadStarted, downloadPathFrom,
 } from "./model";
 
 type ServerState = { compositionId: string | null; revision: number; owner: "guest" | "owner" | null; autosave: "idle" | "pending" | "conflict" | "failed" | "unavailable" | "limited" | "blocked"; lastSavedKey: string | null; expiresAt: string | null; versions: VersionView[]; currentVersionId: string | null };
@@ -306,6 +307,22 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
     } finally { setBusy(false); }
   }
 
+  /**
+   * Download the unchanged original (ADR-0022 D4, C6): one explicit press mints one single-use grant, then the browser navigates to
+   * it programmatically. There is no rendered link, so nothing can prefetch it. The server re-checks ownership and `clean`.
+   */
+  async function downloadOriginal(assetId: string) {
+    const asset = assets.get(assetId), compositionId = server.compositionId; if (!compositionId || !asset || !canDownloadOriginal(asset)) return; setBusy(true);
+    try {
+      const response = await api(`/api/v1/compositions/${compositionId}/assets/${assetId}/download-grants`, "POST");
+      if (!response.ok) { notify(describeDownloadFailure(response.status, response.data)); return; }
+      const path = downloadPathFrom(response.data, compositionId, assetId);
+      if (!path) { notify(describeDownloadFailure(response.status, null)); return; }
+      window.location.assign(path);
+      notify(describeDownloadStarted(asset.name));
+    } finally { setBusy(false); }
+  }
+
   // --- preflight (same pure function the server uses at freeze)
   const facts = useMemo(() => new Map<string, AssetFacts>([...assets.values()].map(a => [a.assetId, { sha256: a.sha256, widthPx: a.widthPx, heightPx: a.heightPx, ...(a.persisted && a.scanStatus ? { scanStatus: a.scanStatus } : {}) }])), [assets]);
   const preflight = useMemo(() => runPreviewPreflight(scene, profile, facts, new Map(LICENSED_FONTS.map(f => [f.fontAssetId, f]))), [scene, facts]);
@@ -410,6 +427,8 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
                 <p className="muted ed-caption" id="ed-scan-state">Artwork {scanLabel(assets.get(current.sourceAssetId)?.scanStatus)}. Server copies are shown only after they pass.</p>)}
               {current.kind === "image" && canRequestScan(assets.get(current.sourceAssetId)) && (
                 <Button variant="outline" disabled={busy} aria-describedby="ed-scan-state" onClick={() => void checkAgain(current.sourceAssetId)}>Check again</Button>)}
+              {current.kind === "image" && canDownloadOriginal(assets.get(current.sourceAssetId)) && (
+                <Button variant="outline" disabled={busy} onClick={() => void downloadOriginal(current.sourceAssetId)}>Download original</Button>)}
               {current.kind === "text" && (<>
                 <label className="ed-field"><span>Text</span><input value={current.text} maxLength={profile.limits.maxTextChars} onChange={e => patch(current, { text: e.currentTarget.value })} aria-label="Text content" /></label>
                 {numeric(current, "Size", current.fontSizePt, l => (l.kind === "text" ? l.fontSizePt : 0), n => updateLayer(scene, zoneId, current.layerId, { fontSizePt: n }), "pt")}
