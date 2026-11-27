@@ -8,7 +8,7 @@ import { connectionString, freshComposition } from "./composition-fixture";
 const requirePg = process.env.CI_REQUIRE_PG_TESTS === "1";
 
 test("composition migration plan pins exact reviewed SQL and refuses any non-local target", async () => {
-  const plan = compositionMigrationPlan(); assert.equal(plan.migrations.length, 1); assert.match(plan.digest, /^[a-f0-9]{64}$/);
+  const plan = compositionMigrationPlan(); assert.equal(plan.migrations.length, 2); assert.match(plan.digest, /^[a-f0-9]{64}$/);
   const client = new Client({ host: "db.example.neon.tech", ssl: true });
   for (const expected of [{ database: "vynvori_creative_staging", role: "vynvori_staging_app" }, { database: "vynvori_m3_migration_test", role: "synthetic" }, { database: "production", role: "synthetic" }]) {
     await assert.rejects(applyCompositionMigrations(client, { ...expected, planSha256: plan.digest }), (e: unknown) => e instanceof CompositionMigrationError && e.code === "TARGET_REJECTED");
@@ -72,7 +72,13 @@ test("composition DDL: replay, drift, immutability, ownership and no-print guara
       await assert.rejects(q(down), /refusing rollback/);
       await client.end();
       const second = await freshComposition();
-      try { await second.query(down); assert.equal((await second.query("SELECT to_regnamespace('vynvori_composition') AS ns")).rows[0].ns, null); }
+      try {
+        // freshComposition() applies the full plan, so 0002 must be rolled back first (F8 repair, ADR-0022 C3a).
+        const down0002 = readFileSync(new URL("../composition-migrations/rollback/0002_asset_access_and_limits.down.sql", import.meta.url), "utf8");
+        await second.query(down0002);
+        await second.query(down);
+        assert.equal((await second.query("SELECT to_regnamespace('vynvori_composition') AS ns")).rows[0].ns, null);
+      }
       finally { await second.end(); }
     });
     await t.test("a missing identity prerequisite aborts before any DDL", async () => {
