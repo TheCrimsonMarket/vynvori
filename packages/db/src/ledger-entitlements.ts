@@ -211,7 +211,7 @@ export async function markRefinementPending(db: LedgerDb, input: MarkRefinementP
     const bundle = await lockBundle(tx, packageId); const slot = slotAt(await lockSlots(tx, packageId), ordinal);
     requireOpen(bundle.state);
     if (slot.state !== "available" || (slot.source_version_id !== null && slot.source_version_id !== sourceVersionId)) throw new LedgerBusinessRejection("INVALID_TRANSITION");
-    if ((await tx.query(`SELECT 1 FROM ${S}.refinement_slots WHERE operation_id = $1 AND user_id = $2`, [operationId, userId])).rows.length) throw new LedgerBusinessRejection("INVALID_TRANSITION"); // one operation, one slot
+    if ((await tx.query(`SELECT 1 FROM ${S}.refinement_slots WHERE operation_id = $1`, [operationId])).rows.length) throw new LedgerBusinessRejection("INVALID_TRANSITION"); // one operation, one slot, system-wide (the unique index is the backstop)
     await insertSlotEvent(tx, slot, "pending", { sourceVersionId, operationId });
   });
 }
@@ -248,10 +248,11 @@ export async function consumeRefinementSlot(db: LedgerDb, input: ConsumeRefineme
   const operationId = assertOpaqueId(input.operationId), deliveredVersionId = assertOpaqueId(input.deliveredVersionId), evidenceRef = assertEvidenceRef(input.evidenceRef);
   const idempotencyKey = assertIdempotencyKey(input.idempotencyKey);
   return runBundleCommand(db, { userId, packageId, actor: { kind: "system", component }, commandKind: "refinement_consume", idempotencyKey, payload: { packageId, ordinal, operationId, deliveredVersionId, evidenceRef } }, async tx => {
-    const bundle = await lockBundle(tx, packageId); const slot = slotAt(await lockSlots(tx, packageId), ordinal);
+    const bundle = await lockBundle(tx, packageId); const slots = await lockSlots(tx, packageId); const slot = slotAt(slots, ordinal);
     requireOpen(bundle.state);
     if (slot.state !== "pending" && slot.state !== "unknown") throw new LedgerBusinessRejection("INVALID_TRANSITION");
     if (slot.operation_id !== operationId) throw new LedgerBusinessRejection("EVIDENCE_INVALID");
+    if (slots.some(s => s.delivered_version_id === deliveredVersionId)) throw new LedgerBusinessRejection("INVALID_TRANSITION"); // one delivered version, one slot (the unique index is the backstop)
     await insertSlotEvent(tx, slot, "used", { operationId, deliveredVersionId, evidenceRef });
   });
 }
