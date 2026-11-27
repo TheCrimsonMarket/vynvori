@@ -53,7 +53,12 @@ test("a failing statement surfaces only a code and SQLSTATE, rolls back, and des
   const log: string[] = []; let destroyed: boolean | undefined;
   const serverError = Object.assign(new Error("relation vynvori_ledger.wallets does not exist (secret detail)"), { code: "42P01", severity: "ERROR" });
   const db = { acquire: async () => ({
-    query: async (text: string) => { log.push(text.trim().split(/\s+/)[0]!); if (/^SELECT now/.test(text.trim())) throw serverError; return { rows: [], rowCount: 0 }; },
+    query: async (text: string) => {
+      log.push(text.trim().split(/\s+/)[0]!);
+      if (/set_config/.test(text)) return { rows: [{ read_only: "on", isolation: "repeatable read" }], rowCount: 1 };
+      if (/^SELECT now/.test(text.trim())) throw serverError;
+      return { rows: [], rowCount: 0 };
+    },
     release: (destroy?: boolean) => { destroyed = destroy; },
   }) } as unknown as LedgerDb;
   await assert.rejects(checkWalletInvariants(db), (e: unknown) => e instanceof LedgerError && e.code === "DATABASE_ERROR" && e.sqlstate === "42P01" && !/secret|wallets/.test(String(e.message)));
@@ -62,6 +67,20 @@ test("a failing statement surfaces only a code and SQLSTATE, rolls back, and des
   const lost = { acquire: async () => ({ query: async () => { throw new Error("Connection terminated unexpectedly"); }, release: (destroy?: boolean) => { destroyed = destroy; } }) } as unknown as LedgerDb;
   await assert.rejects(checkWalletInvariants(lost), code("DATABASE_ERROR"));
   assert.equal(destroyed, true, "no server report: the connection is destroyed, never reused");
+});
+
+test("the checks refuse to run unless the transaction really is READ ONLY and REPEATABLE READ (a pooler or dirty connection may ignore BEGIN options)", async () => {
+  for (const mode of [{ read_only: "off", isolation: "repeatable read" }, { read_only: "on", isolation: "read committed" }, undefined]) {
+    const log: string[] = [];
+    const db = { acquire: async () => ({
+      query: async (text: string) => { log.push(text.trim().split(/\s+/)[0]!); return /set_config/.test(text) ? { rows: mode ? [mode] : [], rowCount: mode ? 1 : 0 } : { rows: [], rowCount: 0 }; },
+      release: () => undefined,
+    }) } as unknown as LedgerDb;
+    await assert.rejects(checkWalletInvariants(db), code("DATABASE_ERROR"));
+    await assert.rejects(findOrphanedReservations(db, { olderThan: new Date() }), code("DATABASE_ERROR"));
+    assert.ok(!log.some(s => /^(WITH)$/.test(s)) && log.filter(s => s === "SELECT").length === 2, "no check statement ran after the mode failed");
+    assert.equal(log.at(-1), "ROLLBACK");
+  }
 });
 
 // ---- disposable PostgreSQL ----------------------------------------------------------------------------------------------
@@ -353,6 +372,72 @@ test("ledger invariants and orphan detection in disposable PostgreSQL", { skip: 
         assert.deepEqual(got[0]!.detail, { state: "consumed", trailState: "claim_reserved", eventSeq: "1", events: "1" });
       } finally { await asSuperuser(c => c.query("UPDATE vynvori_ledger.promo_claims SET state = 'claim_reserved' WHERE claim_id = $1", [promo.claim.claimId])); }
       await ensureBaseline("promo trail restored");
+    });
+
+    await t.test("a changed trigger WHEN clause or UPDATE OF list, and a replaced function body, are caught although name, type and function are unchanged", async () => {
+      const def = await triggerDef("wallets", "wallets_update_guard");
+      await client.query("DROP TRIGGER wallets_update_guard ON vynvori_ledger.wallets");
+      await client.query("CREATE TRIGGER wallets_update_guard BEFORE UPDATE ON vynvori_ledger.wallets FOR EACH ROW WHEN (false) EXECUTE FUNCTION vynvori_ledger.wallets_update_guard()");
+      try { assert.deepEqual(summary(await added()), want(["TRIGGER_MISMATCH", null, "wallets.wallets_update_guard"]), "WHEN (false)"); } finally { await client.query("DROP TRIGGER wallets_update_guard ON vynvori_ledger.wallets"); }
+      await client.query("CREATE TRIGGER wallets_update_guard BEFORE UPDATE OF user_id ON vynvori_ledger.wallets FOR EACH ROW EXECUTE FUNCTION vynvori_ledger.wallets_update_guard()");
+      try { assert.deepEqual(summary(await added()), want(["TRIGGER_MISMATCH", null, "wallets.wallets_update_guard"]), "UPDATE OF user_id"); } finally { await client.query("DROP TRIGGER wallets_update_guard ON vynvori_ledger.wallets"); await client.query(def); }
+      await ensureBaseline("trigger restored");
+      const original = (await one("SELECT pg_get_functiondef('vynvori_ledger.reject_mutation()'::regprocedure) AS def"))["def"]!;
+      await client.query("CREATE OR REPLACE FUNCTION vynvori_ledger.reject_mutation() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $fn$ BEGIN RETURN NEW; END $fn$");
+      try { assert.deepEqual(summary(await added()), want(["FUNCTION_BODY_CHANGED", null, "reject_mutation"])); } finally { await client.query(original); }
+      await client.query("CREATE FUNCTION vynvori_ledger.zz_extra_fn() RETURNS int LANGUAGE sql SET search_path = pg_catalog, pg_temp AS $fn$ SELECT 1 $fn$");
+      try { assert.deepEqual(summary(await added()), want(["FUNCTION_UNEXPECTED", null, "zz_extra_fn"])); } finally { await client.query("DROP FUNCTION vynvori_ledger.zz_extra_fn()"); }
+      await ensureBaseline("function restored");
+    });
+
+    await t.test("a dropped uniqueness guard with a duplicate, orphaned entries, an unvalidated constraint, an invalid index, row security and a role setting that turns triggers off are each reported", async () => {
+      const scopeKey = await constraintDef("ledger_commands", "ledger_commands_scope_key");
+      const duplicate = randomUUID();
+      await asSuperuser(async c => {
+        await c.query("ALTER TABLE vynvori_ledger.ledger_commands DROP CONSTRAINT ledger_commands_scope_key");
+        await c.query("INSERT INTO vynvori_ledger.ledger_commands(command_id, scope, idempotency_key, request_sha256, user_id, command_kind, outcome) SELECT $1::uuid, scope, idempotency_key, request_sha256, user_id, command_kind, outcome FROM vynvori_ledger.ledger_commands LIMIT 1", [duplicate]);
+      });
+      try {
+        const got = await added();
+        assert.deepEqual(summary(got), want(["UNIQUE_KEY_VIOLATED", null, "ledger_commands.scope_key"]));
+        assert.deepEqual(got[0]!.detail, { duplicates: "2" });
+        assert.doesNotMatch(JSON.stringify(got), /idempotency|corrupt-|funds-/, "no idempotency key reaches a report");
+      } finally {
+        await asSuperuser(async c => { await c.query("DELETE FROM vynvori_ledger.ledger_commands WHERE command_id = $1", [duplicate]); await c.query(`ALTER TABLE vynvori_ledger.ledger_commands ADD CONSTRAINT ledger_commands_scope_key ${scopeKey}`); });
+      }
+
+      const ghost = randomUUID(), ghostCommand = randomUUID(), noSource = randomUUID(), noSourceCommand = randomUUID();
+      await asSuperuser(async c => {
+        for (const [commandId, user] of [[ghostCommand, ghost], [noSourceCommand, quoteUser]] as const)
+          await c.query("INSERT INTO vynvori_ledger.ledger_commands(command_id, scope, idempotency_key, request_sha256, user_id, command_kind, outcome) VALUES($1, $2, $3, repeat('b', 64), $4, 'grant_credits', 'applied')", [commandId, `${user}:grant_credits`, "orphan-" + randomUUID(), user]);
+        await c.query(`INSERT INTO vynvori_ledger.ledger_entries(entry_id, user_id, command_id, entry_kind, delta_available, delta_reserved, delta_held, delta_consumed, delta_external, grant_source_id, source_ref, cause_kind, cause_ref)
+          SELECT $1::uuid, $2::uuid, $3::uuid, 'grant', 4, 0, 0, 0, -4, $4::uuid, 'orphan', 'grant', $4::text || ':orphan'`, [randomUUID(), ghost, ghostCommand, source]);
+        await c.query(`INSERT INTO vynvori_ledger.ledger_entries(entry_id, user_id, command_id, entry_kind, delta_available, delta_reserved, delta_held, delta_consumed, delta_external, grant_source_id, source_ref, cause_kind, cause_ref)
+          SELECT $1::uuid, $2::uuid, $3::uuid, 'grant', 4, 0, 0, 0, -4, $4::uuid, 'orphan', 'grant', $4::text || ':orphan'`, [noSource, quoteUser, noSourceCommand, randomUUID()]);
+      });
+      try {
+        const got = (await added()).filter(f => f.invariant === "ENTRY_ORPHANED");
+        assert.deepEqual(got.map(f => f.detail["reason"]).sort(), ["no_grant_source", "no_wallet"]);
+      } finally {
+        await asSuperuser(async c => {
+          await c.query("DELETE FROM vynvori_ledger.ledger_entries WHERE command_id = ANY($1::uuid[])", [[ghostCommand, noSourceCommand]]);
+          await c.query("DELETE FROM vynvori_ledger.ledger_commands WHERE command_id = ANY($1::uuid[])", [[ghostCommand, noSourceCommand]]);
+        });
+      }
+      await ensureBaseline("duplicate and orphaned entries removed");
+
+      await client.query("ALTER TABLE vynvori_ledger.wallets ADD CONSTRAINT zz_unvalidated CHECK (revision >= 0) NOT VALID");
+      try { assert.deepEqual(summary(await added()), want(["CONSTRAINT_NOT_VALIDATED", null, "vynvori_ledger.wallets.zz_unvalidated"])); } finally { await client.query("ALTER TABLE vynvori_ledger.wallets DROP CONSTRAINT zz_unvalidated"); }
+      await assert.rejects(client.query("CREATE UNIQUE INDEX CONCURRENTLY zz_invalid_idx ON vynvori_ledger.wallets(revision)")); // duplicate revisions leave an INVALID index behind
+      try { assert.deepEqual(summary(await added()), want(["INDEX_INVALID", null, "vynvori_ledger.zz_invalid_idx"])); } finally { await client.query("DROP INDEX vynvori_ledger.zz_invalid_idx"); }
+      await client.query("ALTER TABLE vynvori_ledger.wallets ENABLE ROW LEVEL SECURITY");
+      try { assert.deepEqual(summary(await added()), want(["ROW_SECURITY_ENABLED", null, "wallets"])); } finally { await client.query("ALTER TABLE vynvori_ledger.wallets DISABLE ROW LEVEL SECURITY"); }
+      await client.query("CREATE ROLE zz_replica_role NOLOGIN");
+      try {
+        await client.query("ALTER ROLE zz_replica_role SET session_replication_role = replica");
+        assert.deepEqual(summary(await added()), want(["SESSION_SETTING_OVERRIDE", null, "zz_replica_role:session_replication_role=replica"]));
+      } finally { await client.query("ALTER ROLE zz_replica_role RESET ALL"); await client.query("DROP ROLE zz_replica_role"); }
+      await ensureBaseline("guards restored");
     });
 
     await t.test("a flood of findings is capped per invariant and the report says it was truncated", async () => {

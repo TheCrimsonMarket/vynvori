@@ -5,7 +5,7 @@ import { LedgerError, parseSafeUnits, type LedgerConn, type LedgerDb, type Ledge
  * M7 S8 read-only ledger checks (ADR-0021 D14, S2 follow-up "S8"). Library only: nothing under apps/ imports it (static test).
  * It REPORTS and never repairs: every statement it sends is a SELECT inside one READ ONLY, REPEATABLE READ transaction (one
  * consistent snapshot, so concurrent writers can never produce a false finding), and the transaction is always rolled back.
- * It takes no lock, calls no ledger command, writes no row and never releases, settles, holds or resolves anything. It reads no
+ * It takes no row lock (only the ACCESS SHARE table locks every SELECT takes, so do not run it during a migration), calls no ledger command, writes no row and never releases, settles, holds or resolves anything. It reads no
  * vendor-cost evidence, no idempotency key and no workflow reference, so none of them can reach a report. A report is INTERNAL
  * (it names user and reservation ids): it must never be mapped into a customer projection.
  *
@@ -27,7 +27,8 @@ export type InvariantCode =
   | "RESERVATION_TRAIL_MISMATCH" | "ALLOCATION_SUM_MISMATCH" | "AUTHORIZATION_ALLOCATION_MISMATCH"
   | "PROMO_UNIQUENESS_VIOLATED" | "PROMO_CLAIM_TRAIL_MISMATCH" | "SYNTHETIC_GRANT_SOURCE_REGISTERED"
   | "TRIGGER_MISSING" | "TRIGGER_DISABLED" | "TRIGGER_MISMATCH" | "TRIGGER_UNEXPECTED" | "RULE_UNEXPECTED"
-  | "FUNCTION_PRIVILEGE_MISMATCH" | "FUNCTION_SEARCH_PATH_UNPINNED";
+  | "FUNCTION_PRIVILEGE_MISMATCH" | "FUNCTION_SEARCH_PATH_UNPINNED" | "FUNCTION_BODY_CHANGED" | "FUNCTION_UNEXPECTED"
+  | "UNIQUE_KEY_VIOLATED" | "ENTRY_ORPHANED" | "CONSTRAINT_NOT_VALIDATED" | "INDEX_INVALID" | "ROW_SECURITY_ENABLED" | "SESSION_SETTING_OVERRIDE";
 
 /** Values are strings, booleans or null on purpose: a corrupted balance may exceed the safe-integer range and is never rounded. */
 export type FindingDetail = Readonly<Record<string, string | boolean | null>>;
@@ -115,6 +116,26 @@ function tgtypeOf(shape: Shape): number {
 /** The only definer-rights functions the migrations create (privilege model B); every other function is invoker-rights. */
 const EXPECTED_DEFINERS: ReadonlySet<string> = new Set(["ledger_entries_apply_to_wallet", "ledger_entries_apply_to_reservation", "ledger_package_events_apply", "refinement_slot_events_apply"]);
 
+/** md5(prosrc) of every function in vynvori_ledger as migrations 0002-0007 leave it. A migration that changes a function body must update this in the same PR (maintenance rule). */
+const EXPECTED_FUNCTION_BODIES: Readonly<Record<string, string>> = {
+  credit_reservations_check_insert: "ecbee574c173b2ca418c5d84eb289f94", credit_reservations_check_not_pending: "1e598dfe39d4ca05d30aff23133f9842",
+  credit_reservations_update_guard: "e8a0d49c95c51e1a0a11661de2cee5d6", ledger_authorizations_check_complete: "44d0abc587332e5ee082cdcb69fd707c",
+  ledger_authorizations_check_insert: "6f73686ea8cc955bb906a80abded30fd", ledger_entries_apply_to_reservation: "d56fd7686b9f70e9cd52ad7d2c907db8",
+  ledger_entries_apply_to_wallet: "17d47ba36c2232b5eff071ee7ade091d", ledger_entries_bind_reservation: "af64b78049cb923e3c18d45f8402744e",
+  ledger_entries_check_command: "e9443d4703633220c760dbc2e55b7996", ledger_package_edge_allowed: "f52967761a6ea8a34b273de81937294d",
+  ledger_package_events_apply: "bdb2f558134bc9bfdca22c76f75f4825", ledger_package_events_bind: "ddc31d616056590c79387e25107e87c9",
+  ledger_package_events_check_complete: "2d2a9696c80ed688690da6a573d945b5", ledger_packages_check_insert: "efd9af978e982b306096c72e0446138b",
+  ledger_packages_update_guard: "d6cf2585854ae543dc78019850cca774", ledger_quote_check_allocation_sums: "cd4d7f02cbcab28748c12edd83e75084",
+  ledger_quotes_check_version: "deb900f1ad4d4f473eb865afc3698448", ledger_quotes_refuse_authorized_lineage: "7bff808f82a412636ea0fc4f3cb9b289",
+  promo_claim_edge_allowed: "1e5b806034ef1fc53ab6fb18931d870c", promo_claim_events_apply: "92fc0008b09a0b7f3e114e55d5c2297f",
+  promo_claim_events_check: "79a821eaf23858aeb72f4adeaac5b69e", promo_claims_insert_guard: "77044759498a872c3d50a1dd9c0582e5",
+  promo_claims_update_guard: "3d00e7cb348fa8fb34ff7f457e2873f5", refinement_slot_edge_allowed: "6ed40dddbf9756521e5d76f09fb3ab31",
+  refinement_slot_events_apply: "5f52bc47a7e9b4a4d3969b85cfc2e091", refinement_slot_events_bind: "31eb9e63dc9c555783c67dd0945c69ec",
+  refinement_slot_events_check_complete: "f566007dea52cc0451f8843395efc58f", refinement_slots_insert_guard: "7ec5373ccccb37e366b2ff7ef94858dd",
+  refinement_slots_update_guard: "fde9bf403054f6b7ec11987a160086b2", reject_mutation: "a42ccd051c19b2e04f788c2bb3754a08",
+  wallets_insert_guard: "5ce9e49d2ebfcb874827fee0518c955d", wallets_update_guard: "bf909e5b50fc3f4d882305e05665b866",
+};
+
 // ---- connection handling ---------------------------------------------------------------------------------------------------
 
 type Row = Record<string, unknown>;
@@ -140,14 +161,17 @@ function mapFailure(error: unknown): LedgerError {
   return new LedgerError(sqlstate !== undefined && TRANSIENT_SQLSTATES.has(sqlstate) ? "TRANSIENT" : "DATABASE_ERROR", sqlstate); // never the driver message
 }
 
-/** One READ ONLY REPEATABLE READ transaction, always rolled back. Timeouts are set with set_config so every statement stays a SELECT. */
+/** One READ ONLY REPEATABLE READ transaction, always rolled back. Timeouts and a pinned search_path are set with set_config so every statement stays a SELECT, and the mode is verified before any check runs. */
 async function readSnapshot<T>(db: LedgerDb, work: (q: LedgerQueryable) => Promise<T>): Promise<T> {
   const conn = await acquireConn(db);
   let destroy = false;
   try {
     await conn.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
-    await conn.query("SELECT set_config('statement_timeout', $1, true), set_config('lock_timeout', $2, true), set_config('idle_in_transaction_session_timeout', $3, true)",
-      [`${STATEMENT_TIMEOUT_MS}ms`, `${LOCK_TIMEOUT_MS}ms`, `${IDLE_IN_TRANSACTION_TIMEOUT_MS}ms`]);
+    const mode = (await conn.query(`SELECT set_config('search_path', 'pg_catalog, pg_temp', true), set_config('statement_timeout', $1, true), set_config('lock_timeout', $2, true),
+      set_config('idle_in_transaction_session_timeout', $3, true), current_setting('transaction_read_only') AS read_only, current_setting('transaction_isolation') AS isolation`,
+      [`${STATEMENT_TIMEOUT_MS}ms`, `${LOCK_TIMEOUT_MS}ms`, `${IDLE_IN_TRANSACTION_TIMEOUT_MS}ms`])).rows[0];
+    // A pooler or a dirty connection could ignore the BEGIN options; never run the checks unless the snapshot really is read-only and repeatable-read.
+    if (mode?.["read_only"] !== "on" || mode?.["isolation"] !== "repeatable read") throw new LedgerError("DATABASE_ERROR");
     const result = await work(conn);
     await conn.query("ROLLBACK");
     return result;
@@ -328,6 +352,52 @@ export async function checkWalletInvariants(db: LedgerDb): Promise<WalletInvaria
       WHERE s.kind = 'synthetic_test' GROUP BY s.grant_source_id ORDER BY s.grant_source_id LIMIT $1`,
     row => ({ subjectId: row["grant_source_id"], detail: { grants: text(row["grants"]), grantedUnits: text(row["granted_units"]) } }));
 
+    // Uniqueness guards re-derived without trusting the constraints (counts only: no key value, in particular no idempotency key, is ever selected).
+    await collect(q, into, "UNIQUE_KEY_VIOLATED", `
+      SELECT key_name, n FROM (
+        SELECT 'ledger_entries.cause' AS key_name, count(*)::int AS n FROM ${S}.ledger_entries GROUP BY cause_kind, cause_ref HAVING count(*) > 1
+        UNION ALL SELECT 'ledger_commands.scope_key', count(*)::int FROM ${S}.ledger_commands GROUP BY scope, idempotency_key HAVING count(*) > 1
+        UNION ALL SELECT 'ledger_authorizations.quote_version', count(*)::int FROM ${S}.ledger_authorizations GROUP BY quote_version_id HAVING count(*) > 1
+        UNION ALL SELECT 'ledger_authorizations.quote', count(*)::int FROM ${S}.ledger_authorizations GROUP BY quote_id HAVING count(*) > 1
+        UNION ALL SELECT 'credit_reservations.allocation', count(*)::int FROM ${S}.credit_reservations GROUP BY quote_version_id, operation_index HAVING count(*) > 1
+        UNION ALL SELECT 'credit_reservations.operation', count(*)::int FROM ${S}.credit_reservations GROUP BY operation_id HAVING count(*) > 1
+        UNION ALL SELECT 'ledger_entries.one_terminal_per_reservation', count(*)::int FROM ${S}.ledger_entries WHERE entry_kind IN ('release', 'settle', 'hold') GROUP BY reservation_id HAVING count(*) > 1) d
+      ORDER BY key_name, n LIMIT $1`, row => ({ subjectId: row["key_name"], detail: { duplicates: text(row["n"]) } }));
+
+    // Entries the wallet and reservation checks cannot reach because they iterate wallets and reservations.
+    await collect(q, into, "ENTRY_ORPHANED", `
+      SELECT e.entry_id::text AS entry_id, e.user_id::text AS user_id, e.entry_kind AS entry_kind,
+        CASE WHEN w.user_id IS NULL THEN 'no_wallet'
+             WHEN e.entry_kind = 'grant' AND g.grant_source_id IS NULL THEN 'no_grant_source'
+             WHEN e.entry_kind <> 'grant' AND e.reservation_id IS NULL THEN 'no_reservation_id'
+             ELSE 'reservation_missing_or_foreign' END AS reason
+      FROM ${S}.ledger_entries e
+      LEFT JOIN ${S}.wallets w ON w.user_id = e.user_id
+      LEFT JOIN ${S}.ledger_grant_sources g ON g.grant_source_id = e.grant_source_id
+      LEFT JOIN ${S}.credit_reservations r ON r.reservation_id = e.reservation_id AND r.user_id = e.user_id
+      WHERE w.user_id IS NULL OR (e.entry_kind = 'grant' AND g.grant_source_id IS NULL) OR (e.entry_kind <> 'grant' AND r.reservation_id IS NULL)
+      ORDER BY e.created_at, e.entry_id LIMIT $1`, row => ({ userId: row["user_id"], subjectId: row["entry_id"], detail: { entryKind: text(row["entry_kind"]), reason: text(row["reason"]) } }));
+
+    // A constraint or index that exists but is not enforced for every row is not a guard.
+    await collect(q, into, "CONSTRAINT_NOT_VALIDATED", `
+      SELECT c.conrelid::regclass::text AS table_name, c.conname::text AS name FROM pg_catalog.pg_constraint c JOIN pg_catalog.pg_namespace n ON n.oid = c.connamespace
+      WHERE n.nspname = '${S}' AND NOT c.convalidated ORDER BY 1, 2 LIMIT $1`, row => ({ subjectId: `${String(row["table_name"])}.${String(row["name"])}`, detail: {} }));
+    await collect(q, into, "INDEX_INVALID", `
+      SELECT i.indexrelid::regclass::text AS name FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class c ON c.oid = i.indrelid JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = '${S}' AND (NOT i.indisvalid OR NOT i.indisready) ORDER BY 1 LIMIT $1`, row => ({ subjectId: row["name"], detail: {} }));
+
+    // Row-level security would let the checker's role see a subset of rows; a role or database setting could switch triggers off for a role.
+    await collect(q, into, "ROW_SECURITY_ENABLED", `
+      SELECT c.relname::text AS name FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = '${S}' AND c.relkind IN ('r', 'p') AND (c.relrowsecurity OR c.relforcerowsecurity)
+      UNION SELECT p.polrelid::regclass::text FROM pg_catalog.pg_policy p JOIN pg_catalog.pg_class c ON c.oid = p.polrelid JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = '${S}'
+      ORDER BY 1 LIMIT $1`, row => ({ subjectId: row["name"], detail: {} }));
+    await collect(q, into, "SESSION_SETTING_OVERRIDE", `
+      SELECT coalesce(r.rolname::text, '(all roles)') AS role_name, s.setdatabase::int AS database_oid, setting
+      FROM pg_catalog.pg_db_role_setting s LEFT JOIN pg_catalog.pg_roles r ON r.oid = s.setrole, unnest(s.setconfig) AS setting
+      WHERE setting ~ '^(session_replication_role|row_security)=' AND (s.setdatabase = 0 OR s.setdatabase = (SELECT d.oid FROM pg_catalog.pg_database d WHERE d.datname = current_database()))
+      ORDER BY 1, 3 LIMIT $1`, row => ({ subjectId: `${String(row["role_name"])}:${String(row["setting"])}`, detail: { role: text(row["role_name"]), setting: text(row["setting"]) } }));
+
     await checkTriggers(q, into);
     await checkFunctions(q, into);
     return { ok: into.findings.length === 0, checkedAt: (at instanceof Date ? at : new Date(String(at))).toISOString(), findings: into.findings, truncated: [...into.truncated] };
@@ -337,7 +407,8 @@ export async function checkWalletInvariants(db: LedgerDb): Promise<WalletInvaria
 async function checkTriggers(q: LedgerQueryable, into: Collector) {
   const rows = (await q.query(`
     SELECT c.relname::text AS table_name, t.tgname::text AS name, p.proname::text AS fn, pn.nspname::text AS fn_schema, t.tgtype::int AS tgtype, t.tgenabled::text AS enabled,
-      (t.tgconstraint <> 0) AS is_constraint, t.tgdeferrable AS deferrable, t.tginitdeferred AS initially_deferred
+      (t.tgconstraint <> 0) AS is_constraint, t.tgdeferrable AS deferrable, t.tginitdeferred AS initially_deferred,
+      t.tgnargs::int AS nargs, t.tgattr::text AS attrs, pg_catalog.pg_get_expr(t.tgqual, t.tgrelid) AS qual
     FROM pg_catalog.pg_trigger t
     JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
     JOIN pg_catalog.pg_proc p ON p.oid = t.tgfoid JOIN pg_catalog.pg_namespace pn ON pn.oid = p.pronamespace
@@ -352,7 +423,8 @@ async function checkTriggers(q: LedgerQueryable, into: Collector) {
     // 'O' fires in the origin and local replication modes, 'A' always. 'R' (replica only) and 'D' (disabled) leave the ledger unguarded.
     if (enabled !== "O" && enabled !== "A") into.findings.push({ invariant: "TRIGGER_DISABLED", userId: null, subjectId: key, detail: { ...detail, state: enabled } });
     const shapeOk = Number(row["tgtype"]) === tgtypeOf(spec.shape) && String(row["fn"]) === spec.fn && String(row["fn_schema"]) === S && Boolean(row["is_constraint"]) === spec.constraint
-      && (!spec.constraint || (row["deferrable"] === true && row["initially_deferred"] === true));
+      && (!spec.constraint || (row["deferrable"] === true && row["initially_deferred"] === true))
+      && Number(row["nargs"]) === 0 && String(row["attrs"]) === "" && (row["qual"] === null || row["qual"] === undefined); // no WHEN clause, no UPDATE OF column list, no arguments: it fires on every row
     if (!shapeOk) into.findings.push({ invariant: "TRIGGER_MISMATCH", userId: null, subjectId: key, detail: { ...detail, function: `${String(row["fn_schema"])}.${String(row["fn"])}`, expectedFunction: `${S}.${spec.fn}` } });
   }
   for (const [key, row] of found) into.findings.push({ invariant: "TRIGGER_UNEXPECTED", userId: null, subjectId: key, detail: { table: text(row["table_name"]), trigger: text(row["name"]) } });
@@ -363,7 +435,7 @@ async function checkTriggers(q: LedgerQueryable, into: Collector) {
 
 async function checkFunctions(q: LedgerQueryable, into: Collector) {
   const rows = (await q.query(`
-    SELECT p.proname::text AS name, p.prosecdef AS definer, (coalesce(p.proconfig, '{}'::text[]) @> ARRAY['search_path=pg_catalog, pg_temp']::text[]) AS pinned
+    SELECT p.proname::text AS name, p.prosecdef AS definer, (coalesce(p.proconfig, '{}'::text[]) @> ARRAY['search_path=pg_catalog, pg_temp']::text[]) AS pinned, md5(p.prosrc) AS body
     FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = '${S}' ORDER BY p.proname`)).rows;
   const present = new Set<string>();
   for (const row of rows) {
@@ -372,7 +444,11 @@ async function checkFunctions(q: LedgerQueryable, into: Collector) {
     const definer = row["definer"] === true;
     if (definer !== EXPECTED_DEFINERS.has(name)) into.findings.push({ invariant: "FUNCTION_PRIVILEGE_MISMATCH", userId: null, subjectId: name, detail: { securityDefiner: definer, expectedSecurityDefiner: EXPECTED_DEFINERS.has(name) } });
     if (row["pinned"] !== true) into.findings.push({ invariant: "FUNCTION_SEARCH_PATH_UNPINNED", userId: null, subjectId: name, detail: {} });
+    const expectedBody = EXPECTED_FUNCTION_BODIES[name];
+    if (expectedBody === undefined) into.findings.push({ invariant: "FUNCTION_UNEXPECTED", userId: null, subjectId: name, detail: {} });
+    else if (row["body"] !== expectedBody) into.findings.push({ invariant: "FUNCTION_BODY_CHANGED", userId: null, subjectId: name, detail: {} });
   }
+  for (const name of Object.keys(EXPECTED_FUNCTION_BODIES)) if (!present.has(name)) into.findings.push({ invariant: "FUNCTION_UNEXPECTED", userId: null, subjectId: name, detail: { missing: true } });
   for (const name of EXPECTED_DEFINERS) if (!present.has(name)) into.findings.push({ invariant: "FUNCTION_PRIVILEGE_MISMATCH", userId: null, subjectId: name, detail: { securityDefiner: null, expectedSecurityDefiner: true } });
 }
 

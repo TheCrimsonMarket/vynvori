@@ -114,12 +114,16 @@ test("S6: settle and hold entries are written only by ledger-settlement.ts, and 
 test("S8: ledger-invariants.ts is write-free (static): no DML, DDL, lock, advisory lock or command, and every SQL statement starts with SELECT or WITH", () => {
   const code = stripComments(readFileSync(join(root, "packages/db/src/ledger-invariants.ts"), "utf8"));
   assert.doesNotMatch(code, /\b(INSERT|UPDATE|DELETE|TRUNCATE|CREATE|ALTER|DROP|GRANT|REVOKE|COPY|VACUUM|ANALYZE|REINDEX|REFRESH|CALL|DO|LISTEN|NOTIFY|DISCARD|RESET|SET\s+(LOCAL|SESSION|ROLE)|COMMIT)\b(?=\s+[A-Za-z_"'(])(?!\s+(?:of|from)\b)/, "no write verb followed by an operand");
-  assert.doesNotMatch(code, /FOR\s+(UPDATE|SHARE|NO\s+KEY)|pg_advisory|pg_sleep|set_config\('(?:role|session_authorization|session_replication_role|default_transaction_read_only|transaction_read_only)|runLedgerCommand|appendGrantEntry|idempotency_key|workflow_ref\s*(?:=|,)/i);
+  // The duplicate-key re-derivation groups by the idempotency key to COUNT duplicates; that one fragment is allowed and nothing ever selects the key.
+  const withoutCount = code.replace("GROUP BY scope, idempotency_key HAVING count(*) > 1", "");
+  assert.doesNotMatch(withoutCount, /FOR\s+(UPDATE|SHARE|NO\s+KEY)|pg_advisory|pg_sleep|set_config\('(?:role|session_authorization|session_replication_role|default_transaction_read_only|transaction_read_only)|runLedgerCommand|appendGrantEntry|idempotency_key|workflow_ref\s*(?:=|,)/i);
   const direct = [...code.matchAll(/\.query\(\s*"([^"]*)"/g)].map(m => m[1]!.trim());
   for (const statement of direct) assert.match(statement, /^(SELECT |BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY$|ROLLBACK$)/, statement.slice(0, 60));
   const templates = [...code.matchAll(/`([^`]*)`/g)].map(m => m[1]!.trim()).filter(t => /\b(SELECT|INSERT|UPDATE|DELETE|WITH)\b/.test(t));
   assert.ok(templates.length >= 12 && direct.length >= 3, "scanner found the statements");
   for (const statement of templates) assert.match(statement, /^(SELECT|WITH)\b/, statement.slice(0, 60));
+  // Case-insensitive on every SQL statement (direct strings and templates), so lowercase DML or a data-modifying CTE cannot hide.
+  for (const statement of [...direct, ...templates]) assert.doesNotMatch(statement.replace(/'[^']*'/g, "''"), /\b(insert|update|delete|truncate|create|alter|drop|grant|revoke|copy|call|do|commit|lock|merge|vacuum|reindex|refresh|discard|listen|notify)\b/i, statement.slice(0, 60));
   assert.match(code, /BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY/);
   for (const key of Object.keys(ledgerInvariants)) assert.doesNotMatch(key, /repair|fix|release|resolve|settle|hold|grant|write|mutate/i, key);
 });
@@ -267,7 +271,9 @@ test("no source module can register a grant source or write the grant-source reg
   for (const file of readdirSync(src).filter(f => f.endsWith(".ts"))) {
     const text = readFileSync(join(src, file), "utf8");
     assert.doesNotMatch(text, /(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+\S*ledger_grant_sources/i, file);
-    assert.doesNotMatch(text, /session_replication_role|DISABLE\s+TRIGGER|SECURITY\s+DEFINER/i, file);
+    // S8: the read-only checker DETECTS a role/database override of this setting; its single detection pattern is the only permitted mention anywhere in src/.
+    const scanned = file === "ledger-invariants.ts" ? text.replace("'^(session_replication_role|row_security)='", "") : text;
+    assert.doesNotMatch(scanned, /session_replication_role|DISABLE\s+TRIGGER|SECURITY\s+DEFINER/i, file);
   }
   assert.ok(!Object.keys(ledgerCore).some(key => /registerGrantSource|addGrantSource/i.test(key)));
 });
