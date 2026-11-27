@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { compositionHttpHandlers, compositionService, compositionAssetStorage, parseCompositionLimits, resolveApiLimits, resolveGuestCreateLimits, resolveLiveGuestDraftsMax, resolveRatePolicies, resolveUploadLimits } from "@vynvori/commerce/composition";
+import { compositionHttpHandlers, compositionService, compositionAssetStorage, parseCompositionLimits, type CompositionConfig, resolveApiLimits, resolveGuestCreateLimits, resolveLiveGuestDraftsMax, resolveRatePolicies, resolveUploadLimits } from "@vynvori/commerce/composition";
 import { compositionStore } from "@vynvori/db/composition";
 import { getIdentityRuntime } from "./auth-runtime";
 import { identitySettings } from "./identity-settings";
@@ -38,6 +38,20 @@ export function editorCapabilities(env: Env): Readonly<{ artworkUpload: boolean;
   } catch { return Object.freeze({ artworkUpload: false, uploadLimits: null }); }
 }
 
+/**
+ * The service configuration, from the SAME parsed `M3_LIMIT_*` values that configure the HTTP boundary (ADR-0022 D1). Every value is
+ * `undefined` or absent unless it is fully configured and valid; each missing piece closes only the capability that needs it
+ * (`COMPOSITION_LIMITS_NOT_CONFIGURED`). There is no default for any of them.
+ */
+export function serviceConfigFor(env: Env, uploadsEnabled: boolean): CompositionConfig {
+  const parsed = parseCompositionLimits(env), guest = resolveGuestCreateLimits(parsed), uploads = resolveUploadLimits(parsed);
+  return Object.freeze({
+    uploadsEnabled, guestTtlMs: guest ? guest.guestTtlSeconds * 1000 : undefined, imageLimits: uploads?.imageLimits,
+    maxAssetsPerComposition: uploads?.maxAssetsPerComposition, maxBytesPerComposition: uploads?.maxBytesPerComposition,
+    rate: resolveRatePolicies(parsed), liveGuestDraftsMax: resolveLiveGuestDraftsMax(parsed),
+  });
+}
+
 export function createCompositionRuntime(env: Env) {
   const settings = compositionSettings(env);
   const parsed = parseCompositionLimits(env), api = resolveApiLimits(parsed), guest = resolveGuestCreateLimits(parsed), uploads = resolveUploadLimits(parsed);
@@ -48,12 +62,7 @@ export function createCompositionRuntime(env: Env) {
   if (!identity.enabled || !identity.sessions || !identity.pool) throw new Error("Composition requires the identity runtime");
   const sessions = identity.sessions;
   const storage = settings.uploads ? compositionAssetStorage({ ...env, M2_ENV: "staging" } as never) : null;
-  const service = compositionService(compositionStore(identity.pool), storage, {
-    uploadsEnabled: settings.uploads, guestTtlMs: guest ? guest.guestTtlSeconds * 1000 : undefined, imageLimits: uploads?.imageLimits,
-    maxAssetsPerComposition: uploads?.maxAssetsPerComposition, maxBytesPerComposition: uploads?.maxBytesPerComposition,
-    // C4: each rate policy and the live-draft cap are present only when fully configured; an absent one closes just that operation.
-    rate: resolveRatePolicies(parsed), liveGuestDraftsMax: resolveLiveGuestDraftsMax(parsed),
-  });
+  const service = compositionService(compositionStore(identity.pool), storage, serviceConfigFor(env, settings.uploads));
   return compositionHttpHandlers(config, service, {
     async verify(secret) { const session = await sessions.verify(secret); return { userId: session.userId }; },
     claimGuest: (secret, draftId, capability) => sessions.claimGuest(secret, draftId, capability),

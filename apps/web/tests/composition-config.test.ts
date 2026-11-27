@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { LICENSED_FONTS, SYNTHETIC_PREVIEW_PROFILE } from "@vynvori/contracts";
 import { publicConfig } from "@vynvori/shared/public";
-import { compositionSettings, editorCapabilities, uploadLimitsFor } from "../src/server/composition-runtime";
+import { compositionSettings, editorCapabilities, serviceConfigFor, uploadLimitsFor } from "../src/server/composition-runtime";
 
 test("licensed font registry pins the exact bundled Archivo file", () => {
   const bytes = readFileSync(new URL("../src/fonts/archivo.ttf", import.meta.url));
@@ -38,4 +38,17 @@ test("M3_LIMIT_* variables alone never enable uploads or hand the editor any lim
   assert.equal(uploadLimitsFor({ ...SYNTHETIC_LIMIT_ENV, M3_LIMIT_IMAGE_MAX_BYTES: "26214401" }), null, "above the structural ceiling is invalid");
   assert.deepEqual(uploadLimitsFor(SYNTHETIC_LIMIT_ENV), { maxBytes: 13, maxPixels: 14, maxSidePx: 15 });
   assert.equal(publicConfig.features["assets.production_uploads"], false);
+});
+
+test("C4 service configuration: rate policies and the live-guest cap come only from M3_LIMIT_*; nothing is defaulted and each gap closes just its own operation", () => {
+  // SYNTHETIC values, not policy.
+  const SYNTHETIC_ENV: Record<string, string> = { M3_LIMIT_JSON_MAX_BYTES: "11", M3_LIMIT_GUEST_TTL_SECONDS: "12", M3_LIMIT_LIVE_GUEST_DRAFTS_MAX: "13",
+    M3_LIMIT_RATE_GUEST_CREATE_GLOBAL_WINDOW_SECONDS: "14", M3_LIMIT_RATE_GUEST_CREATE_GLOBAL_MAX: "15", M3_LIMIT_RATE_OWNER_WRITE_WINDOW_SECONDS: "16" };
+  const empty = serviceConfigFor({}, false);
+  assert.deepEqual(empty.rate, {}); assert.equal(empty.liveGuestDraftsMax, undefined); assert.equal(empty.guestTtlMs, undefined); assert.equal(empty.imageLimits, undefined);
+  const config = serviceConfigFor(SYNTHETIC_ENV, false);
+  assert.deepEqual(config.rate, { GUEST_CREATE_GLOBAL: { windowSeconds: 14, max: 15 } }, "OWNER_WRITE has only its window, so it stays closed");
+  assert.equal(config.liveGuestDraftsMax, 13); assert.equal(config.guestTtlMs, 12_000); assert.equal(config.uploadsEnabled, false);
+  assert.equal(serviceConfigFor(SYNTHETIC_ENV, true).uploadsEnabled, true);
+  assert.equal(serviceConfigFor({ ...SYNTHETIC_ENV, M3_LIMIT_LIVE_GUEST_DRAFTS_MAX: "0" }, false).liveGuestDraftsMax, undefined, "zero is invalid, not unlimited");
 });
