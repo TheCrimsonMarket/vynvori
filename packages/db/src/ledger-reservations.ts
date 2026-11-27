@@ -115,8 +115,28 @@ async function authorizationOfCommand(db: LedgerQueryable, userId: string, resul
   };
 }
 
-/** Every LedgerDb used here in practice (a Pool, or a test double that also implements query) can run a plain read. */
-const asQueryable = (db: LedgerDb) => db as unknown as LedgerQueryable;
+/**
+ * Runs the read-back after a command committed, on any LedgerDb shape: a pool's own query, else one checked-out connection that
+ * is always released (a `connect`-only pool or an `acquire`-only test double). The command is already durable here, so a failure
+ * of this read is TRANSIENT and never a command failure: retrying with the same idempotency key replays the stored result. A
+ * LedgerError raised by the read itself (NOT_FOUND, DATABASE_ERROR on corruption) passes through unchanged.
+ */
+async function readAfterCommit<T>(db: LedgerDb, read: (q: LedgerQueryable) => Promise<T>): Promise<T> {
+  try {
+    if (typeof (db as Partial<LedgerQueryable>).query === "function") return await read(db as unknown as LedgerQueryable);
+    type Conn = { query: LedgerQueryable["query"]; release?: (destroy?: boolean) => void; on?: (e: "error", l: () => void) => unknown; off?: (e: "error", l: () => void) => unknown };
+    const conn: Conn = typeof (db as { connect?: unknown }).connect === "function" ? await (db as { connect(): Promise<Conn> }).connect() : await (db as { acquire(): Promise<Conn> }).acquire();
+    // As in runLedgerCommand: a checked-out pg client that loses its connection emits 'error'; with a listener it is destroyed, not reused.
+    let broken = false; const onError = () => { broken = true; };
+    conn.on?.("error", onError);
+    try { return await read({ query: (text, values) => conn.query(text, values) }); }
+    catch (error) { if (!(error instanceof LedgerError)) broken = true; throw error; }
+    finally { conn.off?.("error", onError); conn.release?.(broken); }
+  } catch (error) {
+    if (error instanceof LedgerError) throw error;
+    throw new LedgerError("TRANSIENT"); // never surface the driver error
+  }
+}
 const isFinal = (kind: string) => kind === "final_standard" || kind === "final_premium";
 
 /**
@@ -181,7 +201,7 @@ export async function authorizeQuote(db: LedgerDb, input: AuthorizeQuoteInput): 
       allocations: quote.allocations, originalPackageId, preAttemptPackageState,
     });
   });
-  return authorizationOfCommand(asQueryable(db), userId, result);
+  return readAfterCommit(db, q => authorizationOfCommand(q, userId, result));
 }
 
 async function writeAuthorization(tx: LedgerTx, input: {
@@ -241,7 +261,7 @@ export async function releaseReservation(db: LedgerDb, input: ReleaseReservation
        VALUES($1,$2,$3,'release',$4::bigint,-$4::bigint,0,0,0,$5::uuid,'verified_zero_charge_failure',$6,'reservation',$5::uuid::text || ':release')`,
       [randomUUID(), tx.userId, tx.commandId, reservation.hold_units, reservationId, evidence.evidenceRef]);
   });
-  return getReservation(asQueryable(db), userId, reservationId);
+  return readAfterCommit(db, q => getReservation(q, userId, reservationId));
 }
 
 /**
@@ -263,5 +283,5 @@ export async function recordWorkflowRef(db: LedgerDb, input: RecordWorkflowRefIn
     if (reservation.workflow_ref !== null || reservation.state !== "reserved") throw new LedgerBusinessRejection("INVALID_TRANSITION");
     await tx.query(`UPDATE ${S}.credit_reservations SET workflow_ref = $1 WHERE reservation_id = $2 AND user_id = $3 AND workflow_ref IS NULL`, [workflowRef, reservationId, tx.userId]);
   });
-  return getReservation(asQueryable(db), userId, reservationId);
+  return readAfterCommit(db, q => getReservation(q, userId, reservationId));
 }

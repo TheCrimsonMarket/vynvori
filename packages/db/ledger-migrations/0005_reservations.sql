@@ -317,6 +317,8 @@ BEGIN
   IF pg_catalog.pg_xact_status(full8::text::xid8) IS DISTINCT FROM 'in progress' THEN
     RAISE EXCEPTION 'a reservation entry must reference a command written in the same transaction' USING ERRCODE = 'integrity_constraint_violation';
   END IF;
+  -- Lock order is always wallet -> reservation, as in every TypeScript command (A4), so raw-SQL writers cannot deadlock with them.
+  PERFORM 1 FROM vynvori_ledger.wallets w WHERE w.user_id = NEW.user_id FOR UPDATE;
   SELECT cr.state, cr.hold_units, cr.authorization_id, cr.workflow_ref INTO r FROM vynvori_ledger.credit_reservations cr
     WHERE cr.reservation_id = NEW.reservation_id AND cr.user_id = NEW.user_id FOR UPDATE;
   IF NOT FOUND THEN

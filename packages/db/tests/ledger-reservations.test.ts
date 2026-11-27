@@ -275,6 +275,23 @@ test("ledger reservations: authorize, reserve, dispatch and release in disposabl
       assert.equal(await count("ledger_authorizations", user), 1); assert.deepEqual(await buckets(user), { a: 0, r: SYNTHETIC_BUNDLE_HOLD, h: 0 });
     });
 
+    await t.test("an acquire-only LedgerDb (no query method) gets the committed result back, and every checked-out connection is released", async () => {
+      const user = await syntheticProfileWithWallet(client);
+      await fund(user, SYNTHETIC_BUNDLE_HOLD);
+      const quoteVersionId = await issueTestQuote(pool, user, "bundle", qid("acq-only"));
+      let open = 0;
+      const base = faulty(async () => undefined) as { acquire(): Promise<LedgerConn> };
+      const db: LedgerDb = { acquire: async () => { const conn = await base.acquire(); open += 1; return { query: conn.query, release: destroy => { open -= 1; conn.release?.(destroy); } }; } };
+      const authorized = await authorizeQuote(db, { userId: user, quoteVersionId, idempotencyKey: key("acq-only"), consent: consent(), now: new Date(), pricePolicy: currentPricePolicy, eligibility: eligibilityPort() });
+      assert.equal(authorized.replayed, false); assert.equal(authorized.reservations.length, 3);
+      const target = authorized.reservations[0]!;
+      const dispatched = await recordWorkflowRef(db, { userId: user, component: "workflow", reservationId: target.reservationId, workflowRef: "wf:acq-only", idempotencyKey: key("acq-only-wf") });
+      assert.equal(dispatched.workflowRef, "wf:acq-only");
+      const released = await releaseReservation(db, { userId: user, component: "workflow", reservationId: target.reservationId, evidence: releaseEvidence(target.operationId), idempotencyKey: key("acq-only-rel") });
+      assert.equal(released.state, "released");
+      assert.equal(open, 0, "no connection is leaked by the read-back");
+    });
+
     // ---- the 0005 backstop, exercised with raw SQL as the fixture superuser (each probe inside a rolled-back transaction) ----
     const rawCommand = async (user: string, kind: string) => {
       const id = randomUUID();

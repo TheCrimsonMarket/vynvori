@@ -18,11 +18,11 @@ test("ledger plan loads, pins the reviewed SQL and lists 0001 (schema only), 000
 });
 
 // Golden digests: ANY change to plan.json or the pinned SQL forces a visible edit here (the planSha256 argument alone is circular).
-const GOLDEN_PLAN_JSON_SHA256 = "f1a20c738287b6bfd49e348893f57997d6eb284ccd2571dfa7c3b9ef7d87e76b";
+const GOLDEN_PLAN_JSON_SHA256 = "4e7612041dc08c168ba79b7a14493330ab1c6e691ae1cbc8ee5949433bfc69f2";
 const GOLDEN_0001_SQL_SHA256 = "a8273f3fac59de2d0c2f1a661a852d22b9a360c9d9c83e672bd7f0d25d74ef4e";
 const GOLDEN_0002_SQL_SHA256 = "28a6d0e3727bf8c8cd20d98586d2f2564cb57df31412cd655c150e720ea2ea82";
 const GOLDEN_0003_SQL_SHA256 = "f32217a8a099728e5956a2166cf6ecc163cb2ea12af4511879fd0e282ba46159";
-const GOLDEN_0005_SQL_SHA256 = "a68a346f8534f46a1b98ae90cb0ad62c8e843c575761f2bf774ddd815cd89651";
+const GOLDEN_0005_SQL_SHA256 = "07948d4f934cdee709da3b7cded3d36919185075991594f6f3e112f2eb8e1ddf";
 const sha = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
 test("golden digests pin plan.json, 0001, 0002, 0003 and 0005 independently of the loader", () => {
   assert.equal(sha(join(planDir, "plan.json")), GOLDEN_PLAN_JSON_SHA256);
