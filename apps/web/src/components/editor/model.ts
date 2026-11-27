@@ -96,7 +96,10 @@ export function parseMm(raw: string): number | null {
   const value = Number(text);
   return Number.isFinite(value) ? value : null;
 }
-export const keyStep = (event: { shiftKey: boolean; altKey: boolean }) => (event.shiftKey ? 10 : event.altKey ? 0.1 : 1);
+/** Keyboard nudge distances in mm. One source for the behaviour and for the help text screen-reader users hear. */
+export const KEY_STEP_MM = { fine: 0.1, normal: 1, coarse: 10 } as const;
+export const KEY_HELP = `Arrow keys move the focused layer ${KEY_STEP_MM.normal} mm. Shift with an arrow key moves ${KEY_STEP_MM.coarse} mm, Alt moves ${KEY_STEP_MM.fine} mm. Delete removes the layer.`;
+export const keyStep = (event: { shiftKey: boolean; altKey: boolean }) => (event.shiftKey ? KEY_STEP_MM.coarse : event.altKey ? KEY_STEP_MM.fine : KEY_STEP_MM.normal);
 export const isOutside = (zoneId: string, layer: EditorLayerV1) => {
   const zone = zoneOf(zoneId), bounds = rotatedBounds(layer);
   return bounds.minX < 0 || bounds.minY < 0 || bounds.maxX > zone.widthMm || bounds.maxY > zone.heightMm;
@@ -133,3 +136,29 @@ export function describeExpiry(expiresAt: string | null | undefined, locale?: st
   if (!date || Number.isNaN(date.getTime())) return "until it expires";
   return `until ${new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", ...(timeZone ? { timeZone } : {}) }).format(date)}`;
 }
+
+// --- accessibility helpers (pure; the announcements and names the editor exposes to assistive technology)
+/** The list label of a layer. Image names are the uploaded file name (never a path or an id). */
+export const layerTitle = (layer: EditorLayerV1, imageName?: string) => layer.kind === "text" ? `Text · ${layer.text.slice(0, 24)}` : `Image · ${imageName ?? "missing"}`;
+/** 1-based position counted from the top of the stack (the order of the Layers list), or null if the layer is not in the zone. */
+export function stackPosition(scene: CompositionSceneV1, zoneId: string, layerId: string): number | null {
+  const ordered = layersOf(scene, zoneId), index = ordered.findIndex(layer => layer.layerId === layerId);
+  return index < 0 ? null : ordered.length - index;
+}
+/** Per-layer action names stay unique because they carry the stack position: "Move up: Text · A, layer 2 of 3". */
+export const layerActionName = (action: string, title: string, position: number, total: number) => `${action}: ${title}, layer ${position} of ${total}`;
+/** The layer that should receive focus once `layerId` is deleted: the one below it in the list, else the one above, else null. */
+export function neighbourAfterDelete(scene: CompositionSceneV1, zoneId: string, layerId: string): string | null {
+  const ordered = layersOf(scene, zoneId), index = ordered.findIndex(layer => layer.layerId === layerId);
+  if (index < 0) return null;
+  return (ordered[index - 1] ?? ordered[index + 1])?.layerId ?? null;
+}
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+export const describeLayerCount = (n: number) => n === 0 ? "No layers" : plural(n, "layer");
+/** One short sentence instead of re-reading the whole issue list. `info` entries (the always-present preview-only note) are not counted. */
+export function summarizeIssues(issues: readonly { severity: string }[]): string {
+  const problems = issues.filter(issue => issue.severity === "hard_error").length, warnings = issues.filter(issue => issue.severity === "warning").length;
+  if (problems + warnings === 0) return "Preview checks: no problems or warnings.";
+  return `Preview checks: ${[problems ? plural(problems, "problem") : "", warnings ? plural(warnings, "warning") : ""].filter(Boolean).join(" and ")}.`;
+}
+export const describeMove = (xMm: number, yMm: number) => `Moved to x ${xMm} mm, y ${yMm} mm.`;

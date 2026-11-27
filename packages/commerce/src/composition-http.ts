@@ -20,6 +20,7 @@ const statuses: Record<CompositionError["code"], [number, string, boolean]> = {
   ILLEGAL_TRANSITION: [409, "That change is not allowed in the current state.", false],
   STORAGE_UNAVAILABLE: [503, "Storage is temporarily unavailable.", true],
   LIMITS_NOT_CONFIGURED: [503, "This feature is not configured yet.", false],
+  ASSET_NOT_CLEAN: [409, "Artwork in this design has not passed its safety check yet.", false],
 };
 class HttpError extends Error { constructor(readonly status: number, readonly code: "INVALID_REQUEST" | "FORBIDDEN" | "AUTH_REQUIRED" | "DISABLED" | "UNAVAILABLE") { super(code); } }
 
