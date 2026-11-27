@@ -7,6 +7,7 @@ import { featureDefaults } from "@vynvori/shared/public";
 import * as ledgerCore from "../src/ledger-core";
 import * as ledgerMigrations from "../src/ledger-migrations";
 import * as ledgerQuotes from "../src/ledger-quotes";
+import * as ledgerPromo from "../src/ledger-promo";
 import { issueQuote, renewQuote } from "../src/ledger-quotes";
 import { dropLedger, freshLedger, ledgerTarget, registerSyntheticGrantSource, syntheticProfileWithWallet, grantSyntheticCredits } from "./ledger-fixture";
 
@@ -21,7 +22,7 @@ function walk(dir: string, out: string[] = []): string[] {
   }
   return out;
 }
-const ledgerSources = new Set(["packages/db/src/ledger-core.ts", "packages/db/src/ledger-migrations.ts", "packages/db/src/ledger-quotes.ts"]);
+const ledgerSources = new Set(["packages/db/src/ledger-core.ts", "packages/db/src/ledger-migrations.ts", "packages/db/src/ledger-quotes.ts", "packages/db/src/ledger-promo.ts"]);
 const files = ["apps", "packages", "services", "scripts"].flatMap(dir => { try { return walk(join(root, dir)); } catch { return []; } });
 
 test("no app or non-test module imports the ledger (D13)", () => {
@@ -36,7 +37,7 @@ test("no app or non-test module imports the ledger (D13)", () => {
 });
 
 test("packages/db/src exports no numeric constants and nothing that mints or registers credits", () => {
-  for (const [name, module] of Object.entries({ ledgerCore, ledgerMigrations, ledgerQuotes })) {
+  for (const [name, module] of Object.entries({ ledgerCore, ledgerMigrations, ledgerQuotes, ledgerPromo })) {
     for (const [key, value] of Object.entries(module)) {
       assert.ok(typeof value !== "number" && typeof value !== "bigint", `${name}.${key} must not be a numeric constant`);
       assert.doesNotMatch(key, /mint|synthetic|testing|register.*source|price|rate|package/i, `${name}.${key}`);
@@ -59,8 +60,12 @@ test("ledger-quotes exposes exactly the reviewed API (S3; a new export must be a
 });
 
 // ADR-0021 S3 addendum A4: BINDING for every future step. All command kinds implemented anywhere under packages/db/src.
-const KNOWN_LEDGER_COMMAND_KINDS = ["grant_credits", "quote_issue", "quote_renew"];
+const KNOWN_LEDGER_COMMAND_KINDS = ["grant_credits", "quote_issue", "quote_renew", "promo_claim", "promo_outcome"];
 const dbSrcFiles = () => readdirSync(join(root, "packages/db/src")).filter(f => f.endsWith(".ts"));
+
+test("ledger-promo exposes exactly the reviewed API (S4; a new export must be added here deliberately)", () => {
+  assert.deepEqual(Object.keys(ledgerPromo).sort(), ["claimPromo", "getPromoClaim", "markPromoOutcome"]);
+});
 
 test("A4(2): every commandKind literal under packages/db/src is a registered command kind (S5/S6 must register theirs here)", () => {
   const found = new Set<string>();
