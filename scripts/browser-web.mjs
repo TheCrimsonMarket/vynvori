@@ -170,7 +170,7 @@ try {
       assert.equal(await page.locator(".button").first().evaluate(el=>getComputedStyle(el).transitionDuration),"0s");
     }
   });
-  await runEditorScenarios({ page, base, check, output, result });
+  await runEditorScenarios({ page, base, check, output, result, axe });
   await check("Missing route and unknown product return real 404 states", async () => {
     for (const route of ["/not-a-page","/products/not-a-product"]) {
       const response = await fetch(base+route); assert.equal(response.status,404);

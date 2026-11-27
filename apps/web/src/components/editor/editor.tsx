@@ -1,12 +1,13 @@
 "use client";
 import "./zod-jitless";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { CompositionSceneV1Schema, EMPTY_SYNTHETIC_SCENE, LICENSED_FONTS, runPreviewPreflight, type CompositionSceneV1, type EditorLayerV1, type AssetFacts } from "@vynvori/contracts";
 import { Button } from "@/components/ui/button";
 import {
-  PT_TO_MM, addImageLayer, addTextLayer, commit, deleteLayer, duplicateLayer, font, isOutside, keyStep, layersOf, moveInStack, nudge, parseMm, profile,
-  redo, resizeKeepingAspect, sceneKey, startHistory, undo, updateLayer, zoneOf, checkUploadDimensions, checkUploadFileSize, describeExpiry, type EditorAsset, type LayerPatch, type UploadLimits,
+  KEY_HELP, PT_TO_MM, addImageLayer, addTextLayer, commit, deleteLayer, describeLayerCount, describeMove, duplicateLayer, font, isOutside, keyStep, layerActionName, layerTitle, layersOf, moveInStack,
+  neighbourAfterDelete, nudge, parseMm, profile, redo, resizeKeepingAspect, sceneKey, stackPosition, startHistory, summarizeIssues, undo, updateLayer, zoneOf,
+  checkUploadDimensions, checkUploadFileSize, describeExpiry, type EditorAsset, type LayerPatch, type UploadLimits,
 } from "./model";
 
 type ServerState = { compositionId: string | null; revision: number; owner: "guest" | "owner" | null; autosave: "idle" | "pending" | "conflict" | "failed" | "unavailable"; lastSavedKey: string | null; expiresAt: string | null; versions: VersionView[]; currentVersionId: string | null };
@@ -37,6 +38,30 @@ async function api(path: string, method: string, body?: unknown, raw?: { bytes: 
   return { ok: response.ok, status: response.status, data };
 }
 
+// Engineering constants (not policy limits): how long to wait for a burst of changes to settle before speaking.
+const ANNOUNCE_DEBOUNCE_MS = 400, ISSUE_SUMMARY_DEBOUNCE_MS = 600;
+type FocusTarget = { kind: "tab"; zoneId: string } | { kind: "layer"; layerId: string | null } | { kind: "row"; layerId: string | null } | { kind: "action"; layerId: string; action: "up" | "down" };
+function useDebounced<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => { const timer = setTimeout(() => setSettled(value), ms); return () => clearTimeout(timer); }, [value, ms]);
+  return settled;
+}
+/** Numeric field with a local draft: it commits on blur or Enter, keeps focus on Enter, and reports problems inline next to the field. */
+function NumericField({ label, unit, value, error, onApply, onInvalid, onEdit }: Readonly<{ label: string; unit: string; value: number; error: string | null; onApply: (n: number) => void; onInvalid: (text: string) => void; onEdit: () => void }>) {
+  const [draft, setDraft] = useState<string | null>(null), errorId = useId();
+  const commitDraft = () => {
+    if (draft === null) return; setDraft(null);
+    const n = parseMm(draft);
+    if (n === null) onInvalid(`${label}: enter a number.`); else if (n !== value) onApply(n); else onEdit();
+  };
+  return (
+    <div className="ed-fieldrow">
+      <label className="ed-field"><span>{label}</span><span className="ed-num"><input inputMode="decimal" value={draft ?? String(value)} aria-label={`${label} (${unit})`} aria-invalid={error ? true : undefined} aria-describedby={error ? errorId : undefined}
+        onChange={e => { setDraft(e.currentTarget.value); if (error) onEdit(); }} onBlur={commitDraft} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); commitDraft(); } }} /><small>{unit}</small></span></label>
+      {error && <p className="ed-field-error" id={errorId} role="alert">{error}</p>}
+    </div>);
+}
+
 export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }: Readonly<{ compositionId?: string; artworkUpload: boolean; uploadLimits: UploadLimits | null }>) {
   const canUpload = artworkUpload && uploadLimits !== null;
   const [history, setHistory] = useState(() => startHistory(EMPTY_SYNTHETIC_SCENE()));
@@ -50,7 +75,48 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
   const key = useMemo(() => sceneKey(scene), [scene]), dirty = key !== server.lastSavedKey;
 
   const edit = useCallback((next: CompositionSceneV1) => setHistory(h => commit(h, next)), []);
-  const notify = (text: string) => setMessage(text);
+  const notify = (text: string) => setMessage(previous => (previous.replace(/\u00A0$/, "") === text && !previous.endsWith("\u00A0") ? `${text}\u00A0` : text)); // a repeated outcome still changes the text node, so it is announced again
+
+  // --- assistive-technology feedback: one polite announcer for editor actions (separate from the visible status line),
+  // an inline error per numeric field, and an explicit focus target after any change that removes the focused element.
+  const [announcement, setAnnouncement] = useState(""), [fieldError, setFieldError] = useState<{ layerId: string; label: string; text: string } | null>(null);
+  const announceTimer = useRef<ReturnType<typeof setTimeout> | null>(null), rootRef = useRef<HTMLElement | null>(null), pendingFocus = useRef<FocusTarget | null>(null);
+  const speak = (text: string) => setAnnouncement(previous => (previous.replace(/ $/, "") === text && !previous.endsWith(" ") ? `${text} ` : text)); // a repeated sentence still changes the text node
+  const announce = (text: string) => { if (announceTimer.current) clearTimeout(announceTimer.current); announceTimer.current = null; speak(text); };
+  const announceSoon = (text: string) => { if (announceTimer.current) clearTimeout(announceTimer.current); announceTimer.current = setTimeout(() => { announceTimer.current = null; speak(text); }, ANNOUNCE_DEBOUNCE_MS); };
+  useEffect(() => () => { if (announceTimer.current) clearTimeout(announceTimer.current); }, []);
+  useEffect(() => { // runs after every commit; acts only when an action asked for focus to move
+    const target = pendingFocus.current; if (!target) return; pendingFocus.current = null;
+    const root = rootRef.current; if (!root) return;
+    const find = (selector: string) => root.querySelector<HTMLElement | SVGElement>(selector);
+    const element = target.kind === "tab" ? find(`#ed-tab-${target.zoneId}`)
+      : target.kind === "action" ? find(`[data-row-id="${target.layerId}"] [data-action="${target.action}"]`)
+      : target.layerId === null ? null : (target.kind === "layer" ? find(`[data-layer-id="${target.layerId}"]`) : null) ?? find(`[data-row-id="${target.layerId}"] .ed-layer-name`);
+    (element ?? find("#ed-add-text"))?.focus();
+  });
+  function switchZone(nextZoneId: string, moveFocus: boolean) {
+    setZoneId(nextZoneId); setSelected(null); if (moveFocus) pendingFocus.current = { kind: "tab", zoneId: nextZoneId };
+    announce(`${nextZoneId === "front" ? "Front" : nextZoneId === "back" ? "Back" : nextZoneId} side. ${describeLayerCount(layersOf(scene, nextZoneId).length)}.`);
+  }
+  function onTabKeyDown(event: React.KeyboardEvent, index: number) {
+    const zones = profile.zones, last = zones.length - 1;
+    const target = event.key === "ArrowRight" ? (index === last ? 0 : index + 1) : event.key === "ArrowLeft" ? (index === 0 ? last : index - 1) : event.key === "Home" ? 0 : event.key === "End" ? last : null;
+    if (target === null) return; event.preventDefault(); switchZone(zones[target]!.zoneId, true);
+  }
+  function removeLayer(layerId: string, from: "canvas" | "list") { // focus never falls to <body>: it moves to the neighbour, or to "Add text"
+    const layer = layers.find(candidate => candidate.layerId === layerId); if (!layer) return;
+    const title = layerTitle(layer, layer.kind === "image" ? assets.get(layer.sourceAssetId)?.name : undefined);
+    const neighbour = neighbourAfterDelete(scene, zoneId, layerId), remaining = layers.length - 1;
+    pendingFocus.current = { kind: from === "canvas" ? "layer" : "row", layerId: neighbour };
+    edit(deleteLayer(scene, zoneId, layerId)); setSelected(null);
+    announce(`Deleted ${title}. ${remaining === 0 ? "No layers left." : `${describeLayerCount(remaining)} left.`}`);
+  }
+  function reorder(layerId: string, direction: "up" | "down") {
+    const before = stackPosition(scene, zoneId, layerId), next = moveInStack(scene, zoneId, layerId, direction), after = stackPosition(next, zoneId, layerId);
+    pendingFocus.current = { kind: "action", layerId, action: direction };
+    if (before === null || after === null || before === after) { announce(direction === "up" ? "Already the top layer." : "Already the bottom layer."); return; }
+    edit(next); announce(`Moved ${direction}. Now layer ${after} of ${layers.length}.`);
+  }
 
   // --- hydrate: owned route, or resume the last guest draft of this tab (the id is not a secret; the capability is an HttpOnly cookie)
   // biome-ignore lint/correctness/useExhaustiveDependencies: hydrate runs once per route id; notify only sets a message
@@ -120,8 +186,10 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
   }
   function onKeyDown(event: React.KeyboardEvent, layer: EditorLayerV1) {
     const step = keyStep(event), moves: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
-    if (moves[event.key]) { event.preventDefault(); const [dx, dy] = moves[event.key]!; edit(nudge(scene, zoneId, layer.layerId, dx, dy)); }
-    else if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); edit(deleteLayer(scene, zoneId, layer.layerId)); setSelected(null); }
+    if (moves[event.key]) {
+      event.preventDefault(); const [dx, dy] = moves[event.key]!, next = nudge(scene, zoneId, layer.layerId, dx, dy); edit(next);
+      const moved = layersOf(next, zoneId).find(candidate => candidate.layerId === layer.layerId); if (moved) announceSoon(describeMove(moved.xMm, moved.yMm)); // one sentence per burst of key presses
+    } else if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); removeLayer(layer.layerId, "canvas"); }
   }
 
   // --- server persistence (all optional; the editor is fully usable without it)
@@ -163,7 +231,7 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
     try {
       if (dirty && !(await saveDraft())) return;
       const id = server.compositionId ?? (await ensureComposition())?.id; if (!id) return;
-      const state = await api(`/api/v1/compositions/${id}`, "GET"); if (!state.ok) return;
+      const state = await api(`/api/v1/compositions/${id}`, "GET"); if (!state.ok) { notify("Could not freeze this version."); return; }
       const response = await api(`/api/v1/compositions/${id}/versions`, "POST", { expectedRevision: state.data.draft.draftRevision });
       if (!response.ok) { notify("Could not freeze this version."); return; }
       const refreshed = await api(`/api/v1/compositions/${id}`, "GET");
@@ -176,7 +244,7 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
     try {
       const response = await api(`/api/v1/compositions/${server.compositionId}/restore`, "POST", { expectedRevision: server.revision, versionId });
       if (!response.ok) { notify(response.status === 409 ? "This draft changed elsewhere. Reload first." : "Could not restore that version."); return; }
-      const parsed = CompositionSceneV1Schema.safeParse(response.data.scene); if (!parsed.success) return;
+      const parsed = CompositionSceneV1Schema.safeParse(response.data.scene); if (!parsed.success) { notify("Could not restore that version."); return; }
       setHistory(h => commit(h, parsed.data)); setServer(s => ({ ...s, revision: response.data.draft.draftRevision, lastSavedKey: sceneKey(parsed.data) })); setSelected(null);
       notify("Version restored into your draft. The frozen version is unchanged.");
     } finally { setBusy(false); }
@@ -195,22 +263,34 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
   const preflight = useMemo(() => runPreviewPreflight(scene, profile, facts, new Map(LICENSED_FONTS.map(f => [f.fontAssetId, f]))), [scene, facts]);
   const issues = preflight.issues.filter(issue => issue.zoneId === undefined || issue.zoneId === zoneId);
 
-  const numeric = (label: string, value: number, apply: (n: number) => void, unit = "mm") => (
-    <label className="ed-field"><span>{label}</span><span className="ed-num"><input key={`${current?.layerId}-${label}-${value}`} inputMode="decimal" defaultValue={String(value)} aria-label={`${label} (${unit})`}
-      onBlur={e => { const n = parseMm(e.currentTarget.value); if (n === null) { e.currentTarget.value = String(value); notify(`${label}: enter a number.`); } else apply(n); }}
-      onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }} /><small>{unit}</small></span></label>);
+  const issueSummary = useDebounced(summarizeIssues(issues), ISSUE_SUMMARY_DEBOUNCE_MS);
+  const layerName = (layer: EditorLayerV1) => layerTitle(layer, layer.kind === "image" ? assets.get(layer.sourceAssetId)?.name : undefined);
+  /** Applies a validated number, skips a no-op (no empty undo step), and says what changed, including side effects such as the locked aspect ratio. */
+  function applyNumber(layer: EditorLayerV1, label: string, unit: string, apply: (n: number) => CompositionSceneV1) {
+    return (n: number) => {
+      setFieldError(null); const next = apply(n); if (sceneKey(next) === sceneKey(scene)) return; edit(next);
+      const changed = layersOf(next, zoneId).find(candidate => candidate.layerId === layer.layerId);
+      announce(changed ? `${label} set to ${n} ${unit}. Now x ${changed.xMm}, y ${changed.yMm}, width ${changed.widthMm}, height ${changed.heightMm} mm, rotation ${changed.rotationDeg}°.` : `${label} set to ${n} ${unit}.`);
+    };
+  }
+  const numeric = (layer: EditorLayerV1, label: string, value: number, apply: (n: number) => CompositionSceneV1, unit = "mm") => (
+    <NumericField key={`${layer.layerId}-${label}`} label={label} unit={unit} value={value} error={fieldError && fieldError.layerId === layer.layerId && fieldError.label === label ? fieldError.text : null}
+      onApply={applyNumber(layer, label, unit, apply)} onInvalid={text => setFieldError({ layerId: layer.layerId, label, text })} onEdit={() => setFieldError(null)} />);
 
   return (
-    <section className="atelier ed" aria-label="Garment composition editor">
+    <section ref={rootRef} className="atelier ed" aria-label="Garment composition editor">
       <p className="eyebrow">THE INDEPENDENT EDITOR / YOUR ORIGINAL ART</p>
       <h1>{initialId ? "YOUR COMPOSITION." : "YOUR ART. YOUR CANVAS."}</h1>
       <p className="notice" role="note">PREVIEW ONLY. This editor uses a synthetic coordinate frame ({zone.widthMm} × {zone.heightMm} mm), not a manufacturer print area. Nothing here is approved for printing, priced, or ordered. No AI credits required. No account is needed to edit.</p>
       <p className="ed-status" role="status" aria-live="polite">{message || (server.owner === "guest" ? `Guest draft — kept ${describeExpiry(server.expiresAt)} unless you sign in.` : "")}</p>
+      <div className="ed-sr-only" id="ed-announce" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
       <div className="ed-grid">
         <div className="ed-stage">
           <div className="ed-tabs" role="tablist" aria-label="Garment side">
-            {profile.zones.map(z => <button key={z.zoneId} role="tab" aria-selected={z.zoneId === zoneId} className="ed-tab" onClick={() => { setZoneId(z.zoneId); setSelected(null); }}>{z.zoneId.toUpperCase()}</button>)}
+            {profile.zones.map((z, index) => <button key={z.zoneId} id={`ed-tab-${z.zoneId}`} role="tab" aria-selected={z.zoneId === zoneId} aria-controls="ed-tabpanel" tabIndex={z.zoneId === zoneId ? 0 : -1} className="ed-tab"
+              onClick={() => switchZone(z.zoneId, false)} onKeyDown={event => onTabKeyDown(event, index)}>{z.zoneId.toUpperCase()}</button>)}
           </div>
+          <div id="ed-tabpanel" role="tabpanel" aria-labelledby={`ed-tab-${zoneId}`}>
           <svg ref={svgRef} className="ed-canvas" viewBox={`${-8} ${-8} ${zone.widthMm + 16} ${zone.heightMm + 16}`} role="group" aria-label={`${zoneId} print zone, ${zone.widthMm} by ${zone.heightMm} millimetres, synthetic preview frame`} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
             <rect x={-8} y={-8} width={zone.widthMm + 16} height={zone.heightMm + 16} fill="#0b0b0a" />
             <rect x={0} y={0} width={zone.widthMm} height={zone.heightMm} fill="#161614" stroke="#939187" strokeWidth={0.4} />
@@ -219,8 +299,8 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
               {layers.filter(l => l.visible).map(layer => {
                 const asset = layer.kind === "image" ? assets.get(layer.sourceAssetId) : null, cx = layer.xMm + layer.widthMm / 2, cy = layer.yMm + layer.heightMm / 2, on = layer.layerId === selected;
                 return (
-                  <g key={layer.layerId} transform={`rotate(${layer.rotationDeg} ${cx} ${cy})`} tabIndex={0} role="button" aria-pressed={on} style={{ cursor: "move", touchAction: "none" }}
-                    aria-label={`${layer.kind === "text" ? `Text layer: ${layer.text}` : "Image layer"}, x ${layer.xMm} y ${layer.yMm} millimetres. Arrow keys move 1 mm; Shift 10 mm; Alt 0.1 mm.`}
+                  <g key={layer.layerId} data-layer-id={layer.layerId} transform={`rotate(${layer.rotationDeg} ${cx} ${cy})`} tabIndex={0} role="button" aria-pressed={on} style={{ cursor: "move", touchAction: "none" }}
+                    aria-describedby="ed-key-help" aria-label={`${layer.kind === "text" ? `Text layer: ${layer.text}` : `Image layer: ${asset?.name ?? "missing"}`}, x ${layer.xMm} y ${layer.yMm} millimetres`}
                     onPointerDown={e => onPointerDown(e, layer)} onFocus={() => setSelected(layer.layerId)} onKeyDown={e => onKeyDown(e, layer)}>
                     {layer.kind === "image"
                       ? (asset ? <image href={asset.url} x={layer.xMm} y={layer.yMm} width={layer.widthMm} height={layer.heightMm} preserveAspectRatio="none" /> : <rect x={layer.xMm} y={layer.yMm} width={layer.widthMm} height={layer.heightMm} fill="#49483f" />)
@@ -230,52 +310,63 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
               })}
             </svg>
           </svg>
+          <p className="muted ed-caption" id="ed-key-help">{KEY_HELP}</p>
           <p className="muted ed-caption">SYNTHETIC PREVIEW FRAME — coordinates in millimetres, origin top-left. Text shown here is an approximation until the deterministic print renderer exists.</p>
+          </div>
         </div>
         <div className="ed-panel">
           <div className="ed-row">
             {canUpload
               ? <label className="button button-primary ed-file"><input type="file" accept={ACCEPT} multiple disabled={busy} onChange={e => { void addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} /><span>Upload artwork</span></label>
               : <Button disabled aria-describedby="ed-upload-off">Upload artwork — unavailable</Button>}
-            <Button variant="outline" onClick={() => { const r = addTextLayer(scene, zoneId); edit(r.scene); setSelected(r.layerId); }}>Add text</Button>
+            <Button variant="outline" id="ed-add-text" onClick={() => { const r = addTextLayer(scene, zoneId); edit(r.scene); setSelected(r.layerId); announce(`Text layer added and selected. ${describeLayerCount(layers.length + 1)} on the ${zoneId} side.`); }}>Add text</Button>
           </div>
           <div className="ed-row">
-            <Button variant="outline" disabled={!history.past.length} onClick={() => setHistory(undo)}>Undo</Button>
-            <Button variant="outline" disabled={!history.future.length} onClick={() => setHistory(redo)}>Redo</Button>
+            {/* aria-disabled, not disabled: pressing Undo on the last step must not drop keyboard focus to <body> */}
+            <Button variant="outline" aria-disabled={!history.past.length} onClick={() => { if (!history.past.length) return; setHistory(undo); announce(history.past.length === 1 ? "Undone. Nothing more to undo." : "Undone."); }}>Undo</Button>
+            <Button variant="outline" aria-disabled={!history.future.length} onClick={() => { if (!history.future.length) return; setHistory(redo); announce(history.future.length === 1 ? "Redone. Nothing more to redo." : "Redone."); }}>Redo</Button>
           </div>
           <h2 className="ed-h">Layers — {zoneId}</h2>
           {layers.length === 0 ? <p className="muted">No layers yet. Upload a PNG, JPEG or WebP, or add text.</p> : (
             <ol className="ed-layers" aria-label="Layers, top first">
-              {[...layers].reverse().map(layer => (
-                <li key={layer.layerId} className={layer.layerId === selected ? "is-selected" : undefined}>
-                  <button className="ed-layer-name" aria-pressed={layer.layerId === selected} onClick={() => setSelected(layer.layerId)}>{layer.kind === "text" ? `Text · ${layer.text.slice(0, 24)}` : `Image · ${assets.get(layer.sourceAssetId)?.name ?? "missing"}`}{isOutside(zoneId, layer) ? " ⚠" : ""}</button>
-                  <span className="ed-icons">
-                    <button aria-label="Move up" onClick={() => edit(moveInStack(scene, zoneId, layer.layerId, "up"))}>↑</button>
-                    <button aria-label="Move down" onClick={() => edit(moveInStack(scene, zoneId, layer.layerId, "down"))}>↓</button>
-                    <button aria-label={layer.visible ? "Hide layer" : "Show layer"} aria-pressed={!layer.visible} onClick={() => patch(layer, { visible: !layer.visible })}>{layer.visible ? "Hide" : "Show"}</button>
-                  </span>
-                </li>))}
+              {[...layers].reverse().map((layer, index, top) => { // index 0 is the top of the stack; every action name carries the position so no two are alike
+                const title = layerName(layer), name = (action: string) => layerActionName(action, title, index + 1, top.length), outside = isOutside(zoneId, layer);
+                return (
+                  <li key={layer.layerId} data-row-id={layer.layerId} className={layer.layerId === selected ? "is-selected" : undefined}>
+                    <button className="ed-layer-name" aria-pressed={layer.layerId === selected} aria-label={outside ? `${title}, layer ${index + 1} of ${top.length}, extends outside the zone` : `${title}, layer ${index + 1} of ${top.length}`} onClick={() => setSelected(layer.layerId)}>{title}{outside ? " ⚠" : ""}</button>
+                    <span className="ed-icons">
+                      <button data-action="up" aria-label={name("Move up")} aria-disabled={index === 0} onClick={() => reorder(layer.layerId, "up")}>↑</button>
+                      <button data-action="down" aria-label={name("Move down")} aria-disabled={index === top.length - 1} onClick={() => reorder(layer.layerId, "down")}>↓</button>
+                      <button data-action="visibility" aria-label={name(layer.visible ? "Hide layer" : "Show layer")} onClick={() => { patch(layer, { visible: !layer.visible }); announce(`${title} ${layer.visible ? "hidden" : "shown"}.`); }}>{layer.visible ? "Hide" : "Show"}</button>
+                    </span>
+                  </li>);
+              })}
             </ol>)}
           {current && (
             <fieldset className="ed-props"><legend>Selected layer</legend>
-              {numeric("X", current.xMm, n => patch(current, { xMm: n }))}{numeric("Y", current.yMm, n => patch(current, { yMm: n }))}
-              {numeric("Width", current.widthMm, n => (current.kind === "image" && aspectLock ? edit(resizeKeepingAspect(scene, zoneId, current.layerId, "widthMm", n)) : patch(current, { widthMm: n })))}
-              {numeric("Height", current.heightMm, n => (current.kind === "image" && aspectLock ? edit(resizeKeepingAspect(scene, zoneId, current.layerId, "heightMm", n)) : patch(current, { heightMm: n })))}
-              {numeric("Rotation", current.rotationDeg, n => patch(current, { rotationDeg: n }), "°")}
+              {numeric(current, "X", current.xMm, n => updateLayer(scene, zoneId, current.layerId, { xMm: n }))}{numeric(current, "Y", current.yMm, n => updateLayer(scene, zoneId, current.layerId, { yMm: n }))}
+              {numeric(current, "Width", current.widthMm, n => (current.kind === "image" && aspectLock ? resizeKeepingAspect(scene, zoneId, current.layerId, "widthMm", n) : updateLayer(scene, zoneId, current.layerId, { widthMm: n })))}
+              {numeric(current, "Height", current.heightMm, n => (current.kind === "image" && aspectLock ? resizeKeepingAspect(scene, zoneId, current.layerId, "heightMm", n) : updateLayer(scene, zoneId, current.layerId, { heightMm: n })))}
+              {numeric(current, "Rotation", current.rotationDeg, n => updateLayer(scene, zoneId, current.layerId, { rotationDeg: n }), "°")}
               {current.kind === "image" && <label className="ed-check"><input type="checkbox" checked={aspectLock} onChange={e => setAspectLock(e.currentTarget.checked)} /> Lock aspect ratio</label>}
               {current.kind === "text" && (<>
                 <label className="ed-field"><span>Text</span><input value={current.text} maxLength={profile.limits.maxTextChars} onChange={e => patch(current, { text: e.currentTarget.value })} aria-label="Text content" /></label>
-                {numeric("Size", current.fontSizePt, n => patch(current, { fontSizePt: n }), "pt")}
+                {numeric(current, "Size", current.fontSizePt, n => updateLayer(scene, zoneId, current.layerId, { fontSizePt: n }), "pt")}
                 <label className="ed-field"><span>Colour</span><input type="color" value={current.color} onChange={e => patch(current, { color: e.currentTarget.value })} aria-label="Text colour" /></label>
                 <p className="muted ed-caption">Font: {font.family} · licence {font.licenseVersion}</p></>)}
               <div className="ed-row">
-                <Button variant="outline" onClick={() => { const r = duplicateLayer(scene, zoneId, current.layerId); edit(r.scene); setSelected(r.layerId); }}>Duplicate</Button>
-                <Button variant="outline" onClick={() => { edit(deleteLayer(scene, zoneId, current.layerId)); setSelected(null); }}>Delete</Button>
+                <Button variant="outline" onClick={() => { const r = duplicateLayer(scene, zoneId, current.layerId); edit(r.scene); setSelected(r.layerId); announce(`Layer duplicated. The copy is selected. ${describeLayerCount(layers.length + 1)} on the ${zoneId} side.`); }}>Duplicate</Button>
+                <Button variant="outline" onClick={() => removeLayer(current.layerId, "list")}>Delete</Button>
               </div>
             </fieldset>)}
           <section aria-labelledby="ed-checks"><h2 className="ed-h" id="ed-checks">Preview checks</h2>
             <p className="muted">Status: <strong>{preflight.state === "blocked" ? "Blocked — fix the items below" : "Preview only — not approved for print"}</strong></p>
-            <ul className="ed-issues" aria-live="polite">{issues.map((issue, index) => <li key={index} data-severity={issue.severity}>{ISSUE_TEXT[issue.code] ?? issue.code}{issue.layerId ? ` (${issue.layerId})` : ""}</li>)}</ul>
+            {/* The summary is the only live text here: the list itself is not announced wholesale on every change. */}
+            <p className="muted ed-issue-summary" role="status" aria-live="polite">{issueSummary}</p>
+            <ul className="ed-issues" aria-label={`Preview checks, ${zoneId} side`}>{issues.map((issue, index) => {
+              const subject = issue.layerId ? layers.find(layer => layer.layerId === issue.layerId) : undefined;
+              return <li key={index} data-severity={issue.severity}>{ISSUE_TEXT[issue.code] ?? issue.code}{subject ? ` (${layerName(subject)})` : ""}</li>;
+            })}</ul>
           </section>
           <div className="ed-row">
             <Button onClick={() => void saveDraft()} disabled={busy || server.autosave === "pending" || server.autosave === "unavailable"}>{server.autosave === "pending" ? "Saving…" : dirty ? "Save draft" : "Saved"}</Button>

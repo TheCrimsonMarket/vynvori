@@ -157,5 +157,12 @@ details p { margin-top:12px; }
 .ed-issues li { padding:8px 0; border-bottom:1px solid var(--rule); font-size:14px; }
 .ed-issues li[data-severity="hard_error"] { font-weight:700; }
 .ed-hash { word-break:break-all; font-size:13px; }
+.ed-sr-only { position:absolute; width:1px; height:1px; margin:-1px; padding:0; border:0; overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; }
+.ed-fieldrow { display:grid; gap:4px; }
+.ed-field-error { margin:0 0 0 100px; padding-left:8px; border-left:3px solid var(--foreground); font-size:13px; font-weight:700; }
+.ed-issue-summary { margin:4px 0; font-size:14px; }
+/* aria-disabled controls keep keyboard focus (a disabled button would drop it); they must still look and hover like disabled ones */
+.ed .button[aria-disabled="true"],.ed .ed-icons button[aria-disabled="true"] { color:var(--muted); background:var(--panel); border-color:var(--control); cursor:not-allowed; }
+.ed .button[aria-disabled="true"]:hover { background:var(--panel); color:var(--muted); }
 @media(max-width:900px) { .ed-grid { grid-template-columns:1fr; } .ed-canvas { max-height:60svh; } }
 @media(prefers-reduced-motion:reduce) { .ed * { transition:none!important; } }
