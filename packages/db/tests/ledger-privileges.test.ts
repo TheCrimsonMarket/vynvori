@@ -7,6 +7,7 @@ import type { Pool } from "pg";
 import { ensureWallet, getWalletSummary } from "../src/ledger-core";
 import { ledgerMigrationPlan } from "../src/ledger-migrations";
 import { databaseFor, dropLedger, freshEmptyDatabase, grantSyntheticCredits, ledgerPoolAs, ledgerTarget, registerSyntheticGrantSource } from "./ledger-fixture";
+import { assessQuoteForAuthorization, getQuote, issueQuote, renewQuote } from "../src/ledger-quotes";
 
 /**
  * Privilege-model B proof (ADR-0021 S2 addendum). CI's `synthetic` is a SUPERUSER, so a test run as synthetic would pass with
@@ -17,6 +18,21 @@ import { databaseFor, dropLedger, freshEmptyDatabase, grantSyntheticCredits, led
  * SYNTHETIC_* values are test-only.
  */
 const SYNTHETIC_UNITS = 4, MAX_POOL_CONNECTIONS = 5;
+const QV_FN = "vynvori_ledger.ledger_quotes_check_version", ALLOC_FN = "vynvori_ledger.ledger_quote_check_allocation_sums";
+const QV_CHECK = `${QV_FN}()`, ALLOC_SUM = `${ALLOC_FN}()`;
+const alwaysCurrentPricePolicy = { isPriceVersionCurrent: async () => true, allocationsFor: async () => { throw new Error("not used by assessQuoteForAuthorization"); } };
+/** A minimal valid promo_single_preview QuoteViewV3: 0/0, no allocations, the cheapest shape for a privilege probe. */
+function syntheticPromoView(quoteId: string, quoteVersionId: string) {
+  const issuedAt = new Date().toISOString(), expiresAt = new Date(Date.now() + 3_600_000).toISOString();
+  return {
+    quoteId, quoteVersionId, issuedAt, expiresAt, pricePolicyVersion: "priv-pv", capabilitySnapshotId: "priv-cap",
+    creditsQuoted: 0, maxHoldUnits: 0,
+    wallet: { unit: "credits", availableUnits: 0, reservedUnits: 0, heldForReviewUnits: 0, snapshotAt: issuedAt, walletRevision: "0" },
+    consentTextVersion: "priv-ctv", included: [] as string[], excluded: [] as string[],
+    authorizationHint: { quoteId, checkedAt: issuedAt, canAuthorize: false, reasonCodes: [] as string[], quoteVersionId },
+    offerKind: "promo_single_preview" as const, directionId: "priv-direction", finalRenderIncludedInThisPurchase: false, physicalGarmentIncluded: false,
+  };
+}
 const either = (...codes: string[]) => (e: unknown) => codes.includes((e as { code?: string }).code ?? "");
 const code = (c: string, pattern?: RegExp) => (e: unknown) => (e as { code?: string }).code === c && (!pattern || pattern.test((e as Error).message));
 const migrationSql = () => ledgerMigrationPlan().migrations.map(m => m.sql);
@@ -60,6 +76,8 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
           await admin.query(`GRANT UPDATE (user_id) ON vynvori_ledger.wallets TO ${q(role)}`);
           await admin.query(`GRANT SELECT, INSERT ON vynvori_ledger.ledger_entries, vynvori_ledger.ledger_commands TO ${q(role)}`);
           await admin.query(`GRANT SELECT ON vynvori_ledger.ledger_grant_sources TO ${q(role)}`);
+          // S3 (ADR-0021 addendum A5): exactly SELECT, INSERT on the three quote tables; no UPDATE anywhere.
+          await admin.query(`GRANT SELECT, INSERT ON vynvori_ledger.ledger_quote_lineages, vynvori_ledger.ledger_quotes, vynvori_ledger.ledger_quote_allocations TO ${q(role)}`);
         }
         // a role with TABLE-level UPDATE on wallets that is NOT in pg_write_all_data: only the design (not missing privileges) can stop it
         await admin.query(`GRANT USAGE ON SCHEMA vynvori_ledger TO ${q(rtt)}`);
@@ -301,6 +319,81 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
         await admin.query(`ALTER FUNCTION ${APPLY} OWNER TO ${q(definer)}`);
       });
 
+      await t.test("S3 positive: issueQuote/renewQuote/getQuote/assessQuoteForAuthorization work end to end as the restricted runtime role", async () => {
+        const user = await profile(); await ensureWallet(rtPool, user);
+        const quoteId = "priv-quote-1";
+        const issued = await issueQuote(rtPool, { userId: user, quoteView: syntheticPromoView(quoteId, quoteId + "-v1"), modelRef: "priv-model", allocations: [], idempotencyKey: "priv-issue-key-1" });
+        assert.equal(issued.record.versionNo, 1);
+        const renewed = await renewQuote(rtPool, { userId: user, quoteId, expectedLatestVersionNo: 1, quoteView: syntheticPromoView(quoteId, quoteId + "-v2"), modelRef: "priv-model", allocations: [], idempotencyKey: "priv-renew-key-1" });
+        assert.equal(renewed.record.versionNo, 2);
+        const fetched = await getQuote(rtPool, user, quoteId + "-v2");
+        assert.equal(fetched.record.quoteVersionId, quoteId + "-v2");
+        const assessment = await assessQuoteForAuthorization(rtPool, { userId: user, quoteVersionId: quoteId + "-v2", now: new Date(), pricePolicy: alwaysCurrentPricePolicy });
+        assert.deepEqual(assessment, { ok: true });
+      });
+
+      await t.test("S3: a runtime role cannot UPDATE, DELETE or TRUNCATE any quote table", async () => {
+        for (const sql of [
+          "UPDATE vynvori_ledger.ledger_quote_lineages SET created_at = created_at", "DELETE FROM vynvori_ledger.ledger_quote_lineages", "TRUNCATE vynvori_ledger.ledger_quote_lineages",
+          "UPDATE vynvori_ledger.ledger_quotes SET model_ref = model_ref", "DELETE FROM vynvori_ledger.ledger_quotes", "TRUNCATE vynvori_ledger.ledger_quotes",
+          "UPDATE vynvori_ledger.ledger_quote_allocations SET hold_units = hold_units", "DELETE FROM vynvori_ledger.ledger_quote_allocations", "TRUNCATE vynvori_ledger.ledger_quote_allocations",
+        ]) await assert.rejects(rtPool.query(sql), code("42501"), sql);
+      });
+
+      await t.test("S3: the new trigger functions cannot be called directly, with or without EXECUTE, and a TEMP-table trigger using them is rejected by the context check", async () => {
+        const attachVersionCheck = (pool: Pool) => pool.connect().then(async client => {
+          try {
+            await client.query("CREATE TEMP TABLE qv_exploit(quote_version_id text, quote_id text, version_no int, user_id uuid, operation_kind text)");
+            await client.query(`CREATE TRIGGER qv_tg BEFORE INSERT ON qv_exploit FOR EACH ROW EXECUTE FUNCTION ${QV_CHECK}`);
+            await client.query("INSERT INTO qv_exploit VALUES ('x','x',1,$1,'promo_single_preview')", [victim]);
+          } finally { client.release(true); }
+        });
+        const attachAllocSumCheck = (pool: Pool) => pool.connect().then(async client => {
+          try {
+            await client.query("CREATE TEMP TABLE as_exploit(quote_version_id text)");
+            await client.query(`CREATE TRIGGER as_tg AFTER INSERT ON as_exploit FOR EACH ROW EXECUTE FUNCTION ${ALLOC_SUM}`);
+            await client.query("INSERT INTO as_exploit VALUES ('x')");
+          } finally { client.release(true); }
+        });
+        await assert.rejects(rtPool.query(`SELECT ${QV_CHECK}`), code("42501"), "no EXECUTE: version check");
+        await assert.rejects(rtPool.query(`SELECT ${ALLOC_SUM}`), code("42501"), "no EXECUTE: allocation sum check");
+        await assert.rejects(attachVersionCheck(rtPool), code("42501"), "without EXECUTE the version-check trigger cannot even be created");
+        await assert.rejects(attachAllocSumCheck(rtPool), code("42501"), "without EXECUTE the allocation-sum trigger cannot even be created");
+        await admin.query(`GRANT EXECUTE ON FUNCTION ${QV_CHECK} TO ${q(rt)}`);
+        await admin.query(`GRANT EXECUTE ON FUNCTION ${ALLOC_SUM} TO ${q(rt)}`);
+        try {
+          await assert.rejects(attachVersionCheck(rtPool), code("23000", /unexpected context/), "with EXECUTE, the context check still rejects a foreign trigger");
+          await assert.rejects(attachAllocSumCheck(rtPool), code("23000", /unexpected context/), "with EXECUTE, the context check still rejects a foreign trigger");
+          await assert.rejects(rtPool.query(`SELECT ${QV_CHECK}`), code("0A000", /trigger functions can only be called as triggers/), "direct invocation WITH EXECUTE is still refused");
+          await assert.rejects(rtPool.query(`SELECT ${ALLOC_SUM}`), code("0A000", /trigger functions can only be called as triggers/), "direct invocation WITH EXECUTE is still refused");
+        } finally {
+          await admin.query(`REVOKE EXECUTE ON FUNCTION ${QV_CHECK} FROM ${q(rt)}`);
+          await admin.query(`REVOKE EXECUTE ON FUNCTION ${ALLOC_SUM} FROM ${q(rt)}`);
+        }
+      });
+
+      await t.test("S3: a runtime role cannot disable/drop the quote triggers or replace the quote functions", async () => {
+        for (const sql of [
+          "ALTER TABLE vynvori_ledger.ledger_quotes DISABLE TRIGGER ledger_quotes_check_version", "ALTER TABLE vynvori_ledger.ledger_quotes DISABLE TRIGGER ALL",
+          "ALTER TABLE vynvori_ledger.ledger_quote_allocations DISABLE TRIGGER ALL",
+          "DROP TRIGGER ledger_quotes_check_version ON vynvori_ledger.ledger_quotes", "DROP TRIGGER ledger_quotes_check_allocation_sums ON vynvori_ledger.ledger_quotes",
+          "DROP TRIGGER ledger_quote_allocations_check_sums ON vynvori_ledger.ledger_quote_allocations",
+          `CREATE OR REPLACE FUNCTION ${QV_FN}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$`,
+          `CREATE OR REPLACE FUNCTION ${ALLOC_FN}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$`,
+          "DROP FUNCTION vynvori_ledger.ledger_quotes_check_version() CASCADE",
+        ]) await assert.rejects(rtPool.query(sql), code("42501"), sql);
+        assert.equal((await admin.query("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid = 'vynvori_ledger.ledger_quotes'::regclass AND NOT tgisinternal")).rows[0].n, 4, "all ledger_quotes triggers still present");
+      });
+
+      await t.test("S3: the runtime role holds no UPDATE privilege, table- or column-level, on any quote table", async () => {
+        for (const table of ["ledger_quote_lineages", "ledger_quotes", "ledger_quote_allocations"]) {
+          assert.equal((await admin.query("SELECT has_table_privilege($1, $2, 'UPDATE') AS x", [rt, `vynvori_ledger.${table}`])).rows[0].x, false, table);
+        }
+        for (const [table, column] of [["ledger_quotes", "model_ref"], ["ledger_quote_allocations", "hold_units"]] as const) {
+          assert.equal((await admin.query("SELECT has_column_privilege($1, $2, $3, 'UPDATE') AS x", [rt, `vynvori_ledger.${table}`, column])).rows[0].x, false, `${table}.${column}`);
+        }
+      });
+
       await t.test("TEMP: revoking it from the role alone does nothing while PUBLIC holds it; revoking from PUBLIC closes the exploit's first step", async () => {
         await admin.query(`REVOKE TEMPORARY ON DATABASE ${database} FROM ${q(rt)}`);
         assert.equal((await admin.query("SELECT has_database_privilege($1, current_database(), 'TEMP') AS x", [rt])).rows[0].x, true, "still held through PUBLIC");
@@ -311,6 +404,7 @@ test("privilege model B: a non-superuser runtime role cannot move wallet balance
         // the real command path does not need TEMP
         assert.equal((await grantSyntheticCredits(rtPool, { userId: victim, grantSourceId: source, sourceRef: "priv-after-revoke", units: SYNTHETIC_UNITS })).replayed, false);
       });
+
       assert.ok(peak <= MAX_POOL_CONNECTIONS, `peak pooled connections ${peak}`);
     } finally {
       const leaked: string[] = [];
