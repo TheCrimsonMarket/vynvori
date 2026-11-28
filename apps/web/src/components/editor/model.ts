@@ -224,7 +224,7 @@ export const canRequestScan = (asset: Pick<EditorAsset, "persisted" | "scanStatu
 /** The sentence announced after an upload or a check. Never names a scanner, a reason code or evidence. */
 export function describeScanOutcome(name: string, status: ScanStatus): string {
   switch (status) {
-    case "clean": return `${name}: safety check passed.`;
+    case "clean": return `${name}: format check passed.`;
     case "pending": return `${name}: safety check in progress. Choose Check again in a moment.`;
     case "unknown": return `${name}: the safety check could not finish. Choose Check again to try once more.`;
     case "quarantined": return `${name}: this artwork is blocked by the safety check and cannot be used. Remove it from the design.`;

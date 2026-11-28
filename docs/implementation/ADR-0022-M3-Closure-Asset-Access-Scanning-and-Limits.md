@@ -544,7 +544,7 @@ The structural port is wired only when **all** hold, otherwise `unconfiguredScan
 
 | Condition | Status |
 |---|---|
-| Never labelled antivirus or "malware scanned" | Holds in code, evidence rows and tests. **Open (wording):** the editor still says "safety check passed" for `clean` (and the HTTP error strings say "safety check"). That overstates a structural check for pilot users. Recommended for stage 1: reword to a file-check phrase, or accept it for an invite-only pilot. Not changed here because it alters B4a's expected words and the approved copy. |
+| Never labelled antivirus or "malware scanned" | Holds in code, evidence rows and tests. **Wording (resolved under the founder's delegation):** the editor sentence for a `clean` asset now reads "<name>: format check passed." because "safety check passed" overstated a structural check. The pending, unknown and blocked labels and the HTTP error strings still say "safety check"; they make no pass claim and are left as approved. B4a expects the new sentence (`M3-Closure-Checklists.md` updated). |
 | ACC-07 "scans" stays NOT passed | Unchanged; no acceptance row is edited. |
 | Invite-only staging only | Production is closed in code; the canary needs the staging project. Who is invited is a founder action. |
 | BYO art for real customers waits for stage 2 | Not enforced by code; founder decision. |
