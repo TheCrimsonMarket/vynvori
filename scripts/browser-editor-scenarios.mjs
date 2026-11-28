@@ -6,7 +6,7 @@ import path from "node:path";
 
 export const EDITOR_VIEWPORTS = [[1280, 900], [390, 844], [320, 640]];
 const near = (a, b) => Math.abs(a - b) < 0.0005;
-async function until(read, describe, timeoutMs = 4000) {
+export async function until(read, describe, timeoutMs = 4000) {
   const deadline = Date.now() + timeoutMs;
   let last;
   for (;;) {
@@ -16,7 +16,7 @@ async function until(read, describe, timeoutMs = 4000) {
   }
 }
 
-const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]; // WCAG 2.0 to 2.2, levels A and AA
+export const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]; // WCAG 2.0 to 2.2, levels A and AA
 
 export async function runEditorScenarios({ page, base, check, output, result, axe }) {
   const layers = () => page.locator('svg.ed-canvas g[role="button"]');

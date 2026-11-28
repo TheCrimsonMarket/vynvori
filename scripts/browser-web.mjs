@@ -8,6 +8,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { launchEngine, resolveEngine } from "./browser-engine.mjs";
 import { runEditorScenarios } from "./browser-editor-scenarios.mjs";
+import { runVisualScenarios } from "./browser-editor-visual.mjs";
 import { loadLazyImages } from "./browser-settle.mjs";
 // Fail before anything is started: an unknown M0_BROWSER must never fall through to another engine.
 const engine = resolveEngine(process.env.M0_BROWSER);
@@ -171,6 +172,7 @@ try {
     }
   });
   await runEditorScenarios({ page, base, check, output, result, axe });
+  await runVisualScenarios({ page, base, check, result, axe });
   await check("Missing route and unknown product return real 404 states", async () => {
     for (const route of ["/not-a-page","/products/not-a-product"]) {
       const response = await fetch(base+route); assert.equal(response.status,404);
