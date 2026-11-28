@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import Link from "next/link";
 import { CompositionSceneV1Schema, EMPTY_SYNTHETIC_SCENE, LICENSED_FONTS, runPreviewPreflight, type CompositionSceneV1, type EditorLayerV1, type AssetFacts } from "@vynvori/contracts";
 import { Button } from "@/components/ui/button";
+import { CANVAS_PALETTE as C } from "./canvas-palette";
 import {
   KEY_HELP, PT_TO_MM, addImageLayer, addTextLayer, commit, deleteLayer, describeLayerCount, describeMove, duplicateLayer, font, isOutside, keyStep, layerActionName, layerTitle, layersOf, moveInStack,
   neighbourAfterDelete, nudge, parseMm, profile, redo, resizeKeepingAspect, sceneKey, stackPosition, startHistory, summarizeIssues, undo, updateLayer, zoneOf,
@@ -374,9 +375,9 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
           </div>
           <div id="ed-tabpanel" role="tabpanel" aria-labelledby={`ed-tab-${zoneId}`}>
           <svg ref={svgRef} className="ed-canvas" viewBox={`${-8} ${-8} ${zone.widthMm + 16} ${zone.heightMm + 16}`} role="group" aria-label={`${zoneId} print zone, ${zone.widthMm} by ${zone.heightMm} millimetres, synthetic preview frame`} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
-            <rect x={-8} y={-8} width={zone.widthMm + 16} height={zone.heightMm + 16} fill="#0b0b0a" />
-            <rect x={0} y={0} width={zone.widthMm} height={zone.heightMm} fill="#161614" stroke="#939187" strokeWidth={0.4} />
-            <rect x={zone.safeMarginMm} y={zone.safeMarginMm} width={zone.widthMm - 2 * zone.safeMarginMm} height={zone.heightMm - 2 * zone.safeMarginMm} fill="none" stroke="#939187" strokeWidth={0.3} strokeDasharray="2 2" />
+            <rect x={-8} y={-8} width={zone.widthMm + 16} height={zone.heightMm + 16} fill={C.backdrop} />
+            <rect x={0} y={0} width={zone.widthMm} height={zone.heightMm} fill={C.zoneFill} stroke={C.zoneEdge} strokeWidth={0.4} />
+            <rect x={zone.safeMarginMm} y={zone.safeMarginMm} width={zone.widthMm - 2 * zone.safeMarginMm} height={zone.heightMm - 2 * zone.safeMarginMm} fill="none" stroke={C.safeMargin} strokeWidth={0.3} strokeDasharray="2 2" />
             <svg x={0} y={0} width={zone.widthMm} height={zone.heightMm} viewBox={`0 0 ${zone.widthMm} ${zone.heightMm}`} overflow="hidden">
               {layers.filter(l => l.visible).map(layer => {
                 const asset = layer.kind === "image" ? assets.get(layer.sourceAssetId) : null, href = asset ? previewHref(asset) : null, cx = layer.xMm + layer.widthMm / 2, cy = layer.yMm + layer.heightMm / 2, on = layer.layerId === selected;
@@ -386,9 +387,12 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
                     onPointerDown={e => onPointerDown(e, layer)} onFocus={() => setSelected(layer.layerId)} onKeyDown={e => onKeyDown(e, layer)}>
                     {layer.kind === "image"
                       ? (href ? <image href={href} x={layer.xMm} y={layer.yMm} width={layer.widthMm} height={layer.heightMm} preserveAspectRatio="none" />
-                        : <rect data-scan={asset?.scanStatus ?? "missing"} x={layer.xMm} y={layer.yMm} width={layer.widthMm} height={layer.heightMm} fill={asset?.scanStatus === "quarantined" ? "#3a1f1b" : "#49483f"} stroke={asset?.scanStatus === "quarantined" ? "#c9614f" : "none"} strokeWidth={0.4} strokeDasharray="4 2" />)
+                        : <rect data-scan={asset?.scanStatus ?? "missing"} x={layer.xMm} y={layer.yMm} width={layer.widthMm} height={layer.heightMm} fill={asset?.scanStatus === "quarantined" ? C.quarantineFill : C.placeholderFill} stroke={asset?.scanStatus === "quarantined" ? C.quarantineEdge : C.placeholderEdge} strokeWidth={0.4} strokeDasharray="4 2" />)
                       : <text x={layer.xMm} y={layer.yMm} fontSize={layer.fontSizePt * PT_TO_MM} fill={layer.color} style={{ fontFamily: "var(--font-archivo), Archivo, sans-serif" }} dominantBaseline="hanging" aria-hidden="true">{layer.text}</text>}
-                    <rect x={layer.xMm} y={layer.yMm} width={layer.widthMm} height={layer.heightMm} fill="transparent" stroke={on ? "#f1efe9" : "transparent"} strokeWidth={0.5} strokeDasharray={on ? "3 2" : undefined} />
+                    <rect x={layer.xMm} y={layer.yMm} width={layer.widthMm} height={layer.heightMm} fill="transparent" stroke={on ? C.selection : "transparent"} strokeWidth={0.5} strokeDasharray={on ? "3 2" : undefined} />
+                    {/* Keyboard focus ring. A native outline on an SVG <g> is not drawn by every engine and, where it is, it takes the page focus colour, which is too dark on this frame. CSS shows these two rects on :focus-visible only. */}
+                    <rect className="ed-focus-ring" x={layer.xMm} y={layer.yMm} width={layer.widthMm} height={layer.heightMm} stroke={C.focusUnderlay} strokeWidth={7} vectorEffect="non-scaling-stroke" aria-hidden="true" />
+                    <rect className="ed-focus-ring" x={layer.xMm} y={layer.yMm} width={layer.widthMm} height={layer.heightMm} stroke={C.focusRing} strokeWidth={3} vectorEffect="non-scaling-stroke" aria-hidden="true" />
                   </g>);
               })}
             </svg>
