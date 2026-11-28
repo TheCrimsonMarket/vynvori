@@ -155,7 +155,7 @@ Open the production build (a Vercel preview, or `npm run build:web` then `npm ru
 Blocked until B1 and B3 (a staging canary with the composition schema). The scan and download states are blocked further, until B5: no upload can reach a scan state while the scan port is unconfigured. Script them then, using the expected words from `model.ts` and `editor.tsx`:
 
 - Autosave states; the conflict alert ("This draft changed in another tab or device." plus a Reload button); "Frozen versions", Freeze version, Restore.
-- Scan states, which never name a scanner or a reason: "safety check pending", "safety check did not finish", "blocked by the safety check"; sentences such as "<name>: safety check passed." and "<name>: the safety check could not finish. Choose Check again to try once more."; the "Check again" button; "Download original" (offered only for a `clean` asset).
+- Scan states, which never name a scanner or a reason: "safety check pending", "safety check did not finish", "blocked by the safety check"; sentences such as "<name>: format check passed." and "<name>: the safety check could not finish. Choose Check again to try once more."; the "Check again" button; "Download original" (offered only for a `clean` asset).
 - The guest-draft expiry text.
 
 Evidence artifacts: `b4-results.csv` (one row per step per reader: pass, fail, notes), recordings named `b4-<reader>-<browser>-<step>.mp4`, and defects filed as issues. A defect that conflicts with the approved design is a founder question (plan Q7), never a silent waiver. The editor accessibility acceptance row stays IN_PROGRESS until B4a passes, and B4b passes where reachable.

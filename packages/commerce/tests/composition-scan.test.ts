@@ -108,10 +108,10 @@ test("static (C3b hard gate): scanner-side store calls are reachable only from t
   for (const name of ["openScanAttempt", "requestRescan", "runScan", "parseScanResult", "verdict", "evidenceRef", "scannerId", "toStatus"]) assert.equal(httpBoundary.includes(name), false, `composition-http.ts must not name ${name}`);
 });
 
-test("static (ruling QC): no scanner is chosen: the only ArtifactScanPort implementation in src is unconfiguredScanPort, and the scan module imports only contract types", () => {
+test("static (ruling QC, stage 1): no real scanner is chosen: the only ArtifactScanPorts in src are unconfiguredScanPort and the interim structural inspection (not malware scanning), and the scan module imports only contract types", () => {
   const roots = ["packages/commerce/src", "packages/db/src", "packages/shared/src", "packages/contracts/src", "apps/web/src", "apps/medusa/src", "services/image-processing/src"].map(dir => join(repo, dir));
   const implementers = roots.flatMap(walk).filter(file => { const text = readFileSync(file, "utf8"); return /\bscannerId\s*:/.test(text) && /\bscan\s*(\(|:)/.test(text); }).map(file => file.slice(repo.length + 1));
-  assert.deepEqual(implementers, ["packages/commerce/src/composition-scan.ts", "packages/contracts/src/composition-port.ts"]);
+  assert.deepEqual(implementers, ["packages/commerce/src/composition-scan-structural.ts", "packages/commerce/src/composition-scan.ts", "packages/contracts/src/composition-port.ts"].sort());
   // the contracts file only DECLARES the port: it is type-only, with no runtime value at all
   const port = readFileSync(join(repo, "packages/contracts/src/composition-port.ts"), "utf8");
   assert.doesNotMatch(port, /^\s*(export\s+)?(const|let|var|function|class)\s/m, "composition-port.ts declares types only");

@@ -39,7 +39,7 @@ function jpeg(b: Uint8Array): { widthPx: number; heightPx: number } {
     const length = (b[offset + 2]! << 8) | b[offset + 3]!;
     if (length < 2 || offset + 2 + length > b.length) fail("MALFORMED");
     if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
-      if (length < 8) fail("MALFORMED");
+      if (length < 8 || dims) fail("MALFORMED"); // one frame header only: a second SOF would let a decoder that reads a different one disagree with the limits checked here (M3-F2b)
       dims = { heightPx: (b[offset + 5]! << 8) | b[offset + 6]!, widthPx: (b[offset + 7]! << 8) | b[offset + 8]! };
     }
     offset += 2 + length;

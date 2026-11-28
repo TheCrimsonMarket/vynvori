@@ -522,3 +522,54 @@ Revert the PR. `runScan` returns `unknown(scan_timeout)` again. Events already w
 - `composition-scan-suite.ts` (in-memory and PostgreSQL): the result-mapping row; a timeout is quarantined with the recorded reason and evidence, the late `clean` answer changes nothing, nothing is readable or grantable; a rescan over the service and over HTTP, and a second scan, make no port call and record nothing; the HTTP views leak no internal text; a thrown `TimeoutError` or `AbortError` is a timeout; an ordinary throw stays `unknown`.
 - `composition-store-suite.ts` (both stores): a quarantine may carry a reason code, a malformed code and a reason code on `clean` are refused.
 - No new database file: the D8 budget is unchanged.
+
+## M3-F2b — Interim stage-1 structural adapter (2026-11-28)
+
+Step M3-F2b. Implements the **stage 1** scanner decision (founder, 2026-11-28, recorded in the project file `M3-Cloudflare-Free-Scanning-Research.md` §5.1; the coordinator's registry record is separate): zero cost now; the existing structural inspection plugged into `ArtifactScanPort` as an interim for an **invite-only staging pilot only**; **never labelled antivirus**; ACC-07's "scans" clause stays **NOT passed**; the boundary stays inline; uploads through Vercel stay at the 4 MiB that the limits decision supplies. **No migration** (composition journal next is still `0003`), no dependency, no cloud work, no flag change (`assets.production_uploads` stays `false`). One commented key name is added to `.env.example` under the coordinator's grant. ADR-0022 needed **no amendment of its D3 boundary**: the port, the strict parser, the one-call rule and the quarantine rules are unchanged, and this adapter is just a port that needs no network. (The async boundary, a presigned or Worker upload path and ClamAV are stage 2, which needs the ADR amendment described in the research note and is not built here.)
+
+### What this is, and what it is not
+
+- **It is NOT malware scanning.** `packages/commerce/src/composition-scan-structural.ts` runs `inspectImage` on the stored bytes: magic bytes, container structure and CRCs, trailing bytes, animation, and the typed size, pixel and side limits, without decoding pixels. It has no signatures and no definitions and cannot detect a well-formed hostile file.
+- **Every event says so.** Scanner id `structural-inspect`; engine `structural-inspect/1`; definitions version `none` (this answers the question the options paper left to C5: the string for "no definitions" is `none`); evidence reference `structural-inspect:passed` or `structural-inspect:rejected:<CODE>` (the code is the `ImageRejectedError` code, or `MIME_MISMATCH`). The B5 drill record for an interim run is `structural-inspect`, not malware scanning.
+- **Verdict vocabulary.** The port has no word for "passed structural inspection" other than `clean`, and no word for "rejected" other than `infected`. A pass is `clean`. A rejection is `infected`, which the boundary records as `quarantined` (terminal). The honest meaning is in the scanner id and evidence reference, never in the verdict word. A rejection of stored bytes that passed at upload (for example, limits tightened since) is an anomaly that a retry cannot fix, so quarantine is the right outcome and only a human can recover it.
+- **Fail closed.** A hash that is not the bytes' becomes `unknown(scan_hash_mismatch)`; a declared type that is not the real type is a rejection; an aborted signal throws `AbortError` (a timeout outcome, see M3-F2a); any unexpected error propagates and becomes `unknown(scanner_threw)`. The port never returns a verdict it did not compute.
+
+### Wiring (`apps/web/src/server/composition-runtime.ts`, `scanPortFor`)
+
+The structural port is wired only when **all** hold, otherwise `unconfiguredScanPort` and uploads stay `UPLOADS_DISABLED`: `M3_SCAN_ADAPTER` is exactly `structural-inspect` (a **second, explicit opt-in** on top of `M3_COMPOSITION_UPLOADS`, so uploads alone never open); the composition API is enabled on the isolated staging identity canary; `M3_COMPOSITION_UPLOADS` is `true`; `VERCEL_ENV` is not `production`; every upload limit is configured (the adapter is built with the same typed `M3_LIMIT_IMAGE_*` values the upload path enforces); and the private configuration parses (any throw closes). `editorCapabilities` and `serviceConfigFor` use the same function, so the editor is never looser than the API. Any other value of `M3_SCAN_ADAPTER` (case variants, padding, `true`, another scanner name) closes it. The scan limits (`M3_LIMIT_SCAN_*`) are still required.
+
+**Not enforced in code:** the 4 MiB ceiling. It is a per-deployment value of `M3_LIMIT_IMAGE_MAX_BYTES` (checklist K1), and the DoS bound below holds only while that value stays near it.
+
+### Founder conditions, status
+
+| Condition | Status |
+|---|---|
+| Never labelled antivirus or "malware scanned" | Holds in code, evidence rows and tests. **Wording (resolved under the founder's delegation):** the editor sentence for a `clean` asset now reads "<name>: format check passed." because "safety check passed" overstated a structural check. The pending, unknown and blocked labels and the HTTP error strings still say "safety check"; they make no pass claim and are left as approved. B4a expects the new sentence (`M3-Closure-Checklists.md` updated). |
+| ACC-07 "scans" stays NOT passed | Unchanged; no acceptance row is edited. |
+| Invite-only staging only | Production is closed in code; the canary needs the staging project. Who is invited is a founder action. |
+| BYO art for real customers waits for stage 2 | Not enforced by code; founder decision. |
+
+### Security review (M3-F2b)
+
+The `security-reviewer` pass found no CRITICAL or HIGH issue (wiring cannot reach Production or open without the key; no client influence on verdict, evidence or status; every failure fails closed). Dispositions:
+
+- **Fixed (MEDIUM): a second JPEG frame header.** `inspectImage` kept the last SOF it saw, so a decoder that reads a different frame header could disagree with the pixel and side limits. A second SOF is now `MALFORMED` (tested, and the test fails without the fix). This is the one change to `image-inspect.ts`; `clean` now depends on it.
+- **Open for the founder (MEDIUM, wording):** see the first row above.
+- **Accepted (LOW): the structural check is shallow by design.** It does not validate PNG bit depth, color type or interlace, does not inflate IDAT, and does not read metadata chunks, so a zlib bomb or a hostile payload inside a well-formed file passes. The decoded-memory bound rests on declared dimensions only. **Any later consumer (M5 processing, print QA, previews) must not treat `clean` as safe**, and must bound its own decode. Serving is already hardened (`nosniff`, a locked-down CSP and `attachment`).
+- **Accepted (LOW): `quarantined` is terminal**, so tightening the limits after upload quarantines assets that passed before. Fail closed; a human recovers it.
+- **Accepted (INFO): cost.** The reviewer timed 4 MiB hostile inputs at roughly 17 to 70 ms, run twice per upload (pre-storage and the scan). The timeout cannot interrupt synchronous code, but the call finishes far inside it. The cost is linear in `M3_LIMIT_IMAGE_MAX_BYTES`.
+- **Accepted (LOW): a bare `catch` in `scanPortFor`** hides why an invalid configuration closed the adapter. It is fail closed; diagnosing needs the identity settings error.
+- **Fixed (LOW): stale comments** that said `unconfiguredScanPort` was the only in-repo port.
+
+### Rollback
+
+Revert the PR, or unset `M3_SCAN_ADAPTER` in the deployment (the runtime returns to `unconfiguredScanPort` and uploads close). Rows already written stay valid and append-only; assets stay as recorded.
+
+### Tests
+
+- `composition-scan-structural.test.ts`: honest identity; valid PNG, JPEG and WebP pass with the exact evidence; nine structural rejections quarantine with their reason; type and hash mismatches; aborted signal and unexpected error; static (inline and inert: no network, process, filesystem or environment access).
+- `composition-scan-suite.ts` (in-memory and PostgreSQL): an upload is scanned inline, becomes clean, is served and grantable, and the event row says `structural-inspect` with no definitions and the HTTP views name none of it; bytes that no longer pass are quarantined, unservable, and a rescan changes nothing.
+- `composition-scan.test.ts` static test now lists the two ports and still forbids any other.
+- `composition-config.test.ts`: the wiring matrix (every closing condition, every wrong adapter value, Production, missing limits, invalid private configuration) and the `.env.example` key.
+- `composition-assets.test.ts`: the second-SOF rejection.
+- No new database file: the D8 budget is unchanged.

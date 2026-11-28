@@ -26,6 +26,10 @@ test("image inspection rejects empty, oversized, vector/other formats, animation
   reject(Buffer.concat([png(), Buffer.from("PK\u0003\u0004")]), "MALFORMED");
   reject(png().subarray(0, png().length - 5), "MALFORMED");
   reject(Buffer.concat([jpeg(), Buffer.from([0, 0])]), "MALFORMED");
+  // M3-F2b: one frame header only. A second SOF (here a small one that would pass the limits, after a large one that would not) is refused,
+  // so a decoder that reads a different frame header cannot disagree with the dimensions checked here.
+  const doubled = (first: Buffer, second: Buffer) => { const sof = (b: Buffer) => b.subarray(8, 8 + 13); return Buffer.concat([first.subarray(0, 8), sof(first), sof(second), first.subarray(8 + 13)]); };
+  reject(doubled(jpeg(40000, 40000), jpeg(8, 8)), "MALFORMED"); reject(doubled(jpeg(8, 8), jpeg(8, 8)), "MALFORMED");
   reject(Buffer.concat([webp(), Buffer.from([1])]), "MALFORMED");
 });
 

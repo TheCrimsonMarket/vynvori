@@ -11,10 +11,11 @@ import type { ArtifactScanPort, CompositionAccess } from "@vynvori/contracts/com
 import { compositionService, CompositionError, secretHash, type CompositionConfig } from "../src/composition";
 import { compositionCookies, compositionHttpHandlers, type CompositionIdentityPort } from "../src/composition-http";
 import { unconfiguredScanPort } from "../src/composition-scan";
+import { structuralInspectScanPort } from "../src/composition-scan-structural";
 import { imageLayer, memoryStorage, png, sceneWith } from "./composition-fixtures";
 import type { StoreHarness } from "./composition-store-suite";
 import {
-  SYNTHETIC_COMPOSITION_CONFIG, SYNTHETIC_GRANT_TTL_SECONDS, SYNTHETIC_HTTP_LIMITS, SYNTHETIC_RATE_LIMIT, SYNTHETIC_RATE_LIMIT_WINDOW_SECONDS, SYNTHETIC_SCAN_EVIDENCE,
+  SYNTHETIC_COMPOSITION_CONFIG, SYNTHETIC_GRANT_TTL_SECONDS, SYNTHETIC_IMAGE_LIMITS, SYNTHETIC_HTTP_LIMITS, SYNTHETIC_RATE_LIMIT, SYNTHETIC_RATE_LIMIT_WINDOW_SECONDS, SYNTHETIC_SCAN_EVIDENCE,
   syntheticRatePolicies, syntheticScanAnswer, syntheticScanPort, type SyntheticScanBehaviour,
 } from "./composition-synthetic";
 
@@ -173,6 +174,36 @@ export function scanConformance(label: string, factory: () => Promise<StoreHarne
     const ctx = await build({ behaviour: () => { throw new Error("synthetic failure"); } }), g = await ctx.pendingAsset();
     assert.equal(await ctx.service.scanAsset(g.id, g.asset.id, g.access, g.bytes), "unknown");
     assert.deepEqual(await history(ctx, g, g.asset.id), ["pending>unknown:scanner_threw"]);
+  });
+  // ---- M3-F2b: the interim structural adapter, end to end. It is NOT malware scanning; the rows it writes say so.
+  t("structural adapter: an upload is scanned inline, becomes clean, is served and grantable, and the event row says structural-inspect with no definitions", async () => {
+    const ctx = await build({ port: structuralInspectScanPort(SYNTHETIC_IMAGE_LIMITS) }), g = await ctx.guest(), bytes = png(64, 64, 5);
+    const upload = await ctx.http.uploadAsset(post(g.cookie, { raw: bytes, type: "image/png" }), { id: g.id });
+    assert.equal(upload.status, 201);
+    const { asset } = await upload.json();
+    assert.equal(asset.scanStatus, "clean");
+    const [event] = (await ctx.store.listScanEvents(g.id, asset.assetId, g.access, new Date()))!;
+    assert.deepEqual([event!.fromStatus, event!.toStatus, event!.scannerId, event!.engineVersion, event!.definitionsVersion, event!.evidenceRef, event!.reasonCode],
+      ["pending", "clean", "structural-inspect", "structural-inspect/1", "none", "structural-inspect:passed", null]);
+    assert.equal((await ctx.http.readAsset(get(g.cookie), { id: g.id, assetId: asset.assetId })).status, 200);
+    const now = new Date(), grant = await ctx.store.createDownloadGrant(g.id, asset.assetId, g.access, now, { grantId: randomUUID(), tokenHash: tokenHash(), expiresAt: new Date(now.getTime() + SYNTHETIC_GRANT_TTL_SECONDS * 1000) });
+    assert.equal(grant.status, "created");
+    const text = JSON.stringify(await (await ctx.http.get(get(g.cookie), { id: g.id })).json());
+    for (const internal of ["structural-inspect", "engineVersion", "definitionsVersion", "evidenceRef"]) assert.equal(text.includes(internal), false, `${internal} must not be serialised`);
+  });
+  t("structural adapter: bytes that no longer pass (limits tightened after upload) are quarantined, never served, and a rescan changes nothing", async () => {
+    const tight = { maxBytes: SYNTHETIC_IMAGE_LIMITS.maxBytes, maxPixels: 100, maxSide: 8 }; // SYNTHETIC: stricter than the upload limits
+    const ctx = await build({ port: structuralInspectScanPort(tight) }), g = await ctx.guest();
+    const upload = await ctx.http.uploadAsset(post(g.cookie, { raw: png(64, 64, 6), type: "image/png" }), { id: g.id });
+    assert.equal(upload.status, 201);
+    const { asset } = await upload.json();
+    assert.equal(asset.scanStatus, "quarantined");
+    assert.deepEqual(await history(ctx, g, asset.assetId), ["pending>quarantined"]);
+    const [event] = (await ctx.store.listScanEvents(g.id, asset.assetId, g.access, new Date()))!;
+    assert.deepEqual([event!.scannerId, event!.definitionsVersion, event!.evidenceRef], ["structural-inspect", "none", "structural-inspect:rejected:DIMENSIONS"]);
+    assert.equal((await ctx.http.readAsset(get(g.cookie), { id: g.id, assetId: asset.assetId })).status, 404);
+    assert.equal(await ctx.service.rescanAsset(g.id, asset.assetId, g.access), "quarantined");
+    assert.deepEqual(await history(ctx, g, asset.assetId), ["pending>quarantined"]);
   });
   t("bytes that do not match the asset row never reach the scanner (STORAGE_UNAVAILABLE, nothing recorded)", async () => {
     const ctx = await build(), g = await ctx.pendingAsset();

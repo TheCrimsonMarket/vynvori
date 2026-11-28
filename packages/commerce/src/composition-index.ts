@@ -4,3 +4,4 @@ export * from "./image-inspect";
 export * from "./composition-http";
 export * from "./composition-limits";
 export * from "./composition-scan";
+export * from "./composition-scan-structural";

@@ -32,6 +32,7 @@ test("labels, Check again and announcements cover every status and never name in
   assert.equal(new Set(sentences).size, STATUSES.length, "each status has its own sentence");
   for (const sentence of sentences) { assert.match(sentence, /^art\.png: /); assert.doesNotMatch(sentence, /scanner|evidence|reason|verdict|infected|virus|malware/i); }
   assert.match(describeScanOutcome("art.png", "quarantined"), /cannot be used/);
+  assert.equal(describeScanOutcome("art.png", "clean"), "art.png: format check passed.", "a clean result is a structural format check, never described as a safety or virus check");
 });
 
 test("static: the canvas never binds a server asset URL directly, and Check again posts to the scan route with no body", () => {

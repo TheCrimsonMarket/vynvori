@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { compositionHttpHandlers, compositionService, compositionAssetStorage, isScanPortConfigured, parseCompositionLimits, type CompositionConfig, resolveApiLimits, resolveDownloadGrantTtlMs, resolveGuestCreateLimits, resolveLiveGuestDraftsMax, resolveRatePolicies, resolveScanLimits, resolveUploadLimits, unconfiguredScanPort } from "@vynvori/commerce/composition";
+import { compositionHttpHandlers, compositionService, compositionAssetStorage, isScanPortConfigured, parseCompositionLimits, type CompositionConfig, resolveApiLimits, resolveDownloadGrantTtlMs, resolveGuestCreateLimits, resolveLiveGuestDraftsMax, resolveRatePolicies, resolveScanLimits, resolveUploadLimits, structuralInspectScanPort, STRUCTURAL_ADAPTER_NAME, unconfiguredScanPort } from "@vynvori/commerce/composition";
 import { compositionStore } from "@vynvori/db/composition";
 import { getIdentityRuntime } from "./auth-runtime";
 import { identitySettings } from "./identity-settings";
@@ -20,11 +20,20 @@ export function compositionSettings(env: Env): CompositionSettings {
 }
 
 /**
- * The malware-scan port for this deployment (ADR-0022 C5). No scanner is chosen (founder ruling QC), so this is always
- * `unconfiguredScanPort`, which keeps uploads (`UPLOADS_DISABLED`) and rescans (`SCAN_UNAVAILABLE`) closed. Wiring a real port is a
- * separate, founder-approved step; no environment variable can switch one on.
+ * The scan port for this deployment (ADR-0022 C5, M3-F2b). The default is `unconfiguredScanPort`, which keeps uploads
+ * (`UPLOADS_DISABLED`) and rescans (`SCAN_UNAVAILABLE`) closed. The ONLY other port is the interim stage-1 structural inspection,
+ * which is NOT malware scanning (founder decision 2026-11-28). It is wired only when ALL of these hold: `M3_SCAN_ADAPTER` is exactly
+ * `structural-inspect` (a second, explicit opt-in on top of `M3_COMPOSITION_UPLOADS`), the composition API is enabled on the
+ * isolated staging canary, uploads are opted in, the deployment is not Production, and every upload limit is configured. Anything
+ * else, including an invalid private configuration, leaves it closed. No scanner is chosen for real customers.
  */
-export function scanPortFor(_env: Env) { return unconfiguredScanPort; }
+export function scanPortFor(env: Env) {
+  if (env.M3_SCAN_ADAPTER !== STRUCTURAL_ADAPTER_NAME || env.VERCEL_ENV === "production") return unconfiguredScanPort;
+  try {
+    const settings = compositionSettings(env), limits = resolveUploadLimits(parseCompositionLimits(env));
+    return settings.enabled && settings.uploads && limits ? structuralInspectScanPort(limits.imageLimits) : unconfiguredScanPort;
+  } catch { return unconfiguredScanPort; }
+}
 
 /** Upload limits for the editor, from the SAME parsed `M3_LIMIT_*` configuration the API enforces; null while any needed key is unset. */
 export function uploadLimitsFor(env: Env): Readonly<{ maxBytes: number; maxPixels: number; maxSidePx: number }> | null {
