@@ -44,8 +44,9 @@ export type CompositionConfig = Readonly<{
   /** Global cap of live (unexpired, unclaimed) guest drafts. `undefined` closes guest creation. */
   liveGuestDraftsMax: number | undefined;
   /**
-   * The malware-scan port (ADR-0022 C5). The composition root wires `unconfiguredScanPort`, the only in-repo implementation, so
-   * uploads (`UPLOADS_DISABLED`) and rescans (`SCAN_UNAVAILABLE`) stay closed until a founder-chosen scanner is wired (ruling QC).
+   * The scan port (ADR-0022 C5, M3-F2b). The composition root wires `unconfiguredScanPort` unless the staging-only opt-in selects the
+   * interim structural inspection (NOT malware scanning), so uploads (`UPLOADS_DISABLED`) and rescans (`SCAN_UNAVAILABLE`) stay closed
+   * until then. No malware scanner is chosen (ruling QC).
    */
   scanPort: ArtifactScanPort;
   /** One scanner call's timeout and the attempt lease (`M3_LIMIT_SCAN_*`; lease strictly longer). `undefined` closes scanning. */

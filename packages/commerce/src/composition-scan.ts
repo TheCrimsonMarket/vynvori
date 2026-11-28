@@ -1,8 +1,9 @@
 import "server-only";
 /**
- * Malware-scan boundary (ADR-0022 D3, C5). No scanner vendor, binary, SDK or service is chosen, integrated or approximated here
- * (founder ruling QC). This module holds only:
- *  - `unconfiguredScanPort`, the ONLY in-repo `ArtifactScanPort`. It never answers `clean`, and the service refuses uploads and
+ * Scan boundary (ADR-0022 D3, C5). No malware scanner vendor, binary, SDK or service is chosen or integrated (founder ruling QC).
+ * The only in-repo `ArtifactScanPort`s are `unconfiguredScanPort` (below) and the interim stage-1 structural inspection in
+ * `composition-scan-structural.ts` (M3-F2b), which is NOT malware scanning and says so in every event it writes. This module holds only:
+ *  - `unconfiguredScanPort`, the default. It never answers `clean`, and the service refuses uploads and
  *    rescans while it is wired, so it is never actually called on a request path.
  *  - `parseScanResult`, the strict mapping of whatever a port returns to a store event. Only a well-formed `clean` or `infected`
  *    verdict for the SAME bytes becomes `clean` or `quarantined`; everything else becomes `unknown` with a coarse reason code.
