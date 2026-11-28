@@ -210,6 +210,10 @@ export async function runEditorScenarios({ page, base, check, output, result, ax
       assert.equal(await front.getAttribute("tabindex"), "0"); assert.equal(await back.getAttribute("tabindex"), "-1");
       assert.equal(await front.getAttribute("aria-controls"), "ed-tabpanel"); assert.equal(await panel.getAttribute("id"), "ed-tabpanel");
       assert.equal(await panel.getAttribute("aria-labelledby"), "ed-tab-front"); assert.equal(await panel.getByRole("group", { name: /front print zone/ }).count(), 1);
+      // M3-F1: the panel holds everything that depends on the side (canvas, layer controls, fields), and the tablist stays outside it.
+      assert.equal(await panel.getByRole("button", { name: "Add text", exact: true }).count(), 1, "an empty side still has focusable content in its tabpanel");
+      assert.equal(await panel.getByRole("tablist").count(), 0, "the tablist is not inside its own panel");
+      assert.equal(await panel.getByRole("heading", { name: /^Layers/ }).count(), 1, "the Layers heading is inside the tabpanel");
       await front.focus(); await page.keyboard.press("ArrowRight");
       await hasActive(a => a.id === "ed-tab-back", "the BACK tab after ArrowRight");
       assert.equal(await back.getAttribute("aria-selected"), "true"); assert.equal(await back.getAttribute("tabindex"), "0"); assert.equal(await front.getAttribute("tabindex"), "-1");
@@ -228,6 +232,9 @@ export async function runEditorScenarios({ page, base, check, output, result, ax
       for (const expected of [/^- region "Garment composition editor":/m, /- tablist "Garment side":/, /- tab "FRONT" \[selected\]/, /- tab "BACK"/, /- tabpanel "FRONT":/, /- list "Layers, top first":/, /- group "Selected layer":/, /- region "Preview checks":/, /- list "Preview checks, front side":/])
         assert.match(snapshot, expected, `aria snapshot lacks ${expected}\n${snapshot}`);
       assert.equal((snapshot.match(/- listitem:/g) ?? []).length >= 3, true, "layer list has three items");
+      const tabpanel = page.getByRole("tabpanel");
+      assert.equal(await tabpanel.getByRole("list", { name: "Layers, top first" }).count(), 1, "the layer list is inside the tabpanel");
+      assert.equal(await tabpanel.getByRole("group", { name: "Selected layer" }).count(), 1, "the selected-layer fields are inside the tabpanel");
       const names = [...snapshot.matchAll(/button "((?:Move up|Move down|Hide layer|Show layer): [^"]*)"/g)].map(match => match[1]);
       assert.equal(names.length, 9, `nine per-layer actions expected, found ${JSON.stringify(names)}`);
       assert.equal(new Set(names).size, names.length, `per-layer action names repeat: ${JSON.stringify(names)}`);
