@@ -21,7 +21,7 @@ export function SiteHeader() {
     <div className="navigation" onKeyDown={event => {
       if (event.key === "Escape" && open) { setOpen(false); toggle.current?.focus(); }
     }}>
-      <Link href="/" className="brand" aria-label="VYNVORI home" onClick={() => setOpen(false)}>
+      <Link href="/" className="brand" aria-label="VYNVORI home, OBJECTS OF EXPRESSION" onClick={() => setOpen(false)}>
         <Image src="/assets/vynvori-symbol-black.svg" width={32} height={32} alt="" className="brand-symbol" />
         <span>OBJECTS OF EXPRESSION</span>
       </Link>

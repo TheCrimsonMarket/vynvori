@@ -121,7 +121,7 @@ try {
           if (route==="/") { assert(Math.abs(framing.wordmarkRatio-2286.82/320)<0.01); assert(Math.abs(framing.campaignRight-width)<1); }
         }
         await page.addScriptTag({ content: axe });
-        const audit = await page.evaluate(async () => window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a","wcag2aa","wcag21aa","wcag22aa"] } }));
+        const audit = await page.evaluate(async () => window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a","wcag2aa","wcag21a","wcag21aa","wcag22aa"] } }));
         assert.deepEqual(audit.violations.map(v => ({ id:v.id, nodes:v.nodes.map(n => n.target) })), []);
         const filename = `${route === "/" ? "home" : route.split("/").at(-1)}-${width}x${height}.png`;
         await page.screenshot({ path: path.join(output, filename), fullPage: true });

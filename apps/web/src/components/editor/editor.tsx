@@ -367,13 +367,13 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
       <p className="notice" role="note">PREVIEW ONLY. This editor uses a synthetic coordinate frame ({zone.widthMm} × {zone.heightMm} mm), not a manufacturer print area. Nothing here is approved for printing, priced, or ordered. No AI credits required. No account is needed to edit.</p>
       <p className="ed-status" role="status" aria-live="polite">{message || (server.owner === "guest" ? `Guest draft — kept ${describeExpiry(server.expiresAt)} unless you sign in.` : "")}</p>
       <div className="ed-sr-only" id="ed-announce" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
-      <div className="ed-grid">
+      <div className="ed-tabs" role="tablist" aria-label="Garment side">
+        {profile.zones.map((z, index) => <button key={z.zoneId} id={`ed-tab-${z.zoneId}`} role="tab" aria-selected={z.zoneId === zoneId} aria-controls="ed-tabpanel" tabIndex={z.zoneId === zoneId ? 0 : -1} className="ed-tab"
+          onClick={() => switchZone(z.zoneId, false)} onKeyDown={event => onTabKeyDown(event, index)}>{z.zoneId.toUpperCase()}</button>)}
+      </div>
+      {/* The tabpanel owns everything that depends on the selected side: the canvas, the layer list and the selected-layer fields. It is the grid itself. */}
+      <div id="ed-tabpanel" role="tabpanel" aria-labelledby={`ed-tab-${zoneId}`} className="ed-grid">
         <div className="ed-stage">
-          <div className="ed-tabs" role="tablist" aria-label="Garment side">
-            {profile.zones.map((z, index) => <button key={z.zoneId} id={`ed-tab-${z.zoneId}`} role="tab" aria-selected={z.zoneId === zoneId} aria-controls="ed-tabpanel" tabIndex={z.zoneId === zoneId ? 0 : -1} className="ed-tab"
-              onClick={() => switchZone(z.zoneId, false)} onKeyDown={event => onTabKeyDown(event, index)}>{z.zoneId.toUpperCase()}</button>)}
-          </div>
-          <div id="ed-tabpanel" role="tabpanel" aria-labelledby={`ed-tab-${zoneId}`}>
           <svg ref={svgRef} className="ed-canvas" viewBox={`${-8} ${-8} ${zone.widthMm + 16} ${zone.heightMm + 16}`} role="group" aria-label={`${zoneId} print zone, ${zone.widthMm} by ${zone.heightMm} millimetres, synthetic preview frame`} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
             <rect x={-8} y={-8} width={zone.widthMm + 16} height={zone.heightMm + 16} fill={C.backdrop} />
             <rect x={0} y={0} width={zone.widthMm} height={zone.heightMm} fill={C.zoneFill} stroke={C.zoneEdge} strokeWidth={0.4} />
@@ -399,7 +399,6 @@ export function Editor({ compositionId: initialId, artworkUpload, uploadLimits }
           </svg>
           <p className="muted ed-caption" id="ed-key-help">{KEY_HELP}</p>
           <p className="muted ed-caption">SYNTHETIC PREVIEW FRAME — coordinates in millimetres, origin top-left. Text shown here is an approximation until the deterministic print renderer exists.</p>
-          </div>
         </div>
         <div className="ed-panel">
           <div className="ed-row">
