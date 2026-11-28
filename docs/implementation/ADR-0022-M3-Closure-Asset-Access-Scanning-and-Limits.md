@@ -485,3 +485,40 @@ Decision record only. The sections above keep their original wording; where they
 | C6 | Log redaction of the link code | Logs must not carry the download link code. **Done in #59** by keeping the code out of the URL: the mint response returns `grantToken`, the editor sends it in the `x-vynvori-download-grant` header, and redeem refuses any query string with the uniform `404`. No platform log, proxy, browser history entry or Referer can hold the code. If an APM or error tool is ever set to capture headers or bodies, it must redact `x-vynvori-download-grant` and `grantToken`. | founder |
 
 The founder's C6 direction was given in the project chat on 2026-11-28 (Asia/Dhaka) in reply to the two open questions on [#56](https://github.com/smallhingelabs/vynvori/pull/56), which merged at 20:35Z (`f9daf00`) without either. Both were answered by [#59](https://github.com/smallhingelabs/vynvori/pull/59) (C6 follow-up, `b72b972`, 20:52Z).
+
+## M3-F2a — A timed-out scan is quarantined (2026-11-28)
+
+Step M3-F2a, a follow-up to C5 (the founder-delegated decision of 2026-11-28 in "Founder decisions recorded 2026-11-28": a `scan_timeout` is an unknown outcome, so quarantine, and a human reconciles before any re-check; AGENTS rule 7). **No migration** (composition journal next is still `0003`), no dependency, no environment variable, no flag change; `assets.production_uploads` stays `false`. This section governs where it differs from the C5 section (which said a timeout is `unknown(scan_timeout)`).
+
+### What changed
+
+- **`runScan` returns `quarantined` on a timeout**, with `reasonCode: "scan_timeout"`. A port that throws its own `TimeoutError` or `AbortError` gets the same result, because after a request has gone out that is the same unknown outcome. Every other throw and every malformed answer is still `unknown`.
+- **Evidence text is honest, not borrowed.** The `0002` CHECK requires `scanner_id`, `engine_version`, `definitions_version`, `evidence_ref` and an attempt on every `quarantined` event, but a timeout has no verdict. The event records the port's own `scannerId`, `unavailable` for the engine and the definitions, and the evidence reference `scan-timeout-outcome-unknown-human-reconcile-required`. The `reason_code` column (already nullable, already written by the store) carries `scan_timeout`, so a reader can tell a timeout from a detection without reading free text.
+- **Contract:** one additive optional field, `reasonCode`, on the quarantined variant of `ScanResultEvent` (`packages/contracts/src/composition-port.ts`). Both stores accept it on a `quarantined` result only; a `clean` result with a reason code, or a malformed code, throws `RangeError`.
+- **No re-check by any in-app path.** `quarantined` is terminal: `rescanAsset` and `scanAsset` report it without a call, `requestRescan` needs `unknown`, `openScanAttempt` answers `not_scannable`, and the `0002` trigger allows no edge out of it. A late `clean` answer from the abandoned call is ignored (the existing C5 test, now asserting `quarantined`).
+- **Wording.** The editor sentence for a quarantined asset no longer says the artwork "did not pass" the check (a timeout is not a verdict on the file). It reads "this artwork is blocked by the safety check and cannot be used". The HTTP views still carry only `scanStatus`; no reason, evidence or scanner id is serialised (tested).
+
+### What "a human reconciles" means in W1
+
+Nothing in the app releases a quarantined asset, and no operator tool exists. Reconciliation is an out-of-band decision by the founder or an operator who reads the event row (`reason_code = scan_timeout`) and the scanner's own records. There is **no release path in W1.** Practical consequence: the owner or guest cannot recover that asset in that composition; re-uploading the same bytes there returns the same quarantined row. A release primitive, if wanted, is its own reviewed step.
+
+### Security review (M3-F2a)
+
+The `security-reviewer` pass found no CRITICAL or HIGH issue. Dispositions:
+
+- **Accepted (MEDIUM, existing behaviour, documented in C5): a timeout whose result cannot be recorded can still lead to a call.** If the guest draft expires or is claimed while the scanner runs, `completeScanAttempt` answers `not_found` and the result (including this quarantine) is dropped. The asset stays `pending` with an open attempt, and after the lease two explicit requests close it as `unknown(lease_expired)` and start a new scan. A process crash mid-scan has the same shape. The founder accepted the two-request recovery on 2026-11-28; this section records that it is also a way around the "no re-check after a timeout" rule in this narrow case. Closing it needs a store primitive that records a result without the caller's access, which is a new reviewed step.
+- **Fixed (MEDIUM): a port that enforces its own deadline by throwing.** A thrown `TimeoutError` or `AbortError` is now a timeout, tested. **Binding condition for the scanner-choice step:** a real port must not turn its own timeout into some other throw or into an `error` verdict after the request may have been accepted; map it to a `TimeoutError`/`AbortError` or let the typed timeout fire.
+- **Accepted (LOW): the quarantine is per composition.** Assets are keyed by composition and SHA-256, so a quarantine never affects another user. Re-uploading the same bytes into a fresh composition makes a new row and a new scan, bounded by the upload rate limits and quotas. If "no user re-check" must hold across compositions, that is a decision for the scanner-choice step.
+- **Fixed (LOW): wording** (above).
+- **Noted (INFO):** `quarantined` is not proof of malware. Any later tooling (late detection, abuse handling, reports) must key on `reason_code`, not on the status alone. Nothing in the repository deletes or purges quarantined objects.
+
+### Rollback
+
+Revert the PR. `runScan` returns `unknown(scan_timeout)` again. Events already written with `reason_code = scan_timeout` stay valid rows (append-only) and their assets stay quarantined; nothing is migrated.
+
+### Tests
+
+- `composition-scan.test.ts`: `runScan` timeout is `quarantined` with the exact evidence and reason.
+- `composition-scan-suite.ts` (in-memory and PostgreSQL): the result-mapping row; a timeout is quarantined with the recorded reason and evidence, the late `clean` answer changes nothing, nothing is readable or grantable; a rescan over the service and over HTTP, and a second scan, make no port call and record nothing; the HTTP views leak no internal text; a thrown `TimeoutError` or `AbortError` is a timeout; an ordinary throw stays `unknown`.
+- `composition-store-suite.ts` (both stores): a quarantine may carry a reason code, a malformed code and a reason code on `clean` are refused.
+- No new database file: the D8 budget is unchanged.

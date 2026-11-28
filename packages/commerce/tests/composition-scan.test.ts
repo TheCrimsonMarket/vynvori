@@ -65,7 +65,8 @@ test("runScan: one call; a throw, the unconfigured port and a timeout are unknow
   let aborted = false;
   const slow = syntheticScanPort((r, signal) => new Promise(resolve => { signal.addEventListener("abort", () => { aborted = true; }); setTimeout(() => resolve(syntheticScanAnswer("clean", r)), SYNTHETIC_SLOW_ANSWER_MS); }));
   const started = Date.now(), result = await runScan(slow, request, SYNTHETIC_FAST_TIMEOUT_MS);
-  assert.deepEqual(result, { toStatus: "unknown", reasonCode: "scan_timeout", scannerId: "synthetic-scanner" });
+  // M3-F2a: a timeout is an unknown outcome, so it is quarantined (with honest evidence text), never `unknown` and never `clean`
+  assert.deepEqual(result, { toStatus: "quarantined", scannerId: "synthetic-scanner", engineVersion: "unavailable", definitionsVersion: "unavailable", evidenceRef: "scan-timeout-outcome-unknown-human-reconcile-required", reasonCode: "scan_timeout" });
   assert.ok(Date.now() - started < SYNTHETIC_SLOW_ANSWER_MS, "the timeout does not wait for the port"); assert.equal(aborted, true);
   const synchronous = syntheticScanPort(); // a port that answers synchronously-shaped values still goes through the parser
   assert.equal((await runScan({ scannerId: synchronous.scannerId, scan: (() => syntheticScanAnswer("infected", request)) as never }, request, SYNTHETIC_SLOW_ANSWER_MS)).toStatus, "quarantined");

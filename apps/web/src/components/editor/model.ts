@@ -227,7 +227,7 @@ export function describeScanOutcome(name: string, status: ScanStatus): string {
     case "clean": return `${name}: safety check passed.`;
     case "pending": return `${name}: safety check in progress. Choose Check again in a moment.`;
     case "unknown": return `${name}: the safety check could not finish. Choose Check again to try once more.`;
-    case "quarantined": return `${name}: this artwork did not pass the safety check and cannot be used. Remove it from the design.`;
+    case "quarantined": return `${name}: this artwork is blocked by the safety check and cannot be used. Remove it from the design.`;
   }
 }
 

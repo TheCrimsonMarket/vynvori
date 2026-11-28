@@ -120,7 +120,7 @@ export function memoryHarness(): StoreHarness {
       const r = input.result;
       return { status: "recorded", event: r.toStatus === "unknown"
         ? append(a, now, { toStatus: "unknown", attemptId: attempt.attemptId, scannerId: r.scannerId ?? null, reasonCode: r.reasonCode })
-        : append(a, now, { toStatus: r.toStatus, attemptId: attempt.attemptId, scannerId: r.scannerId, engineVersion: r.engineVersion, definitionsVersion: r.definitionsVersion, evidenceRef: r.evidenceRef }) };
+        : append(a, now, { toStatus: r.toStatus, attemptId: attempt.attemptId, scannerId: r.scannerId, engineVersion: r.engineVersion, definitionsVersion: r.definitionsVersion, evidenceRef: r.evidenceRef, reasonCode: r.reasonCode ?? null }) };
     },
     async expireScanAttempt(compositionId, assetId, access, now, input) {
       if (!MEM_ID.test(input?.attemptId ?? "") || !isMemDate(now)) memInvalid();
@@ -216,7 +216,10 @@ const memText = (value: unknown) => typeof value === "string" && value.trim() !=
 const memReason = (value: unknown): value is string => typeof value === "string" && value.length <= MEM_TEXT_MAX && MEM_REASON.test(value);
 function memInvalid(): never { throw new RangeError("composition store: invalid input"); }
 function memScanResult(r: ScanResultEvent) {
-  if (r?.toStatus === "clean" || r?.toStatus === "quarantined") { if (![r.scannerId, r.engineVersion, r.definitionsVersion, r.evidenceRef].every(memText)) memInvalid(); }
+  if (r?.toStatus === "clean" || r?.toStatus === "quarantined") {
+    if (![r.scannerId, r.engineVersion, r.definitionsVersion, r.evidenceRef].every(memText)) memInvalid();
+    if (r.reasonCode !== undefined && (r.toStatus !== "quarantined" || !memReason(r.reasonCode))) memInvalid(); // mirrors the SQL store: only a quarantine may carry one
+  }
   else if (r?.toStatus === "unknown") { if (!memReason(r.reasonCode) || (r.scannerId !== undefined && !memText(r.scannerId))) memInvalid(); }
   else memInvalid();
 }

@@ -127,9 +127,12 @@ export type ScanEventRecord = Readonly<{
 export type ScanAttemptRecord = Readonly<{
   attemptId: string; assetId: string; compositionId: string; startedAt: Date; leaseExpiresAt: Date; finishedAt: Date | null; outcome: "completed" | "lease_expired" | null;
 }>;
-/** A clean/quarantined result needs the full scanner evidence; an unknown result needs a reason code. */
+/**
+ * A clean/quarantined result needs the full scanner evidence; an unknown result needs a reason code. A quarantine MAY also carry a
+ * reason code (M3-F2a: a timed-out scan is quarantined with `scan_timeout`, because its outcome is unknown and a human reconciles it).
+ */
 export type ScanResultEvent =
-  | Readonly<{ toStatus: "clean" | "quarantined"; scannerId: string; engineVersion: string; definitionsVersion: string; evidenceRef: string }>
+  | Readonly<{ toStatus: "clean" | "quarantined"; scannerId: string; engineVersion: string; definitionsVersion: string; evidenceRef: string; reasonCode?: string }>
   | Readonly<{ toStatus: "unknown"; reasonCode: string; scannerId?: string }>;
 /** Full scanner evidence for a late detection (`clean -> quarantined`). */
 export type LateDetectionResult = Readonly<{ toStatus: "quarantined"; scannerId: string; engineVersion: string; definitionsVersion: string; evidenceRef: string }>;
