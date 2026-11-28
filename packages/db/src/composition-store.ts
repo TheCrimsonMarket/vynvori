@@ -54,6 +54,7 @@ function invalid(what: string): never { throw new RangeError(`composition store:
 function assertScanResult(result: ScanResultEvent): void {
   if (result?.toStatus === "clean" || result?.toStatus === "quarantined") {
     if (![result.scannerId, result.engineVersion, result.definitionsVersion, result.evidenceRef].every(isText)) invalid("scan evidence");
+    if (result.reasonCode !== undefined && (result.toStatus !== "quarantined" || !isReason(result.reasonCode))) invalid("scan reason"); // only a quarantine may carry one (M3-F2a)
   } else if (result?.toStatus === "unknown") {
     if (!isReason(result.reasonCode) || (result.scannerId !== undefined && !isText(result.scannerId))) invalid("scan reason");
   } else invalid("scan result");
@@ -343,7 +344,7 @@ export function compositionStore(pool: Pool): CompositionStore {
         await tx.query(`UPDATE ${S}.asset_scan_attempts SET finished_at=$2, outcome='completed' WHERE attempt_id=$1 AND finished_at IS NULL`, [input.attemptId, now]);
         const event = result.toStatus === "unknown"
           ? await appendEvent(tx, row, now, { toStatus: "unknown", attemptId: input.attemptId, scannerId: result.scannerId ?? null, reasonCode: result.reasonCode })
-          : await appendEvent(tx, row, now, { toStatus: result.toStatus, attemptId: input.attemptId, scannerId: result.scannerId, engineVersion: result.engineVersion, definitionsVersion: result.definitionsVersion, evidenceRef: result.evidenceRef });
+          : await appendEvent(tx, row, now, { toStatus: result.toStatus, attemptId: input.attemptId, scannerId: result.scannerId, engineVersion: result.engineVersion, definitionsVersion: result.definitionsVersion, evidenceRef: result.evidenceRef, reasonCode: result.reasonCode ?? null });
         return { status: "recorded" as const, event };
       });
     },

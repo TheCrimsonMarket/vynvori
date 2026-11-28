@@ -116,7 +116,7 @@ export function scanConformance(label: string, factory: () => Promise<StoreHarne
     ["not an object", () => "clean", "unknown", "pending>unknown:scan_result_malformed"],
     ["wrong hash", r => syntheticScanAnswer("clean", r, { sha256: "0".repeat(64) }), "unknown", "pending>unknown:scan_hash_mismatch"],
     ["throws", () => { throw new Error("synthetic failure"); }, "unknown", "pending>unknown:scanner_threw"],
-    ["timeout (a late clean answer is ignored)", (r, signal) => new Promise(resolve => signal.addEventListener("abort", () => setTimeout(() => resolve(syntheticScanAnswer("clean", r)), 5))), "unknown", "pending>unknown:scan_timeout"],
+    ["timeout (a late clean answer is ignored)", (r, signal) => new Promise(resolve => signal.addEventListener("abort", () => setTimeout(() => resolve(syntheticScanAnswer("clean", r)), 5))), "quarantined", "pending>quarantined:scan_timeout"],
   ];
   for (const [name, behaviour, status, event] of MAPPING) {
     t(`result mapping: ${name} -> ${status}`, async () => {
@@ -129,6 +129,51 @@ export function scanConformance(label: string, factory: () => Promise<StoreHarne
       assert.equal(ctx.calls.length, 1, "one call, never retried");
     });
   }
+  // ---- M3-F2a: a timed-out scan is an unknown outcome (AGENTS rule 7). It is quarantined and waits for a human; nothing re-checks it.
+  const timesOut: SyntheticScanBehaviour = (r, signal) => new Promise(resolve => signal.addEventListener("abort", () => setTimeout(() => resolve(syntheticScanAnswer("clean", r)), 5)));
+  t("timed-out scan: quarantined with a reason and honest evidence text, a late clean answer is ignored, nothing is served", async () => {
+    const ctx = await build({ behaviour: timesOut }), g = await ctx.pendingAsset();
+    assert.equal(await ctx.service.scanAsset(g.id, g.asset.id, g.access, g.bytes), "quarantined");
+    const [event] = (await ctx.store.listScanEvents(g.id, g.asset.id, g.access, new Date()))!;
+    assert.deepEqual([event!.fromStatus, event!.toStatus, event!.reasonCode, event!.scannerId, event!.engineVersion, event!.definitionsVersion], ["pending", "quarantined", "scan_timeout", "synthetic-scanner", "unavailable", "unavailable"]);
+    assert.match(event!.evidenceRef ?? "", /human-reconcile-required/); assert.ok(event!.attemptId, "the attempt that timed out is on the event");
+    await sleep(50); // the late `clean` answer has arrived by now and must change nothing
+    assert.equal((await ctx.store.getAsset(g.id, g.asset.id, g.access, new Date()))!.scanStatus, "quarantined");
+    await code(ctx.service.readAsset(g.id, g.asset.id, g.access), "NOT_FOUND");
+    const now = new Date();
+    assert.deepEqual(await ctx.store.createDownloadGrant(g.id, g.asset.id, g.access, now, { grantId: randomUUID(), tokenHash: tokenHash(), expiresAt: new Date(now.getTime() + SYNTHETIC_GRANT_TTL_SECONDS * 1000) }), { status: "asset_not_clean", scanStatus: "quarantined" });
+  });
+  t("timed-out scan: no re-check without a human. An explicit rescan, over the service and over HTTP, reports quarantined, makes no call and records nothing", async () => {
+    const ctx = await build({ behaviour: timesOut }), g = await ctx.pendingAsset();
+    await ctx.service.scanAsset(g.id, g.asset.id, g.access, g.bytes);
+    assert.equal(ctx.calls.length, 1);
+    assert.equal(await ctx.service.rescanAsset(g.id, g.asset.id, g.access), "quarantined");
+    const res = await ctx.http.scanAsset(post(g.cookie), { id: g.id, assetId: g.asset.id });
+    assert.equal(res.status, 200); assert.deepEqual(await res.json(), { asset: { assetId: g.asset.id, scanStatus: "quarantined" } });
+    assert.equal(await ctx.service.scanAsset(g.id, g.asset.id, g.access, g.bytes), "quarantined");
+    assert.equal(ctx.calls.length, 1, "the port was called exactly once, never again");
+    assert.deepEqual(await history(ctx, g, g.asset.id), ["pending>quarantined:scan_timeout"]);
+  });
+  t("timed-out scan: the HTTP views never carry the reason, the evidence text or the scanner id", async () => {
+    const ctx = await build({ behaviour: timesOut }), g = await ctx.pendingAsset();
+    await ctx.service.scanAsset(g.id, g.asset.id, g.access, g.bytes);
+    const listed = JSON.stringify(await (await ctx.http.get(get(g.cookie), { id: g.id })).json());
+    assert.match(listed, /"scanStatus":"quarantined"/);
+    for (const internal of ["scan_timeout", "unavailable", "reconcile", "synthetic-scanner", "attemptId", "evidenceRef"]) assert.equal(listed.includes(internal), false, `${internal} must not be serialised`);
+  });
+  t("a port that throws its own TimeoutError or AbortError is a timeout too: quarantined, not a re-checkable unknown", async () => {
+    for (const name of ["TimeoutError", "AbortError"]) {
+      const ctx = await build({ behaviour: () => { throw Object.assign(new Error("synthetic deadline"), { name }); } }), g = await ctx.pendingAsset();
+      assert.equal(await ctx.service.scanAsset(g.id, g.asset.id, g.access, g.bytes), "quarantined", name);
+      assert.deepEqual(await history(ctx, g, g.asset.id), ["pending>quarantined:scan_timeout"]);
+      assert.equal(await ctx.service.rescanAsset(g.id, g.asset.id, g.access), "quarantined"); assert.equal(ctx.calls.length, 1);
+    }
+  });
+  t("a thrown error is still unknown (a retryable failure the owner may re-check), not quarantined", async () => {
+    const ctx = await build({ behaviour: () => { throw new Error("synthetic failure"); } }), g = await ctx.pendingAsset();
+    assert.equal(await ctx.service.scanAsset(g.id, g.asset.id, g.access, g.bytes), "unknown");
+    assert.deepEqual(await history(ctx, g, g.asset.id), ["pending>unknown:scanner_threw"]);
+  });
   t("bytes that do not match the asset row never reach the scanner (STORAGE_UNAVAILABLE, nothing recorded)", async () => {
     const ctx = await build(), g = await ctx.pendingAsset();
     await code(ctx.service.scanAsset(g.id, g.asset.id, g.access, png(64, 64, 99)), "STORAGE_UNAVAILABLE");

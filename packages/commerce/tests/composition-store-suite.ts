@@ -97,6 +97,18 @@ export function storeConformance(label: string, factory: () => Promise<StoreHarn
     assert.deepEqual(history.map(e => [e.seq, e.fromStatus, e.toStatus]), [[1, "pending", "unknown"], [2, "unknown", "pending"], [3, "pending", "quarantined"]]);
   });
 
+  t("a quarantine may carry a reason code (M3-F2a); no other clean or quarantined result may carry a malformed one", async () => {
+    const { store, withAsset } = await setup(); const g = await withAsset(), now = new Date();
+    const rejects = (p: Promise<unknown>) => assert.rejects(p, RangeError);
+    await rejects(store.completeScanAttempt(g.id, g.asset.id, g.access, now, { attemptId: randomUUID(), result: { toStatus: "quarantined", ...SYNTHETIC_SCAN_EVIDENCE, reasonCode: "Bad Reason" } }));
+    await rejects(store.completeScanAttempt(g.id, g.asset.id, g.access, now, { attemptId: randomUUID(), result: { toStatus: "clean", ...SYNTHETIC_SCAN_EVIDENCE, reasonCode: "scan_timeout" } as never }));
+    const a = await store.openScanAttempt(g.id, g.asset.id, g.access, now, lease(now));
+    if (a.status !== "opened") return assert.fail(a.status);
+    const done = await store.completeScanAttempt(g.id, g.asset.id, g.access, now, { attemptId: a.attempt.attemptId, result: { toStatus: "quarantined", ...SYNTHETIC_SCAN_EVIDENCE, reasonCode: "scan_timeout" } });
+    if (done.status !== "recorded") return assert.fail(done.status);
+    assert.deepEqual([done.event.toStatus, done.event.reasonCode, done.event.evidenceRef], ["quarantined", "scan_timeout", SYNTHETIC_SCAN_EVIDENCE.evidenceRef]);
+  });
+
   t("lease: never expired early or automatically; an explicit expiry after the lease records unknown(lease_expired)", async () => {
     const { store, withAsset } = await setup(); const g = await withAsset(), now = new Date(), until = new Date(now.getTime() + SYNTHETIC_SHORT_LEASE_MS);
     const opened = await store.openScanAttempt(g.id, g.asset.id, g.access, now, { attemptId: randomUUID(), leaseExpiresAt: until });

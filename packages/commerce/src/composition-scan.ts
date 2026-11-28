@@ -6,7 +6,9 @@ import "server-only";
  *    rescans while it is wired, so it is never actually called on a request path.
  *  - `parseScanResult`, the strict mapping of whatever a port returns to a store event. Only a well-formed `clean` or `infected`
  *    verdict for the SAME bytes becomes `clean` or `quarantined`; everything else becomes `unknown` with a coarse reason code.
- *  - `runScan`, one bounded call with an abort signal and the typed timeout. A throw, a timeout or a malformed answer is `unknown`.
+ *  - `runScan`, one bounded call with an abort signal and the typed timeout. A throw or a malformed answer is `unknown`. A TIMEOUT is
+ *    an unknown outcome (the port may still be running or billing), so it is recorded as `quarantined(scan_timeout)` and a human
+ *    reconciles it before any re-check (founder-delegated decision 2026-11-28, M3-F2a; AGENTS rule 7).
  * There is no retry anywhere in this module: a call is attempted at most once per explicit request (AGENTS rule 7).
  */
 import type { ArtifactScanPort, ArtifactScanRequest, ScanResultEvent } from "@vynvori/contracts/composition-port";
@@ -35,7 +37,18 @@ export function isScanPortConfigured(port: ArtifactScanPort | null | undefined):
 }
 
 /** Coarse reason codes recorded with an `unknown` event (they match the store's `^[a-z][a-z0-9_]*$`). Never a vendor message. */
-export type ScanUnknownReason = "scanner_error" | "scan_result_malformed" | "scan_hash_mismatch" | "scan_timeout" | "scanner_threw" | "scanner_not_configured" | "scan_not_started";
+export type ScanUnknownReason = "scanner_error" | "scan_result_malformed" | "scan_hash_mismatch" | "scanner_threw" | "scanner_not_configured" | "scan_not_started";
+/** The reason recorded with a timed-out scan's quarantine. */
+export const SCAN_TIMEOUT_REASON = "scan_timeout";
+/** A port that enforces its OWN deadline typically throws one of these. After the request has gone out that is the same unknown outcome as our timeout. */
+const isTimeoutError = (error: unknown): boolean => error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+const timedOut = (scannerId: string): ScanResultEvent => ({ toStatus: "quarantined", scannerId, ...SCAN_TIMEOUT_EVIDENCE, reasonCode: SCAN_TIMEOUT_REASON });
+/**
+ * What a timed-out scan records. The 0002 CHECK requires evidence text on every `quarantined` event, but a timeout has no verdict, so
+ * the engine and definitions are the honest word `unavailable` and the evidence reference says what happened. No value is borrowed from
+ * the port. A human reads this row; there is no automatic release (quarantine is terminal on every in-app path).
+ */
+export const SCAN_TIMEOUT_EVIDENCE = Object.freeze({ engineVersion: "unavailable", definitionsVersion: "unavailable", evidenceRef: "scan-timeout-outcome-unknown-human-reconcile-required" });
 const RESULT_KEYS = ["verdict", "sha256", "engineVersion", "definitionsVersion", "evidenceRef", "scannedAt"] as const;
 
 /**
@@ -71,7 +84,8 @@ export function parseScanResult(raw: unknown, request: Pick<ArtifactScanRequest,
 
 /**
  * One scanner call, bounded by `timeoutMs` (typed `M3_LIMIT_SCAN_TIMEOUT_SECONDS`). On timeout the signal is aborted and the result
- * is `unknown(scan_timeout)`; whatever the port answers later is ignored. Never retried here.
+ * is `quarantined(scan_timeout)` (the outcome is unknown, so the asset is never served and never rescanned until a human reconciles
+ * it); whatever the port answers later is ignored. Never retried here.
  */
 export async function runScan(port: ArtifactScanPort, request: ArtifactScanRequest, timeoutMs: number): Promise<ScanResultEvent> {
   const controller = new AbortController();
@@ -82,7 +96,8 @@ export async function runScan(port: ArtifactScanPort, request: ArtifactScanReque
     .then(value => ({ kind: "answer" as const, value }), (error: unknown) => ({ kind: "threw" as const, error }));
   try {
     const outcome = await Promise.race([call, timeout]);
-    if (outcome.kind === "timeout") return { toStatus: "unknown", reasonCode: "scan_timeout", scannerId: port.scannerId };
+    if (outcome.kind === "timeout") return timedOut(port.scannerId);
+    if (outcome.kind === "threw" && isTimeoutError(outcome.error)) return timedOut(port.scannerId); // the port's own deadline: same unknown outcome
     if (outcome.kind === "threw") return { toStatus: "unknown", reasonCode: outcome.error instanceof ScannerNotConfiguredError ? "scanner_not_configured" : "scanner_threw", scannerId: port.scannerId };
     return parseScanResult(outcome.value, request, port.scannerId);
   } finally { if (timer) clearTimeout(timer); }
